@@ -1,0 +1,1 @@
+../../../.opencode/skills/select-trainer/SKILL.md
