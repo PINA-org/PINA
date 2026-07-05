@@ -216,7 +216,6 @@ class MyParametricProblem(SpatialProblem, ParametricProblem):
 - [ ] PDE problem includes both the equation AND boundary/initial conditions
 - [ ] `problem.discretise_domain(n=..., mode=..., domains=...)` called for
       each physics domain
-- [ ] `problem.move_discretisation_into_conditions()` called before training
 - [ ] `problem.are_all_domains_discretised` is `True` after discretisation
 - [ ] (Optional) `solution(pts)` method defined with correct analytical
       solution returning `LabelTensor` with `output_variables` labels
