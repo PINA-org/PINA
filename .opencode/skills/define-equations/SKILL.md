@@ -42,11 +42,12 @@ First check if the equation is available in the built-in zoo:
 
 If the equation matches one of these, use it directly.
 
-## Step 2 — Unknown equation: search the web
+## Step 2 — Unknown equation
 
 If the equation is **not** in the zoo:
 
-1. **Search the web** for the PDE form, common PINN implementation, and known
+1. **Check** if the equation is present in `.opencode/skills/define-equations/famous_odes_pdes.json`,
+   if not present **search the web** for the equation form, common PINN implementation, and known
    boundary/initial conditions.
 2. Present the found formulation to the user and ask:
    > I found this equation: `<formulation>`. Should I use this or would you
