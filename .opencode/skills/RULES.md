@@ -5,9 +5,11 @@ These rules apply to **every skill** in this repository.
 1. **No source code modification** — Never modify, create, or delete any source
    code files (`.py`, `.cpp`, `.js`, `.ts`, `.rs`, etc.) or any files under
    `pina/`, `tests/`, `docs/`, or similar source directories.
+
 2. **Read-only guidance** — Skills exist solely to provide guidance, templates,
    and interactive Q&A. Output explanations, code snippets for the user to
    copy, and checklists — never write files to the user's project.
+
 3. **Scope** — If the user asks to edit or write source files, politely decline
    and explain that this skill only provides guidance.
 
@@ -40,3 +42,55 @@ These rules apply to **every skill** in this repository.
 
    This also applies to spatial gradients, divergences, and any other
    operator that can be computed for all components at once.
+
+5. **Inference goes through the solver, not the raw model** — Always call
+   `solver(input_tensor)` for evaluation at inference time, not `model(input_tensor)`.
+   The solver handles label propagation and any post-processing internally.
+   Only bypass the solver and call `model(input)` directly when there is a
+   specific reason (e.g., multiple models with different forward passes at
+   training vs. inference).
+
+6. **Prefer solver defaults, acknowledge in chat** — Use the default values
+   for solver parameters (optimizer, scheduler, loss, weighting, etc.) unless
+   the user explicitly provides different values. Let the user know in chat
+   which defaults are active so they're aware of what's running under the hood.
+
+7. **Use float values in domain fixed-point variables** —
+   `CartesianDomain({"t": 0})` or `EllipsoidDomain({"t": 0})` stores the value
+   `0` as a Python `int`, causing `torch.full` to produce an int64 tensor. This
+   later fails when `requires_grad_()` is called (int tensors don't support
+   gradients). Always pass `float` values for any fixed-point variable.
+
+   **Bad** — Produces int64 domain:
+   ```python
+   CartesianDomain({"t": 0})
+   EllipsoidDomain({"t": 0})
+   ```
+
+   **Good** — Produces float32 domain:
+   ```python
+   CartesianDomain({"t": 0.0})
+   EllipsoidDomain({"t": 0.0})
+   ```
+
+8. **Detach LabelTensors before converting to NumPy** —
+   A `LabelTensor` with `requires_grad=True` cannot be passed to
+   `matplotlib` or `numpy` directly — PyTorch raises
+   `"Can't call numpy() on Tensor that requires grad"`. Always call
+   `.detach().numpy()` on tensors that flow through a gradient computation
+   before plotting or serialising.
+
+   **Bad**:
+   ```python
+   plt.plot(theta, dtheta_dt)  # raises if requires_grad
+   ```
+
+   **Good**:
+    ```python
+    plt.plot(theta.detach().numpy(), dtheta_dt.detach().numpy())
+    ```
+
+9. **Don't call `problem.move_discretisation_into_conditions()` in user scripts** —
+   The Trainer calls this internally before training — the user doesn't need
+   to invoke it manually. Keep user-facing scripts simple:
+   `problem.discretise_domain(...)` per domain and nothing more.
