@@ -9,7 +9,7 @@ from pina.model import FNO, FeedForward
 from pina.solver import SupervisedSingleModelSolver
 from pina.problem.zoo import SupervisedProblem
 from pina import Trainer, LabelTensor
-from pina.topology.monitor import TopologyMonitor
+from pina.topology import TopologyMonitor, TopologicalProfiler, GudhiBackend
 
 print("=" * 60)
 print("Testing TopologyMonitor with Darcy dataset")
