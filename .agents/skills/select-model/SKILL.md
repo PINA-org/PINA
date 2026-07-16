@@ -1,0 +1,1 @@
+../../../.opencode/skills/select-model/SKILL.md

@@ -310,6 +310,41 @@ trainer.train()
 
 <details>
 <summary>
+  <h2>AI-Assisted Development</h2>
+</summary>
+
+<p>
+This repository includes <b>AI agent skills</b> (guides for opencode, Claude Code, Cursor)
+that walk you through the full PINA workflow — from problem definition to trained solver —
+through natural conversation.
+</p>
+
+<p>Skills are located at <code>.opencode/skills/&lt;name&gt;/SKILL.md</code> and cover:</p>
+
+<ul>
+  <li><b>pina-workflow</b> — Orchestrates a complete session (entry point)</li>
+  <li><b>create-problem</b> — Setting up physics-driven or data-driven problems</li>
+  <li><b>define-domains</b> — Creating and discretising domains</li>
+  <li><b>define-equations</b> — Writing PDEs/ODEs and using the equation zoo</li>
+  <li><b>condition-setup</b> — Binding equations to domains</li>
+  <li><b>select-model</b>, <b>select-solver</b>, <b>select-trainer</b> — Architecture and training</li>
+</ul>
+
+<p>
+Just open the project in a compatible agent and start describing your problem —
+the agent will guide you step by step.
+</p>
+
+<p>
+Or type <code>/pina-agentic</code> (in opencode or Claude Code) to launch an
+interactive session that walks you through the full workflow end-to-end.
+</p>
+
+<hr/>
+</details>
+
+<details>
+<summary>
   <h2>Contributing & Community</h2>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img align="center" height="20" src="https://img.shields.io/github/contributors/mathlab/pina?style=for-the-badge">

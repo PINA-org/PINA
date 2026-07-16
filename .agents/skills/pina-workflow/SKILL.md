@@ -1,0 +1,1 @@
+../../../.opencode/skills/pina-workflow/SKILL.md

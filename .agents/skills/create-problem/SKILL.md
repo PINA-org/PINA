@@ -1,0 +1,1 @@
+../../../.opencode/skills/create-problem/SKILL.md

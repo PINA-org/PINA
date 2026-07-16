@@ -1,0 +1,1 @@
+../../../.opencode/skills/select-solver/SKILL.md

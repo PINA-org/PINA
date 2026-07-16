@@ -1,0 +1,1 @@
+../../../.opencode/skills/condition-setup/SKILL.md

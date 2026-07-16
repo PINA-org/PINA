@@ -1,0 +1,1 @@
+../../../.opencode/skills/define-equations/SKILL.md

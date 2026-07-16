@@ -1,0 +1,1 @@
+../../../.opencode/skills/create-skill/SKILL.md

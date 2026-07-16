@@ -1,0 +1,1 @@
+../../.opencode/commands/pina-agentic.md
