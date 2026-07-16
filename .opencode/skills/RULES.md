@@ -44,7 +44,8 @@ These rules apply to **every skill** in this repository.
    operator that can be computed for all components at once.
 
 5. **Inference goes through the solver, not the raw model** — Always call
-   `solver(input_tensor)` for evaluation at inference time, not `model(input_tensor)`.
+   `solver(input_tensor)` for evaluation at inference time,
+   not `model(input_tensor)` or `solver.model(input_tensor)`.
    The solver handles label propagation and any post-processing internally.
    Only bypass the solver and call `model(input)` directly when there is a
    specific reason (e.g., multiple models with different forward passes at
@@ -94,3 +95,8 @@ These rules apply to **every skill** in this repository.
    The Trainer calls this internally before training — the user doesn't need
    to invoke it manually. Keep user-facing scripts simple:
    `problem.discretise_domain(...)` per domain and nothing more.
+
+10. **Smoke-Test Training Runs** - Before delivering training code, run a short 
+   smoke test using only a few epochs to confirm that the pipeline executes 
+   successfully and does not fail. After the test passes, restore the final 
+   configuration to the intended number of training epochs.
