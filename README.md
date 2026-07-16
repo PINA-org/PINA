@@ -61,7 +61,7 @@ SPDX-License-Identifier: Apache-2.0
 <div style="border: 1px solid #ddd; border-radius: 10px; padding: 14px; margin: 12px 0;">
   <ul style="margin: 0; padding-left: 18px; line-height: 1.55;">
     <li>
-      <b>[v0.3.1]</b> – <b>Agentic PINA:</b> Added AI agents that guide users through the PINA pipeline, with dedicated skills for problem setup, model and solver selection, and training configuration.
+      <b>[v0.3.2]</b> – <b>Agentic PINA:</b> Added AI agents that guide users through the PINA pipeline, with dedicated skills for problem setup, model and solver selection, and training configuration.
     </li>
     <li>
       <b>[v0.3]</b> – <b>New solvers:</b> autoregressive solver for sequential prediction tasks and multi-model solver support. Internals redesigned around a <b>mixin architecture</b> — lightweight, single-responsibility mixins (preprocessing, forward, postprocessing) that can be freely composed, with residual computation and loss aggregation clearly separated.
