@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>FNO &#8212; pina-mathlab 0.3.1 documentation</title>
+    <title>FNO &#8212; pina-mathlab 0.3.2 documentation</title>
   
   
   
@@ -41,7 +41,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../_static/documentation_options.js?v=4621528c"></script>
+    <script src="../../_static/documentation_options.js?v=71d9d8e6"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -55,8 +55,8 @@
     <link rel="prev" title="FourierIntegralKernel" href="fourier_integral_kernel.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.3.1" />
-    <meta name="docbuild:last-update" content="Jul 01, 2026"/>
+  <meta name="docsearch:version" content="0.3.2" />
+    <meta name="docbuild:last-update" content="Jul 17, 2026"/>
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -126,8 +126,8 @@
     
     
     
-    <img src="../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.1 documentation - Home"/>
-    <img src="../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.1 documentation - Home"/>
+    <img src="../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.2 documentation - Home"/>
+    <img src="../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.2 documentation - Home"/>
   
   
 </a></div>
@@ -736,9 +736,9 @@ DOI: <a class="reference external" href="https://arxiv.org/abs/2010.08895">arXiv
 </dd>
 <dt class="field-even">Parameters<span class="colon">:</span></dt>
 <dd class="field-even"><ul class="simple">
-<li><p><strong>lifting_net</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.12)"><em>torch.nn.Module</em></a>) – The lifting neural network mapping
+<li><p><strong>lifting_net</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.13)"><em>torch.nn.Module</em></a>) – The lifting neural network mapping
 the input to its hidden dimension.</p></li>
-<li><p><strong>projecting_net</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.12)"><em>torch.nn.Module</em></a>) – The projection neural network
+<li><p><strong>projecting_net</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.13)"><em>torch.nn.Module</em></a>) – The projection neural network
 mapping the hidden representation to the output function.</p></li>
 <li><p><strong>n_modes</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em>) – The number of modes.</p></li>
 <li><p><strong>dimensions</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – The number of dimensions. It can be set to <code class="docutils literal notranslate"><span class="pre">1</span></code>,
@@ -747,10 +747,10 @@ mapping the hidden representation to the output function.</p></li>
 <li><p><strong>padding_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The padding strategy. Default is <code class="docutils literal notranslate"><span class="pre">constant</span></code>.</p></li>
 <li><p><strong>inner_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – The inner size. Default is <code class="docutils literal notranslate"><span class="pre">20</span></code>.</p></li>
 <li><p><strong>n_layers</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – The number of layers. Default is <code class="docutils literal notranslate"><span class="pre">2</span></code>.</p></li>
-<li><p><strong>func</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.12)"><em>torch.nn.Module</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.12)"><em>torch.nn.Module</em></a><em>]</em>) – The activation function. If a list is passed, it must have
+<li><p><strong>func</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.13)"><em>torch.nn.Module</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.13)"><em>torch.nn.Module</em></a><em>]</em>) – The activation function. If a list is passed, it must have
 the same length as <code class="docutils literal notranslate"><span class="pre">n_layers</span></code>. If a single function is passed, it
 is used for all layers, except for the last one.
-Default is <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Tanh.html#torch.nn.Tanh" title="(in PyTorch v2.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.Tanh</span></code></a>.</p></li>
+Default is <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Tanh.html#torch.nn.Tanh" title="(in PyTorch v2.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.Tanh</span></code></a>.</p></li>
 <li><p><strong>layers</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em>) – The list of the dimension of inner layers.
 If <code class="docutils literal notranslate"><span class="pre">None</span></code>, <code class="docutils literal notranslate"><span class="pre">n_layers</span></code> of dimension <code class="docutils literal notranslate"><span class="pre">inner_size</span></code> are used.
 Otherwise, it overrides the values passed to <code class="docutils literal notranslate"><span class="pre">n_layers</span></code> and
@@ -768,7 +768,7 @@ Then, several layers of Fourier blocks are applied. Finally, the
 function.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>x</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.12)"><em>torch.Tensor</em></a><em> | </em><a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor"><em>LabelTensor</em></a>) – <p>The input tensor for performing the computation. Depending
+<dd class="field-odd"><p><strong>x</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)"><em>torch.Tensor</em></a><em> | </em><a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor"><em>LabelTensor</em></a>) – <p>The input tensor for performing the computation. Depending
 on the <code class="docutils literal notranslate"><span class="pre">dimensions</span></code> in the initialization, it expects a tensor
 with the following shapes:</p>
 <ul class="simple">
@@ -782,7 +782,7 @@ with the following shapes:</p>
 <dd class="field-even"><p>The output tensor.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.12)">torch.Tensor</a></p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)">torch.Tensor</a></p>
 </dd>
 </dl>
 </dd></dl>

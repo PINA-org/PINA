@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Graph &#8212; pina-mathlab 0.3.1 documentation</title>
+    <title>Graph &#8212; pina-mathlab 0.3.2 documentation</title>
   
   
   
@@ -41,7 +41,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../_static/documentation_options.js?v=4621528c"></script>
+    <script src="../../_static/documentation_options.js?v=71d9d8e6"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -55,8 +55,8 @@
     <link rel="prev" title="LabelTensor" href="../label_tensor.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.3.1" />
-    <meta name="docbuild:last-update" content="Jul 01, 2026"/>
+  <meta name="docsearch:version" content="0.3.2" />
+    <meta name="docbuild:last-update" content="Jul 17, 2026"/>
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -126,8 +126,8 @@
     
     
     
-    <img src="../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.1 documentation - Home"/>
-    <img src="../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.1 documentation - Home"/>
+    <img src="../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.2 documentation - Home"/>
+    <img src="../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.2 documentation - Home"/>
   
   
 </a></div>
@@ -731,13 +731,13 @@ the graph undirected if required. For more details, see the
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.12)"><em>torch.Tensor</em></a><em>, </em><a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor"><em>LabelTensor</em></a>) – Optional tensor of node features <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">F)</span></code> where <code class="docutils literal notranslate"><span class="pre">F</span></code> is the
+<li><p><strong>x</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)"><em>torch.Tensor</em></a><em>, </em><a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor"><em>LabelTensor</em></a>) – Optional tensor of node features <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">F)</span></code> where <code class="docutils literal notranslate"><span class="pre">F</span></code> is the
 number of features per node.</p></li>
-<li><p><strong>edge_index</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.12)"><em>torch.Tensor</em></a>) – A tensor of shape <code class="docutils literal notranslate"><span class="pre">(2,</span> <span class="pre">E)</span></code>
+<li><p><strong>edge_index</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)"><em>torch.Tensor</em></a>) – A tensor of shape <code class="docutils literal notranslate"><span class="pre">(2,</span> <span class="pre">E)</span></code>
 representing the indices of the graph’s edges.</p></li>
-<li><p><strong>pos</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.12)"><em>torch.Tensor</em></a><em> | </em><a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor"><em>LabelTensor</em></a>) – A tensor of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">D)</span></code> representing the positions of
+<li><p><strong>pos</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)"><em>torch.Tensor</em></a><em> | </em><a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor"><em>LabelTensor</em></a>) – A tensor of shape <code class="docutils literal notranslate"><span class="pre">(N,</span> <span class="pre">D)</span></code> representing the positions of
 <code class="docutils literal notranslate"><span class="pre">N</span></code> points in <code class="docutils literal notranslate"><span class="pre">D</span></code>-dimensional space.</p></li>
-<li><p><strong>edge_attr</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.12)"><em>torch.Tensor</em></a><em> | </em><a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor"><em>LabelTensor</em></a>) – Optional tensor of edge_featured <code class="docutils literal notranslate"><span class="pre">(E,</span> <span class="pre">F')</span></code> where
+<li><p><strong>edge_attr</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)"><em>torch.Tensor</em></a><em> | </em><a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor"><em>LabelTensor</em></a>) – Optional tensor of edge_featured <code class="docutils literal notranslate"><span class="pre">(E,</span> <span class="pre">F')</span></code> where
 <code class="docutils literal notranslate"><span class="pre">F'</span></code> is the number of edge features</p></li>
 <li><p><strong>undirected</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Whether to make the graph undirected</p></li>
 <li><p><strong>kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>) – Additional keyword arguments passed to the
@@ -770,7 +770,7 @@ representing the indices of the graph’s edges.</p></li>
 <dd><p>Check if the edge index is consistent.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>edge_index</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.12)"><em>torch.Tensor</em></a>) – The edge index tensor.</p>
+<dd class="field-odd"><p><strong>edge_index</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)"><em>torch.Tensor</em></a>) – The edge index tensor.</p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the edge index tensor is not consistent.</p>
@@ -786,8 +786,8 @@ with the edge index.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>edge_attr</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.12)"><em>torch.Tensor</em></a><em> | </em><a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor"><em>LabelTensor</em></a>) – The edge attribute tensor.</p></li>
-<li><p><strong>edge_index</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.12)"><em>torch.Tensor</em></a>) – The edge index tensor.</p></li>
+<li><p><strong>edge_attr</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)"><em>torch.Tensor</em></a><em> | </em><a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor"><em>LabelTensor</em></a>) – The edge attribute tensor.</p></li>
+<li><p><strong>edge_index</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)"><em>torch.Tensor</em></a>) – The edge index tensor.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
@@ -804,8 +804,8 @@ with the edge index.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.12)"><em>torch.Tensor</em></a><em> | </em><a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor"><em>LabelTensor</em></a>) – The input tensor.</p></li>
-<li><p><strong>pos</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.12)"><em>torch.Tensor</em></a><em> | </em><a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor"><em>LabelTensor</em></a>) – The position tensor.</p></li>
+<li><p><strong>x</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)"><em>torch.Tensor</em></a><em> | </em><a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor"><em>LabelTensor</em></a>) – The input tensor.</p></li>
+<li><p><strong>pos</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)"><em>torch.Tensor</em></a><em> | </em><a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor"><em>LabelTensor</em></a>) – The position tensor.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
@@ -821,7 +821,7 @@ with the edge index.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>edge_index</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.12)"><em>torch.Tensor</em></a>) – The edge index.</p></li>
+<li><p><strong>edge_index</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)"><em>torch.Tensor</em></a>) – The edge index.</p></li>
 <li><p><strong>undirected</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Whether the graph is undirected.</p></li>
 </ul>
 </dd>
@@ -829,7 +829,7 @@ with the edge index.</p>
 <dd class="field-even"><p>The preprocessed edge index.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.12)">torch.Tensor</a></p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)">torch.Tensor</a></p>
 </dd>
 </dl>
 </dd></dl>

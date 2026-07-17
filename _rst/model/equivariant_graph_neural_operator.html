@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>EquivariantGraphNeuralOperator &#8212; pina-mathlab 0.3.1 documentation</title>
+    <title>EquivariantGraphNeuralOperator &#8212; pina-mathlab 0.3.2 documentation</title>
   
   
   
@@ -41,7 +41,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../_static/documentation_options.js?v=4621528c"></script>
+    <script src="../../_static/documentation_options.js?v=71d9d8e6"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -55,8 +55,8 @@
     <link rel="prev" title="PirateNet" href="pirate_network.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.3.1" />
-    <meta name="docbuild:last-update" content="Jul 01, 2026"/>
+  <meta name="docsearch:version" content="0.3.2" />
+    <meta name="docbuild:last-update" content="Jul 17, 2026"/>
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -126,8 +126,8 @@
     
     
     
-    <img src="../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.1 documentation - Home"/>
-    <img src="../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.1 documentation - Home"/>
+    <img src="../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.2 documentation - Home"/>
+    <img src="../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.2 documentation - Home"/>
   
   
 </a></div>
@@ -706,7 +706,7 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="pina._src.model.equivariant_graph_neural_operator.EquivariantGraphNeuralOperator">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">EquivariantGraphNeuralOperator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_egno_layers</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node_feature_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_feature_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">modes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_steps=2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_dim=64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_emb_dim=16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_time_idx=10000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_message_layers=2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_update_layers=2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">activation=&lt;class</span> <span class="pre">'torch.nn.modules.activation.SiLU'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">aggr='add'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node_dim=-2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flow='source_to_target'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/pina/_src/model/equivariant_graph_neural_operator.html#EquivariantGraphNeuralOperator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pina._src.model.equivariant_graph_neural_operator.EquivariantGraphNeuralOperator" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></a></p>
+<dd><p>Bases: <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></a></p>
 <p>Equivariant Graph Neural Operator (EGNO) for modeling 3D dynamics.</p>
 <p>EGNO is a graph-based neural operator that preserves equivariance with
 respect to 3D transformations while modeling temporal and spatial
@@ -767,8 +767,8 @@ embeddings. Default is 10000.</p></li>
 network of each EGNO layer. Default is 2.</p></li>
 <li><p><strong>n_update_layers</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – The number of layers in the update network
 of each EGNO layer. Default is 2.</p></li>
-<li><p><strong>activation</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.12)"><em>torch.nn.Module</em></a>) – The activation function.
-Default is <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.SiLU.html#torch.nn.SiLU" title="(in PyTorch v2.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.SiLU</span></code></a>.</p></li>
+<li><p><strong>activation</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.13)"><em>torch.nn.Module</em></a>) – The activation function.
+Default is <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.SiLU.html#torch.nn.SiLU" title="(in PyTorch v2.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.SiLU</span></code></a>.</p></li>
 <li><p><strong>aggr</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The aggregation scheme to use for message passing.
 Available options are “add”, “mean”, “min”, “max”, “mul”.
 See <code class="xref py py-class docutils literal notranslate"><span class="pre">torch_geometric.nn.MessagePassing</span></code> for more details.
