@@ -1,0 +1,141 @@
+meta:
+  skill: create-problem
+  description: Tests for problem class creation — physics-driven, data-driven, inverse, mixed
+
+prompts:
+  - id: diffusion-parametric
+    text: >
+      Build a problem class for a 2D diffusion equation that's time-dependent
+      and has an unknown parametric diffusivity across several simulation runs.
+    skills_expected:
+      - create-problem
+      - define-domains
+      - define-equations
+      - condition-setup
+    near_miss: false
+    turns:
+      - "Domain x in [0,1], y in [0,1], t in [0,10]. Unknown D in [0.01, 0.1]."
+      - "FixedValue BCs: u=0 on all boundaries. Initial condition u(x,y,0)=sin(pi*x)*sin(pi*y)."
+      - "TimeDependentProblem class, CartesianDomain, FeedForward 4x40."
+    max_turns: 3
+    assertions:
+      - id: uses_time_dependent_problem
+        type: code_regex
+        values:
+          - "TimeDependentProblem"
+          - "class.*Problem.*TimeDependent"
+        min_count: 1
+      - id: uses_parametric_problem
+        type: code_regex
+        values:
+          - "ParametricProblem"
+          - "class.*Problem.*Parametric"
+        min_count: 1
+      - id: defines_output_variables
+        type: code_regex
+        values:
+          - "output_variables"
+        min_count: 1
+      - id: defines_conditions
+        type: code_regex
+        values:
+          - "conditions"
+          - "Condition"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: lorenz-ode
+    text: >
+      I have a Lorentz ODE system, help me set up that problem class.
+    skills_expected:
+      - create-problem
+      - define-equations
+      - condition-setup
+    near_miss: false
+    turns:
+      - "sigma=10, rho=28, beta=8/3. Initial condition (1, 1, 1), t in [0, 20]."
+      - "Use TimeDependentProblem with output_variables [x, y, z]."
+      - "FeedForward 3x40, PINN solver, 300 epochs."
+    max_turns: 3
+    assertions:
+      - id: uses_ode_problem
+        type: text_contains
+        values: ["SpatialProblem", "TimeDependentProblem"]
+        min_count: 1
+      - id: defines_lorenz_equations
+        type: code_regex
+        values:
+          - "lorenz"
+          - "sigma.*rho.*beta"
+          - "dx/dt"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: data-driven-material
+    text: >
+      I need a purely data-driven problem for classifying material type from
+      a table of tensile-strength measurements, no PDE involved.
+    skills_expected:
+      - create-problem
+      - condition-setup
+    near_miss: false
+    turns:
+      - "500 samples, 10 features (strain, stress, temp, etc.), 3 material classes."
+      - "Input is a LabelTensor of shape (500, 10), targets are one-hot class labels."
+      - "SupervisedSolver, FeedForward 10x32x3, 100 epochs, accuracy metric."
+    max_turns: 3
+    assertions:
+      - id: uses_base_problem
+        type: code_regex
+        values:
+          - "BaseProblem"
+          - "class.*Problem.*Base"
+        min_count: 1
+      - id: no_pde_equation
+        type: not_present
+        values:
+          - "equation"
+          - "Equation"
+          - "laplacian"
+          - "grad"
+      - id: uses_input_target_condition
+        type: code_regex
+        values:
+          - "Condition\\(.*input.*target.*\\)"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: wave-plus-sensors
+    text: >
+      Set up a problem combining a wave equation with sparse experimental
+      sensor data as an extra fitting condition.
+    skills_expected:
+      - create-problem
+      - define-domains
+      - define-equations
+      - condition-setup
+    near_miss: false
+    turns:
+      - "2D domain x in [0,1], y in [0,1], t in [0,2]. Wave speed c=1.0."
+      - "FixedValue BCs, zero initial displacement and velocity."
+      - "8 sensors at random (x,y) locations with synthetic u measurements at 20 time points each."
+    max_turns: 3
+    assertions:
+      - id: uses_wave_equation
+        type: code_regex
+        values:
+          - "AcousticWaveEquation"
+          - "WaveEquation"
+          - "wave"
+        min_count: 1
+      - id: uses_mixed_conditions
+        type: code_regex
+        values:
+          - "Condition\\(.*domain.*equation.*\\)"
+          - "Condition\\(.*input.*target.*\\)"
+        min_count: 2
+      - id: code_compiles
+        type: code_compiles

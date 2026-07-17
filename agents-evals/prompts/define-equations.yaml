@@ -1,0 +1,130 @@
+meta:
+  skill: define-equations
+  description: Tests for equation definition — zoo equations, custom equations, inverse, boundary conditions
+
+prompts:
+  - id: navier-stokes-custom
+    text: >
+      Define 2D incompressible Navier–Stokes (continuity + momentum) as a
+      custom equation.
+    skills_expected:
+      - define-equations
+    near_miss: false
+    turns:
+      - "Continuity: div(u)=0. Momentum: u.grad(u) = -grad(p) + nu*laplacian(u)."
+      - "Use grad, div, laplacian from PINA operators."
+      - "nu=0.01, output_variables=[u, v, p]."
+    max_turns: 3
+    assertions:
+      - id: defines_continuity
+        type: code_regex
+        values:
+          - "div.*u"
+          - "div.*v"
+          - "continuity"
+        min_count: 1
+      - id: defines_momentum
+        type: code_regex
+        values:
+          - "momentum"
+          - "navier"
+          - "stokes"
+        min_count: 1
+      - id: uses_autograd_operators
+        type: code_regex
+        values:
+          - "grad\\("
+          - "div\\("
+          - "laplacian\\("
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: robin-boundary
+    text: >
+      I need a Robin boundary condition — not Dirichlet or Neumann — it's not
+      in the zoo, how do I write it?
+    skills_expected:
+      - define-equations
+    near_miss: false
+    turns:
+      - "Condition: u + alpha*du/dn = g on the boundary."
+      - "alpha=0.5, g=0. Underlying PDE is Poisson on x in [0,1]."
+      - "Write it as a custom equation function taking u and x."
+    max_turns: 3
+    assertions:
+      - id: checks_zoo_first
+        type: text_contains
+        values:
+          - "equation zoo"
+          - "equation_zoo"
+          - "zoo"
+        min_count: 1
+      - id: defines_custom_boundary
+        type: code_regex
+        values:
+          - "def.*robin"
+          - "robin"
+          - "Robin"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: inverse-reaction-diffusion
+    text: >
+      Set up an inverse problem to discover both the diffusion coefficient
+      and a source term in a reaction-diffusion PDE.
+    skills_expected:
+      - define-equations
+    near_miss: false
+    turns:
+      - "1D domain x in [0,1], t in [0,5]. Equation: u_t = D*u_xx + R(u)."
+      - "Unknown D in [0.001, 0.1], unknown R(u) = k*u^2 with k in [0.1, 2.0]."
+      - "Use unknown_parameters={'D': D, 'k': k} in the equation signature."
+    max_turns: 3
+    assertions:
+      - id: uses_diffusion_reaction
+        type: code_regex
+        values:
+          - "DiffusionReactionEquation"
+          - "reaction.*diffusion"
+          - "diffusion.*reaction"
+        min_count: 1
+      - id: uses_inverse_params
+        type: code_regex
+        values:
+          - "unknown_parameters"
+          - "Parameter"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: kdv-equation
+    text: >
+      Define the Korteweg–de Vries (KdV) equation for a 1D soliton.
+    skills_expected:
+      - define-equations
+    near_miss: false
+    turns:
+      - "KdV: u_t + 6*u*u_x + u_xxx = 0 on x in [-5, 5], t in [0, 1]."
+      - "Initial condition: u(x,0) = 2*sech(x)^2, periodic BCs."
+      - "Build it as a custom equation using grad with d=['x'] for the third derivative."
+    max_turns: 3
+    assertions:
+      - id: defines_kdv
+        type: code_regex
+        values:
+          - "KdV"
+          - "korteweg"
+          - "soliton"
+          - "u_xxx"
+          - "u_t"
+        min_count: 1
+      - id: uses_third_derivative
+        type: code_regex
+        values:
+          - "grad\\(.*d=\\[\"x\"\\].*"
+          - "grad\\(.*d=\\[\"x\"\\].*components.*"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles

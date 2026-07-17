@@ -1,0 +1,94 @@
+meta:
+  skill: condition-setup
+  description: Tests for condition setup — physics-on-domain, data-driven, time series, graph conditions
+
+prompts:
+  - id: graph-time-series
+    text: >
+      I have graph time-series traffic-sensor data — set up rolling-window
+      conditions for a GNN forecaster.
+    skills_expected:
+      - condition-setup
+    near_miss: false
+    turns:
+      - "100 sensors, 500 time steps. Each sensor records speed and occupancy."
+      - "Use n_windows=10, unroll_length=5 for 10-step-ahead prediction."
+      - "Input is a PyG Data object per window, target is next-step values."
+    max_turns: 3
+    assertions:
+      - id: uses_time_series_condition
+        type: code_regex
+        values:
+          - "n_windows"
+          - "unroll_length"
+          - "rolling"
+        min_count: 1
+      - id: uses_graph_data
+        type: code_regex
+        values:
+          - "Data\\("
+          - "edge_index"
+          - "PyG"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: multi-condition-mix
+    text: >
+      I want PDE-residual conditions, boundary-data conditions, and separate
+      experimental-measurement conditions all in one problem — how do I bind
+      them together?
+    skills_expected:
+      - condition-setup
+    near_miss: false
+    turns:
+      - "PDE: Poisson on x in [0,1], y in [0,1]. 256 interior pts."
+      - "Dirichlet BCs on all edges, plus 50 experimental (x,y,u) measurements."
+      - "Use a dict of Condition objects — one per type — in the problem's conditions."
+    max_turns: 3
+    assertions:
+      - id: uses_multiple_conditions
+        type: code_regex
+        values:
+          - "Condition\\("
+        min_count: 3
+      - id: uses_domain_equation
+        type: code_regex
+        values:
+          - "Condition\\(.*domain.*equation.*\\)"
+        min_count: 1
+      - id: uses_input_target
+        type: code_regex
+        values:
+          - "Condition\\(.*input.*target.*\\)"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: pyg-molecule
+    text: >
+      My input is PyG Data objects representing molecule graphs and the target
+      is a scalar energy — set up that condition.
+    skills_expected:
+      - condition-setup
+    near_miss: false
+    turns:
+      - "1000 molecules, each Data has atom features (node_x=10) and adjacency (edge_index)."
+      - "Target energy is a (1000, 1) LabelTensor. Use Condition(input=..., target=...)."
+      - "Batch size 32, use PyG DataLoader."
+    max_turns: 3
+    assertions:
+      - id: uses_pyg_data
+        type: code_regex
+        values:
+          - "from torch_geometric"
+          - "Data\\(x="
+          - "batch"
+        min_count: 1
+      - id: uses_input_target_condition
+        type: code_regex
+        values:
+          - "Condition\\(.*input.*target.*\\)"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles

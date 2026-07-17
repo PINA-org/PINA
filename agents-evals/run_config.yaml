@@ -1,0 +1,16 @@
+# agents-evals sweep configuration
+# Defines which models, modes, and runs to execute
+
+models:
+  - id: deepseek-v4
+    provider: opencode/deepseek-v4-flash-free
+  - id: hy3-free
+    provider: opencode/hy3-free
+  - id: mimo-v2.5
+    provider: opencode/mimo-v2.5-free
+
+modes:
+  - with-skills
+  - bare
+
+runs: 3

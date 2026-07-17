@@ -1,0 +1,192 @@
+meta:
+  skill: pina-workflow
+  description: End-to-end orchestrator tests — full workflow from problem to trained solver
+
+prompts:
+  - id: navier-stokes-sensor
+    text: >
+      I have pressure/velocity sensor readings from a pipe and want a model
+      that respects incompressible Navier–Stokes while also fitting the
+      sensor data.
+    skills_expected:
+      - pina-workflow
+      - create-problem
+      - define-equations
+      - define-domains
+      - condition-setup
+      - select-model
+      - select-solver
+      - select-trainer
+    near_miss: false
+    turns:
+      - "2D axisymmetric pipe, radius 0.1m, length 1m, Re=100."
+      - "10 sensors evenly spaced along the axis, recording (p, ux, ur)."
+      - "Use default optimizer, 500 epochs, FeedForward 6x20."
+    max_turns: 3
+    assertions:
+      - id: triggers_pina_workflow
+        type: text_contains
+        values: ["pina-workflow", "PINA Workflow"]
+        min_count: 1
+      - id: reads_define_equations
+        type: text_contains
+        values: ["define-equations", "Define Equations"]
+        min_count: 1
+      - id: reads_define_domains
+        type: text_contains
+        values: ["define-domains", "Define Domains"]
+        min_count: 1
+      - id: reads_select_model
+        type: text_contains
+        values: ["select-model", "Select a Model"]
+        min_count: 1
+      - id: reads_select_solver
+        type: text_contains
+        values: ["select-solver", "Select a Solver"]
+        min_count: 1
+      - id: uses_condition_physics_and_data
+        type: code_regex
+        values:
+          - "Condition\\(.*domain.*equation.*\\)"
+          - "Condition\\(.*input.*target.*\\)"
+        min_count: 2
+      - id: code_compiles
+        type: code_compiles
+      - id: code_runs
+        type: code_runs
+        kwargs:
+          max_epochs: 2
+          accelerator: cpu
+
+  - id: damped-pendulum-inverse
+    text: >
+      I have a damped pendulum with unknown air-drag coefficient and angle
+      time-series — help me build something that both simulates it and
+      discovers the drag term.
+    skills_expected:
+      - pina-workflow
+      - create-problem
+      - define-equations
+      - condition-setup
+      - select-model
+      - select-solver
+      - select-trainer
+    near_miss: false
+    turns:
+      - "Length 1m, initial angle 30deg, mass 0.5kg. 100 time points over 10s."
+      - "Unknown drag coefficient b in [0.01, 0.5]."
+      - "Use SelfAdaptivePINN, 200 epochs."
+    max_turns: 3
+    assertions:
+      - id: triggers_pina_workflow
+        type: text_contains
+        values: ["pina-workflow", "PINA Workflow"]
+        min_count: 1
+      - id: uses_inverse_problem
+        type: text_contains
+        values: ["InverseProblem"]
+        min_count: 1
+      - id: uses_unknown_parameter
+        type: code_regex
+        values:
+          - "unknown_parameters"
+          - "Parameter"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+      - id: code_runs
+        type: code_runs
+        kwargs:
+          max_epochs: 2
+          accelerator: cpu
+
+  - id: schrodinger-1d
+    text: >
+      Simulate the 1D Schrödinger equation for a quantum harmonic oscillator
+      with periodic boundaries.
+    skills_expected:
+      - pina-workflow
+      - create-problem
+      - define-equations
+      - define-domains
+      - condition-setup
+      - select-model
+      - select-solver
+      - select-trainer
+    near_miss: false
+    turns:
+      - "Domain x in [-5, 5] with periodic BCs, t in [0, 1]."
+      - "hbar=1, m=1, omega=1. Initial wavefunction is Gaussian ground state."
+      - "FeedForward 4x50, PINN solver, 300 epochs."
+    max_turns: 3
+    assertions:
+      - id: triggers_pina_workflow
+        type: text_contains
+        values: ["pina-workflow", "PINA Workflow"]
+        min_count: 1
+      - id: defines_custom_equation
+        type: code_regex
+        values:
+          - "def.*equation"
+          - "schr.*dinger"
+          - "harmonic"
+        min_count: 1
+      - id: uses_periodic_domain
+        type: code_regex
+        values:
+          - "periodic"
+          - "CartesianDomain"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+      - id: code_runs
+        type: code_runs
+        kwargs:
+          max_epochs: 2
+          accelerator: cpu
+
+  - id: weather-graph-gnn
+    text: >
+      I have a graph of interconnected weather stations, each with historical
+      readings, and some stations are missing data — train a supervised
+      ensemble of models on the graph to fill in the gaps and give me an
+      uncertainty estimate.
+    skills_expected:
+      - pina-workflow
+      - create-problem
+      - condition-setup
+      - select-model
+      - select-solver
+      - select-trainer
+    near_miss: false
+    turns:
+      - "50 stations, 365 days of daily temperature/pressure/humidity. 10% missing at random."
+      - "GraphNeuralOperator with 3 message-passing layers, EnsembleSolver with 5 members."
+      - "Use SupervisedSolver, 200 epochs, EarlyStopping patience 20."
+    max_turns: 3
+    assertions:
+      - id: triggers_pina_workflow
+        type: text_contains
+        values: ["pina-workflow", "PINA Workflow"]
+        min_count: 1
+      - id: uses_graph_model
+        type: code_regex
+        values:
+          - "GraphNeuralOperator"
+          - "GNN"
+          - "PyG"
+          - "Data\\(x="
+        min_count: 1
+      - id: uses_ensemble
+        type: code_regex
+        values:
+          - "EnsembleSolver"
+          - "ensemble"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+      - id: code_runs
+        type: code_runs
+        kwargs:
+          max_epochs: 2
+          accelerator: cpu

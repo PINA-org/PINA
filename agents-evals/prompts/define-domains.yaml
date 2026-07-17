@@ -1,0 +1,126 @@
+meta:
+  skill: define-domains
+  description: Tests for domain creation, set operations, and discretisation
+
+prompts:
+  - id: l-shaped-region
+    text: >
+      I need an L-shaped 2D region built from combining two rectangles.
+    skills_expected:
+      - define-domains
+    near_miss: false
+    turns:
+      - "Rectangle A: x [0,2], y [0,1]. Rectangle B: x [0,1], y [0,2]. Union."
+      - "Discretise with n=256 points in grid mode."
+      - "Also visualise the merged domain points."
+    max_turns: 3
+    assertions:
+      - id: uses_union
+        type: code_regex
+        values:
+          - "Union"
+          - "union"
+        min_count: 1
+      - id: uses_cartesian_domain
+        type: code_regex
+        values:
+          - "CartesianDomain"
+        min_count: 2
+      - id: uses_discretise_domain
+        type: code_regex
+        values:
+          - "discretise_domain"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+      - id: code_runs
+        type: code_runs
+        kwargs:
+          max_epochs: 1
+          accelerator: cpu
+
+  - id: annulus
+    text: >
+      Define an annulus — a disk with a circular hole in the middle.
+    skills_expected:
+      - define-domains
+    near_miss: false
+    turns:
+      - "Outer radius 2.0, inner radius 1.0, centred at origin."
+      - "Use EllipsoidDomain with Difference to subtract inner from outer."
+      - "Discretise with n=500 random points."
+    max_turns: 3
+    assertions:
+      - id: uses_difference_or_exclusion
+        type: code_regex
+        values:
+          - "Difference"
+          - "Exclusion"
+          - "difference"
+          - "exclusion"
+        min_count: 1
+      - id: uses_ellipsoid_domain
+        type: code_regex
+        values:
+          - "EllipsoidDomain"
+        min_count: 2
+      - id: code_compiles
+        type: code_compiles
+
+  - id: triangular-domain
+    text: >
+      Set up a triangular domain from vertex coordinates and sample it.
+    skills_expected:
+      - define-domains
+    near_miss: false
+    turns:
+      - "Vertices at (0,0), (1,0), (0.5, 0.866)."
+      - "Use SimplexDomain with those vertices."
+      - "Discretise with 200 random points using 'random' mode."
+    max_turns: 3
+    assertions:
+      - id: uses_simplex_domain
+        type: code_regex
+        values:
+          - "SimplexDomain"
+        min_count: 1
+      - id: uses_discretise_domain
+        type: code_regex
+        values:
+          - "discretise_domain"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: ellipsoid-lhs
+    text: >
+      Build a 3D ellipsoidal region and discretise it with Latin hypercube
+      sampling.
+    skills_expected:
+      - define-domains
+    near_miss: false
+    turns:
+      - "Radii: a=3.0, b=2.0, c=1.0, centred at (0,0,0)."
+      - "Use EllipsoidDomain with bounds on x,y,z."
+      - "Discretise with n=300 using 'lh' mode."
+    max_turns: 3
+    assertions:
+      - id: uses_ellipsoid_domain
+        type: code_regex
+        values:
+          - "EllipsoidDomain"
+        min_count: 1
+      - id: uses_latin_hypercube
+        type: code_regex
+        values:
+          - "lh"
+          - "latin"
+          - "LatinHypercube"
+        min_count: 1
+      - id: uses_discretise_domain
+        type: code_regex
+        values:
+          - "discretise_domain"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles

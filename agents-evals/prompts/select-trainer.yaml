@@ -1,0 +1,92 @@
+meta:
+  skill: select-trainer
+  description: Tests for trainer configuration — batching, precision, early stopping, mixed condition types
+
+prompts:
+  - id: imbalanced-batching
+    text: >
+      I have far more interior PDE points than boundary points and want
+      batches that reflect that imbalance.
+    skills_expected:
+      - select-trainer
+    near_miss: false
+    turns:
+      - "10K interior pts vs 500 boundary pts — about 20:1 ratio."
+      - "Use the Trainer's batch_size and weights to balance per condition."
+      - "Set batch_size=128, use weighted sampling by condition size."
+    max_turns: 3
+    assertions:
+      - id: discusses_batching_strategy
+        type: code_regex
+        values:
+          - "batch"
+          - "Batch"
+          - "batch_size"
+          - "weights"
+          - "weighted"
+        min_count: 1
+      - id: discusses_sampling
+        type: text_contains
+        values:
+          - "sample"
+          - "stratified"
+          - "proportional"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: mixed-precision-early-stop
+    text: >
+      Set up mixed-precision GPU training with early stopping on plateauing
+      validation loss.
+    skills_expected:
+      - select-trainer
+    near_miss: false
+    turns:
+      - "Trainer with precision='16-mixed' for mixed precision."
+      - "EarlyStopping callback monitoring val_loss, patience=10."
+      - "Also add ModelCheckpoint to save the best model."
+    max_turns: 3
+    assertions:
+      - id: uses_mixed_precision
+        type: code_regex
+        values:
+          - "precision"
+          - "16-mixed"
+          - "16"
+          - "mixed"
+        min_count: 1
+      - id: uses_early_stopping
+        type: code_regex
+        values:
+          - "EarlyStopping"
+          - "early_stop"
+          - "early stopping"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: mixed-condition-batching
+    text: >
+      One of my conditions is pointwise and another is graph-structured — how
+      do I batch them without forcing the same shape?
+    skills_expected:
+      - select-trainer
+    near_miss: false
+    turns:
+      - "Condition A: 5000 (x,y) points on a 2D grid with PDE equation."
+      - "Condition B: 200 PyG Data objects from a molecular dataset."
+      - "Use per-condition batch_size in the Trainer, each condition batches independently."
+    max_turns: 3
+    assertions:
+      - id: discusses_condition_batching
+        type: text_contains
+        values:
+          - "batch"
+          - "Batch"
+          - "datamodule"
+          - "DataModule"
+          - "multi"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles

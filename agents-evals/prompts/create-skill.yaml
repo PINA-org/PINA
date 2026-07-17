@@ -1,0 +1,114 @@
+meta:
+  skill: create-skill
+  description: Tests for skill creation and editing
+
+prompts:
+  - id: viz-skill
+    text: >
+      Create a skill for visualising PINN training results — loss curves and
+      residual plots.
+    skills_expected:
+      - create-skill
+      - condition-setup
+      - create-problem
+      - define-domains
+      - define-equations
+      - pina-workflow
+      - select-model
+      - select-solver
+      - select-trainer
+      - skill-sync-checker
+    near_miss: false
+    turns:
+      - "Include matplotlib and plotly as tool suggestions."
+      - "Add a section on interpreting convergence from loss curves."
+      - "Make it compatible with opencode, Claude Code, and Codex CLI via symlinks."
+    max_turns: 3
+    assertions:
+      - id: discusses_skill_structure
+        type: text_contains
+        values:
+          - "SKILL.md"
+          - "front matter"
+          - "directory"
+        min_count: 1
+      - id: discusses_file_locations
+        type: text_contains
+        values:
+          - ".opencode/skills"
+          - "agents/skills"
+          - "claude/skills"
+        min_count: 1
+      - id: discusses_symlinks
+        type: text_contains
+        values:
+          - "symlink"
+          - "cross-tool"
+          - "compatibility"
+        min_count: 1
+      - id: no_source_code
+        type: not_present
+        values:
+          - "pina/"
+          - "tests/"
+          - "docs/"
+
+  - id: multi-gpu-skill
+    text: >
+      Add a skill for multi-GPU/distributed training with PINA's Trainer,
+      wired into opencode, Claude Code, and Codex CLI.
+    skills_expected:
+      - create-skill
+    near_miss: false
+    turns:
+      - "Cover DDP strategy, devices=4, and NCCL backend."
+      - "Include a troubleshooting section for common multi-GPU errors (OOM, timeout)."
+      - "Don't forget AGENTS.md registration and symlinks for cross-tool discovery."
+    max_turns: 3
+    assertions:
+      - id: discusses_cross_tool
+        type: text_contains
+        values:
+          - "opencode"
+          - "Claude Code"
+          - "Codex CLI"
+        min_count: 2
+      - id: discusses_symlinks
+        type: text_contains
+        values:
+          - "symlink"
+          - "compatibility"
+        min_count: 1
+      - id: discusses_AGENTS_MD
+        type: code_regex
+        values:
+          - "AGENTS.md"
+          - "AGENTS"
+        min_count: 1
+
+  - id: nan-debug-skill
+    text: >
+      Write a skill for debugging NaN-loss issues during PINN training.
+    skills_expected:
+      - create-skill
+    near_miss: false
+    turns:
+      - "Cover gradient clipping, weight init, and learning rate tuning."
+      - "Include a checklist: check inputs, activation functions, boundary conditions."
+      - "Make it discoverable from all three agent tools via symlinks."
+    max_turns: 3
+    assertions:
+      - id: discusses_skill_structure
+        type: text_contains
+        values:
+          - "SKILL.md"
+          - "front matter"
+        min_count: 1
+      - id: discusses_nan_debugging
+        type: text_contains
+        values:
+          - "NaN"
+          - "nan"
+          - "loss"
+          - "gradient"
+        min_count: 1

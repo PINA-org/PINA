@@ -1,0 +1,100 @@
+meta:
+  skill: select-model
+  description: Tests for model selection and configuration
+
+prompts:
+  - id: unstructured-cfd-gno
+    text: >
+      I have an unstructured 3D CFD mesh and want to predict pressure fields
+      with a graph neural operator — what should I use?
+    skills_expected:
+      - select-model
+    near_miss: false
+    turns:
+      - "500K nodes, 2M tetrahedral elements. Steady-state pressure field."
+      - "Input features: (x,y,z) coordinates. Output: scalar pressure."
+      - "GraphNeuralOperator with 4 message-passing layers, hidden_dim=64."
+    max_turns: 3
+    assertions:
+      - id: suggests_graph_operator
+        type: code_regex
+        values:
+          - "GraphNeuralOperator"
+          - "GNO"
+          - "graph.*operator"
+          - "DeepONet"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: sindy-discovery
+    text: >
+      I want to discover a governing ODE directly from noisy trajectories, not
+      just fit a black-box surrogate.
+    skills_expected:
+      - select-model
+    near_miss: false
+    turns:
+      - "Three state variables (x, y, z), 1000 time steps, 5% measurement noise."
+      - "Candidate library: polynomials up to degree 3, sine, cosine."
+      - "Use SINDy model with threshold=0.1 for sparsity."
+    max_turns: 3
+    assertions:
+      - id: suggests_sindy
+        type: code_regex
+        values:
+          - "SINDy"
+          - "sindy"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: multi-scale-boundary
+    text: >
+      My solution has fine boundary layers next to smooth bulk regions —
+      multi-scale features are hurting convergence.
+    skills_expected:
+      - select-model
+    near_miss: false
+    turns:
+      - "Boundary layer thickness ~0.01, domain size ~1.0, so 100x scale ratio."
+      - "2D convection-diffusion, Re=1000."
+      - "Consider PirateNet or Fourier feature encodings for multi-scale resolution."
+    max_turns: 3
+    assertions:
+      - id: suggests_multiscale
+        type: code_regex
+        values:
+          - "PirateNet"
+          - "multi-scale"
+          - "multiscale"
+          - "fourier"
+          - "Fourier"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: few-shot-regression
+    text: >
+      I only have 50 training points for a 1D regression — what's more
+      parameter-efficient than a plain MLP?
+    skills_expected:
+      - select-model
+    near_miss: false
+    turns:
+      - "Input 1D, output 1D. Function is smooth with one sharp peak."
+      - "KolmogorovArnoldNetwork sounds interesting — how many layers?"
+      - "Try KAN with 2 hidden layers of width 8, grid size 5."
+    max_turns: 3
+    assertions:
+      - id: suggests_efficient_model
+        type: code_regex
+        values:
+          - "KolmogorovArnoldNetwork"
+          - "KAN"
+          - "Bayesian"
+          - "ResidualFeedForward"
+          - "parameter.*efficient"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles

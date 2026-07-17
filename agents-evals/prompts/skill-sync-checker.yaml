@@ -1,0 +1,41 @@
+meta:
+  skill: skill-sync-checker
+  description: Tests for the narrow-trigger skill-sync-checker (exact phrase required)
+
+prompts:
+  - id: sync-select-solver
+    text: >
+      I am a pina developer and I need to check skills are updated with code
+      — for the select-solver skill specifically.
+    skills_expected:
+      - skill-sync-checker
+    near_miss: false
+    turns:
+      - "Check for references to old solver names that were renamed."
+      - "Propose specific fixes for each stale reference found."
+    max_turns: 2
+    assertions:
+      - id: triggers_on_exact_phrase
+        type: text_contains
+        values:
+          - "skill-sync-checker"
+          - "Skill Sync Checker"
+        min_count: 1
+      - id: reads_check_script
+        type: text_contains
+        values:
+          - "check_skill_sync"
+          - "utils/"
+        min_count: 1
+      - id: targets_select_solver
+        type: text_contains
+        values:
+          - "select-solver"
+          - "select_solver"
+          - "Select a Solver"
+        min_count: 1
+      - id: no_source_code
+        type: not_present
+        values:
+          - "pina/"
+          - "tests/"

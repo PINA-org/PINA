@@ -1,0 +1,97 @@
+meta:
+  skill: select-solver
+  description: Tests for solver selection — causality, ensembles, adaptive weighting, adversarial
+
+prompts:
+  - id: causality-pinn
+    text: >
+      My PDE is time-dependent and I want training to respect causality
+      instead of fitting late times before early ones converge.
+    skills_expected:
+      - select-solver
+    near_miss: false
+    turns:
+      - "1D Burgers equation on x in [-1,1], t in [0,1]."
+      - "Use CausalPINN with causality_param=0.1."
+      - "FeedForward 4x50, 500 epochs."
+    max_turns: 3
+    assertions:
+      - id: suggests_causal_solver
+        type: code_regex
+        values:
+          - "CausalPINN"
+          - "causal"
+          - "Causal"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: ensemble-uncertainty
+    text: >
+      I want to train 5 independent models on the same physics-informed
+      problem and average predictions for uncertainty estimation.
+    skills_expected:
+      - select-solver
+    near_miss: false
+    turns:
+      - "Each model is a FeedForward 3x40, Poisson equation on unit square."
+      - "Use PINNEnsembleSolver with 5 members, aggregate by mean."
+      - "Also report std dev across ensemble for uncertainty."
+    max_turns: 3
+    assertions:
+      - id: suggests_ensemble
+        type: code_regex
+        values:
+          - "EnsembleSolver"
+          - "ensemble"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: sharp-interfaces
+    text: >
+      My PDE has sharp interfaces that are hard to fit — I want training to
+      automatically focus more there.
+    skills_expected:
+      - select-solver
+    near_miss: false
+    turns:
+      - "Allen-Cahn equation on x in [-1,1], t in [0,1], sharp phase boundary."
+      - "SelfAdaptivePINN with adaptive weights on the residual loss."
+      - "FeedForward 4x60, 400 epochs."
+    max_turns: 3
+    assertions:
+      - id: suggests_adaptive_solver
+        type: code_regex
+        values:
+          - "SelfAdaptivePINN"
+          - "SelfAdaptive"
+          - "self-adaptive"
+          - "adaptive"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles
+
+  - id: adversarial-pinn
+    text: >
+      I want an adversarial discriminator that checks whether the PINN's
+      residual looks realistic, min-max style.
+    skills_expected:
+      - select-solver
+    near_miss: false
+    turns:
+      - "2D Helmholtz equation on x in [0,1], y in [0,1]."
+      - "CompetitivePINN with a discriminator network (FeedForward 3x20)."
+      - "Train discriminator and generator alternately, 300 epochs."
+    max_turns: 3
+    assertions:
+      - id: suggests_adversarial_solver
+        type: code_regex
+        values:
+          - "CompetitivePINN"
+          - "adversarial"
+          - "discriminator"
+          - "min.*max"
+        min_count: 1
+      - id: code_compiles
+        type: code_compiles

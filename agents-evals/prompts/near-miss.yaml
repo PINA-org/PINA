@@ -1,0 +1,168 @@
+meta:
+  skill: near-miss
+  description: Near-miss prompts that should NOT trigger any PINA skill
+
+prompts:
+  - id: stiff-odes-methods
+    text: >
+      What's the best numerical method for stiff ODEs?
+    skills_expected: []
+    near_miss: true
+    assertions:
+      - id: no_pina_skill_load
+        type: not_present
+        values:
+          - "pina-workflow"
+          - "create-problem"
+          - "define-equations"
+          - "define-domains"
+          - "condition-setup"
+          - "select-model"
+          - "select-solver"
+          - "select-trainer"
+          - "create-skill"
+          - "skill-sync-checker"
+
+  - id: heat-equation-uniqueness
+    text: >
+      Prove the heat equation has unique solutions given BCs.
+    skills_expected: []
+    near_miss: true
+    assertions:
+      - id: no_pina_skill_load
+        type: not_present
+        values:
+          - "pina-workflow"
+          - "create-problem"
+          - "define-equations"
+          - "define-domains"
+          - "condition-setup"
+          - "select-model"
+          - "select-solver"
+          - "select-trainer"
+          - "create-skill"
+          - "skill-sync-checker"
+
+  - id: cnn-vs-transformer
+    text: >
+      Compare CNNs vs Transformers for time series.
+    skills_expected: []
+    near_miss: true
+    assertions:
+      - id: no_pina_skill_load
+        type: not_present
+        values:
+          - "pina-workflow"
+          - "create-problem"
+          - "define-equations"
+          - "define-domains"
+          - "condition-setup"
+          - "select-model"
+          - "select-solver"
+          - "select-trainer"
+          - "create-skill"
+          - "skill-sync-checker"
+
+  - id: adam-vs-sgd
+    text: >
+      What's the difference between Adam and SGD?
+    skills_expected: []
+    near_miss: true
+    assertions:
+      - id: no_pina_skill_load
+        type: not_present
+        values:
+          - "pina-workflow"
+          - "create-problem"
+          - "define-equations"
+          - "define-domains"
+          - "condition-setup"
+          - "select-model"
+          - "select-solver"
+          - "select-trainer"
+          - "create-skill"
+          - "skill-sync-checker"
+
+  - id: close-but-wrong-phrase
+    text: >
+      I am a pina developer and I need to update a skill.
+    skills_expected: []
+    near_miss: true
+    assertions:
+      - id: no_skill_sync_trigger
+        type: not_present
+        values:
+          - "skill-sync-checker"
+          - "Skill Sync Checker"
+      - id: no_pina_skill_load
+        type: not_present
+        values:
+          - "pina-workflow"
+          - "create-problem"
+          - "define-equations"
+          - "define-domains"
+          - "condition-setup"
+          - "select-model"
+          - "select-solver"
+          - "select-trainer"
+          - "create-skill"
+
+  - id: run-tests
+    text: >
+      Run pytest on the solver tests.
+    skills_expected: []
+    near_miss: true
+    assertions:
+      - id: no_pina_skill_load
+        type: not_present
+        values:
+          - "pina-workflow"
+          - "create-problem"
+          - "define-equations"
+          - "define-domains"
+          - "condition-setup"
+          - "select-model"
+          - "select-solver"
+          - "select-trainer"
+          - "create-skill"
+          - "skill-sync-checker"
+
+  - id: what-is-tensor
+    text: >
+      Can you explain what a tensor is?
+    skills_expected: []
+    near_miss: true
+    assertions:
+      - id: no_pina_skill_load
+        type: not_present
+        values:
+          - "pina-workflow"
+          - "create-problem"
+          - "define-equations"
+          - "define-domains"
+          - "condition-setup"
+          - "select-model"
+          - "select-solver"
+          - "select-trainer"
+          - "create-skill"
+          - "skill-sync-checker"
+
+  - id: setup-venv
+    text: >
+      Set up a Python venv for this project.
+    skills_expected: []
+    near_miss: true
+    assertions:
+      - id: no_pina_skill_load
+        type: not_present
+        values:
+          - "pina-workflow"
+          - "create-problem"
+          - "define-equations"
+          - "define-domains"
+          - "condition-setup"
+          - "select-model"
+          - "select-solver"
+          - "select-trainer"
+          - "create-skill"
+          - "skill-sync-checker"
