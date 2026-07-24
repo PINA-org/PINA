@@ -14,14 +14,14 @@ SPDX-License-Identifier: Apache-2.0
          alt="PyPI downloads"/>
   </a>
   <img src="https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FmathLab%2FPINA%2Frefs%2Fheads%2F0.3%2Fpyproject.toml&style=for-the-badge&logo=python&logoColor=white"><br>
-  <img src="https://img.shields.io/github/v/release/mathlab/pina?sort=date&display_name=release&style=for-the-badge">
-  <img src="https://img.shields.io/github/check-runs/mathlab/pina/master?style=for-the-badge&logo=githubactions&logoColor=white&label=master">
-  <img src="https://img.shields.io/github/check-runs/mathlab/pina/dev?style=for-the-badge&logo=githubactions&logoColor=white&label=dev">
+  <img src="https://img.shields.io/github/v/release/pina-org/pina?sort=date&display_name=release&style=for-the-badge">
+  <img src="https://img.shields.io/github/check-runs/pina-org/pina/master?style=for-the-badge&logo=githubactions&logoColor=white&label=master">
+  <img src="https://img.shields.io/github/check-runs/pina-org/pina/dev?style=for-the-badge&logo=githubactions&logoColor=white&label=dev">
 
 
   </p>
-  <a href="https://github.com/mathLab/PINA">
-    <img src="https://raw.githubusercontent.com/mathLab/PINA/refs/heads/master/readme/pina.svg"
+  <a href="https://github.com/pina-org/PINA">
+    <img src="https://raw.githubusercontent.com/pina-org/PINA/refs/heads/master/readme/pina.svg"
          alt="PINA"
          width="60%"
          style="max-width: 220px; height: auto;" />
@@ -83,7 +83,7 @@ SPDX-License-Identifier: Apache-2.0
 
 <p style="margin-top: 6px;">
   <i>Want the full history?</i>
-  See the <a href="https://github.com/mathLab/PINA/releases"><b>Releases</b></a> page.
+  See the <a href="https://github.com/pina-org/PINA/releases"><b>Releases</b></a> page.
 </p>
 
 <hr/>
@@ -100,7 +100,7 @@ PINA provides an intuitive framework for defining, experimenting with, and solvi
 
 
 
-<img src="https://github.com/mathLab/PINA/blob/master/readme/applications.gif"
+<img src="https://github.com/pina-org/PINA/blob/master/readme/applications.gif"
      alt="PINA pipeline"
      style="max-width: 100%; height: auto; margin-top: 20px;" />
 
@@ -123,7 +123,7 @@ PINA provides an intuitive framework for defining, experimenting with, and solvi
 
 <h3>Install from source</h3>
 
-<pre><code>git clone https://github.com/mathLab/PINA
+<pre><code>git clone https://github.com/pina-org/PINA
 cd PINA
 git checkout master
 pip install .
@@ -203,7 +203,7 @@ flowchart LR
 
 <p>
 Want to dive deeper? Check out the official
-<a href="https://github.com/mathLab/PINA/tree/master/tutorials#pina-tutorials"><b>Tutorials</b></a>.
+<a href="https://github.com/pina-org/PINA/tree/master/tutorials#pina-tutorials"><b>Tutorials</b></a>.
 </p>
 
 <hr/>
@@ -213,7 +213,7 @@ Want to dive deeper? Check out the official
 <summary>
   <h2>PINA by Examples</h2>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://github.com/mathLab/PINA/blob/master/tutorials/README.md">
+  <a href="https://github.com/pina-org/PINA/blob/master/tutorials/README.md">
   <img align="center" height="20" src="https://img.shields.io/badge/tutorial-fa9900?style=for-the-badge&logo=jupyter&logoColor=white&labelColor=555">
   </a>
 </summary>
@@ -350,12 +350,12 @@ interactive session that walks you through the full workflow end-to-end.
 <summary>
   <h2>Contributing & Community</h2>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img align="center" height="20" src="https://img.shields.io/github/contributors/mathlab/pina?style=for-the-badge">
+  <img align="center" height="20" src="https://img.shields.io/github/contributors/pina-org/pina?style=for-the-badge">
 </summary>
 <p>
 We would love to develop PINA together with the community.
 A great place to start is the list of
-<a href="https://github.com/mathLab/PINA/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22">
+<a href="https://github.com/pina-org/PINA/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22">
   <b>good-first-issue</b>
 </a>
 issues.
@@ -367,7 +367,7 @@ If you would like to contribute, please read the
 </p>
 
 <p align="center">
-  <a href="https://github.com/mathLab/PINA/graphs/contributors">
+  <a href="https://github.com/pina-org/PINA/graphs/contributors">
     <img src="https://contrib.rocks/image?repo=mathLab/PINA"
          alt="Contributors"
          style="max-width: 100%; height: auto;" />
