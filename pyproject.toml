@@ -47,8 +47,8 @@ tutorial = [
 ]
 
 [project.urls]
-Homepage = "https://mathlab.github.io/PINA/"
-Repository = "https://github.com/mathLab/PINA"
+Homepage = "https://pina-org.github.io/PINA/"
+Repository = "https://github.com/PINA-org/PINA"
 
 [build-system]
 requires = [ "setuptools>=41", "wheel", "setuptools-git-versioning>=2.0,<3", ]
