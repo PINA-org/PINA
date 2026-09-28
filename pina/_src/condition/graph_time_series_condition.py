@@ -1,21 +1,21 @@
-"""Module for the TimeSeriesCondition class."""
+"""Module for the Graph Time-Series Condition class."""
 
 import torch
-from pina._src.core.utils import check_consistency, check_positive_integer
-from pina._src.data.manager.data_manager import _DataManager
-from pina._src.condition.time_series_condition import TimeSeriesCondition
-from pina._src.core.label_tensor import LabelTensor
-from pina._src.condition.base_condition import BaseCondition
-from torch_geometric.data import Data
+
+from pina._src.condition.base_condition import _unwrap_single
+from pina._src.condition.graph_condition import GraphCondition
+from pina._src.condition.time_series_condition import _unroll_windows
 from pina._src.core.graph import Graph
+from pina._src.core.utils import check_consistency, check_positive_integer
+from torch_geometric.data import Data
 
 
-class GraphTimeSeriesCondition(TimeSeriesCondition):
+class GraphTimeSeriesCondition(GraphCondition):
     """
-    The :class:`TimeSeriesCondition` class represents an autoregressive time
-    series condition defined by temporal ``input`` data. The input is expected
-    to have shape ``[trajectories, time_steps, *features]``, where the second
-    dimension corresponds to the temporal evolution of each trajectory.
+    The :class:`GraphTimeSeriesCondition` class represents an autoregressive
+    time series condition defined by temporal ``input`` data. The input is
+    expected to have shape ``[trajectories, time_steps, *features]``, where the
+    second dimension corresponds to the temporal evolution of each trajectory.
 
     During training, the condition automatically extracts overlapping temporal
     windows from the trajectories. The parameter ``unroll_length`` defines the
@@ -26,15 +26,16 @@ class GraphTimeSeriesCondition(TimeSeriesCondition):
     Internally, the unrolled data is stored as a tensor of shape
     ``[trajectories, n_windows, unroll_length, *features]``.
 
-    Supported data types include :class:`~pina.label_tensor.LabelTensor` and
-    :class:`torch.Tensor`.
+    Supported data types include :class:`~pina.graph.Graph` and
+    :class:`~torch_geometric.data.Data`.
 
     :Example:
 
-    >>> from pina import Condition, LabelTensor
+    >>> from pina.graph import Graph
     >>> import torch
+    >>> from torch_geometric.data import Data
 
-    >>> data = LabelTensor(torch.rand(5, 10, 2), labels=["u", "v"])
+    >>> data = Graph(torch.rand(5, 10, 2), edge_index=torch.randint(0, 5, (2, 20)))
     >>> condition = Condition(input=data, unroll_length=5, n_windows=3)
     """
 
@@ -50,7 +51,7 @@ class GraphTimeSeriesCondition(TimeSeriesCondition):
         check_positive_integer(n_windows, strict=True)
         check_positive_integer(unroll_length, strict=True)
 
-        return BaseCondition.__new__(cls)
+        return super().__new__(cls)
 
     def store_data(self, **kwargs):
         """
@@ -61,8 +62,8 @@ class GraphTimeSeriesCondition(TimeSeriesCondition):
 
         :param dict kwargs: The keyword arguments containing the data to be
             stored.
-        :return: A dictionary-like structure containing the stored data.
-        :rtype: _DataManager
+        :return: A namespace-like structure containing the stored data.
+        :rtype: SimpleNamespace
         """
         # Extract unrolling parameters from kwargs
         unroll_length = kwargs.get("unroll_length")
@@ -77,7 +78,7 @@ class GraphTimeSeriesCondition(TimeSeriesCondition):
                 f"The provided graph does not have the specified key '{key}'."
             )
 
-        unrolled_data = self._unroll(
+        unrolled_data = _unroll_windows(
             data=graph.__getattribute__(key),
             n_windows=n_windows,
             unroll_length=unroll_length,
@@ -85,7 +86,7 @@ class GraphTimeSeriesCondition(TimeSeriesCondition):
         )
         graph.__setattr__(key, unrolled_data)
 
-        return _DataManager(input=graph)
+        return super().store_data(input=graph)
 
     def evaluate(self, batch, solver):
         """
@@ -145,3 +146,13 @@ class GraphTimeSeriesCondition(TimeSeriesCondition):
 
         # Stack the step-wise residuals
         return torch.stack(residuals).as_subclass(torch.Tensor)
+
+    @property
+    def input(self):
+        """
+        The input data associated with the condition.
+
+        :return: The (unrolled) graph data.
+        :rtype: Graph | Data
+        """
+        return _unwrap_single(self.data.input)

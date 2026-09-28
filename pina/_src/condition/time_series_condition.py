@@ -1,13 +1,78 @@
-"""Module for the TimeSeriesCondition class."""
+"""Module for the Time-Series Condition class."""
 
 import torch
-from pina._src.core.utils import check_consistency, check_positive_integer
-from pina._src.data.manager.data_manager import _DataManager
-from pina._src.condition.base_condition import BaseCondition
+
+from pina._src.condition.tensor_condition import TensorCondition
 from pina._src.core.label_tensor import LabelTensor
+from pina._src.core.utils import check_consistency, check_positive_integer
 
 
-class TimeSeriesCondition(BaseCondition):
+def _unroll_windows(data, n_windows, unroll_length, randomize):
+    """
+    Build temporal windows from time-series data.
+
+    Given data with shape ``[trajectories, time_steps, *features]``, this
+    function returns a tensor of temporal windows with shape
+    ``[trajectories, windows, unroll_length, *features]``.
+
+    :param data: The temporal data tensor to be unrolled.
+    :type data: torch.Tensor | LabelTensor
+    :param int n_windows: The maximum number of temporal windows to extract.
+    :param int unroll_length: The number of time steps in each window.
+    :param bool randomize: If ``True``, starting indices are randomly
+        permuted before applying ``n_windows``. Default is ``False``.
+    :raises ValueError: If ``unroll_length`` is greater than the number of
+        time steps in the data.
+    :return: A tensor of unrolled windows.
+    :rtype: torch.Tensor | LabelTensor
+    """
+    # Store the number of time steps in the data
+    time_steps = data.shape[1]
+
+    # Compute the last valid starting index for unroll windows
+    last_idx = time_steps - unroll_length
+
+    # Raise error if unroll_length is greater than time_steps
+    if last_idx < 0:
+        raise ValueError(
+            f"Cannot create unroll windows: unroll_length {unroll_length} "
+            f"exceeds the available number of time steps {time_steps}."
+        )
+
+    # Extract starting indices
+    start_indices = torch.arange(last_idx + 1)
+
+    # Randomly permute starting indices if randomize is True
+    if randomize:
+        start_indices = start_indices[torch.randperm(len(start_indices))]
+
+    # Raise error if n_windows is greater than the number of valid windows
+    if len(start_indices) < n_windows:
+        raise ValueError(
+            f"Cannot create {n_windows} unroll windows with the selected "
+            f"unroll_length {unroll_length} from data with {time_steps} "
+            f"time steps. Only {len(start_indices)} valid windows are "
+            "available."
+        )
+
+    # Limit the number of windows to n_windows
+    start_indices = start_indices[:n_windows]
+
+    # Create unroll windows by slicing the input data at the starting idx
+    windows = [data[:, s : s + unroll_length] for s in start_indices]
+
+    # Stack the windows along a new dimension
+    unrolled_data = torch.stack(windows, dim=1)
+
+    # Preserve labels if the input data is a LabelTensor
+    if isinstance(data, LabelTensor):
+        unrolled_data = unrolled_data.as_subclass(LabelTensor)
+        unrolled_data.labels = data.labels
+
+    return unrolled_data
+
+
+class TimeSeriesCondition(TensorCondition):
     """
     The :class:`TimeSeriesCondition` class represents an autoregressive time
     series condition defined by temporal ``input`` data. The input is expected
@@ -76,7 +141,7 @@ class TimeSeriesCondition(BaseCondition):
         if unroll_length < 2:
             raise ValueError(
                 f"unroll_length must be strictly greater than 1 to create "
-                f" temporal windows. Got unroll_length={unroll_length}."
+                f"temporal windows. Got unroll_length={unroll_length}."
             )
 
         return super().__new__(cls)
@@ -90,8 +155,8 @@ class TimeSeriesCondition(BaseCondition):
 
         :param dict kwargs: The keyword arguments containing the data to be
             stored.
-        :return: A dictionary-like structure containing the stored data.
-        :rtype: _DataManager
+        :return: A namespace-like structure containing the stored data.
+        :rtype: SimpleNamespace
         """
         # Extract unrolling parameters from kwargs
         unroll_length = kwargs.get("unroll_length")
@@ -100,82 +165,14 @@ class TimeSeriesCondition(BaseCondition):
         data = kwargs.get("input")
 
         # Create unrolled windows from the input data
-        unrolled_data = self._unroll(
+        unrolled_data = _unroll_windows(
             data=data,
             n_windows=n_windows,
             unroll_length=unroll_length,
             randomize=randomize,
         )
 
-        # Preserve labels if the input data is a LabelTensor
-        if isinstance(data, LabelTensor):
-            unrolled_data = unrolled_data.as_subclass(LabelTensor)
-            unrolled_data.labels = data.labels
-
-        return _DataManager(input=unrolled_data)
-
-    def _unroll(self, data, n_windows, unroll_length, randomize):
-        """
-        Build temporal windows from time-series data.
-
-        Given data with shape ``[trajectories, time_steps, *features]``, this
-        method returns a tensor of overlapping temporal windows with shape
-        ``[trajectories, windows, unroll_length, *features]``.
-
-        :param data: The temporal data tensor to be unrolled.
-        :type data: torch.Tensor | LabelTensor
-        :param int n_windows: The maximum number of temporal windows to extract.
-        :param int unroll_length: The number of time steps in each window.
-        :param bool randomize: If ``True``, starting indices are randomly
-            permuted before applying ``n_windows``. Default is ``True``.
-        :raises ValueError: If ``unroll_length`` is greater than the number of
-            time steps in the data.
-        :return: A tensor of unrolled windows.
-        :rtype: torch.Tensor | LabelTensor
-        """
-        # Store the number of time steps in the data
-        time_steps = data.shape[1]
-
-        # Compute the last valid starting index for unroll windows
-        last_idx = time_steps - unroll_length
-
-        # Raise error if unroll_length is greater than time_steps
-        if last_idx < 0:
-            raise ValueError(
-                f"Cannot create unroll windows: unroll_length {unroll_length} "
-                f"exceeds the available number of time steps {time_steps}."
-            )
-
-        # Extract starting indices
-        start_indices = torch.arange(last_idx + 1)
-
-        # Randomly permute starting indices if randomize is True
-        if randomize:
-            start_indices = start_indices[torch.randperm(len(start_indices))]
-
-        # Raise error if n_windows is greater than the number of valid windows
-        if len(start_indices) < n_windows:
-            raise ValueError(
-                f"Cannot create {n_windows} unroll windows with the selected "
-                f"unroll_length {unroll_length} from data with {time_steps} "
-                f"time steps. Only {len(start_indices)} valid windows are "
-                "available."
-            )
-
-        # Limit the number of windows to n_windows
-        start_indices = start_indices[:n_windows]
-
-        # Create unroll windows by slicing the input data at the starting idx
-        windows = [data[:, s : s + unroll_length] for s in start_indices]
-
-        if isinstance(data, LabelTensor):
-            # Preserve labels if the input data is a LabelTensor
-            unrolled_data = torch.stack(windows, dim=1).as_subclass(LabelTensor)
-            unrolled_data.labels = data.labels
-        else:
-            unrolled_data = torch.stack(windows, dim=1)
-
-        return unrolled_data
+        return super().store_data(input=unrolled_data)
 
     def evaluate(self, batch, solver):
         """
@@ -239,9 +236,9 @@ class TimeSeriesCondition(BaseCondition):
     @property
     def input(self):
         """
-        The unrolled temporal input data.
+        The input data associated with the condition.
 
-        :return: The input data.
+        :return: The unrolled input data.
         :rtype: torch.Tensor | LabelTensor
         """
         return self.data.input
