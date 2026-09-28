@@ -5,7 +5,9 @@ from pina._src.problem.time_dependent_problem import TimeDependentProblem
 from pina._src.domain.cartesian_domain import CartesianDomain
 from pina._src.equation.system_equation import SystemEquation
 from pina._src.problem.spatial_problem import SpatialProblem
-from pina._src.condition.condition import Condition
+from pina._src.condition.domain_equation_condition import (
+    DomainEquationCondition,
+)
 from pina._src.core.utils import check_consistency
 from pina._src.equation.equation import Equation
 from pina._src.equation.zoo.fixed_value import FixedValue
@@ -97,8 +99,8 @@ class AcousticWaveProblem(TimeDependentProblem, SpatialProblem):
     }
 
     conditions = {
-        "boundary": Condition(domain="boundary", equation=FixedValue(0.0)),
-        "t0": Condition(
+        "boundary": DomainEquationCondition(domain="boundary", equation=FixedValue(0.0)),
+        "t0": DomainEquationCondition(
             domain="t0",
             equation=SystemEquation(
                 [Equation(initial_condition), FixedGradient(0.0, d="t")]
@@ -117,7 +119,7 @@ class AcousticWaveProblem(TimeDependentProblem, SpatialProblem):
         check_consistency(c, (float, int))
         self.c = c
 
-        self.conditions["D"] = Condition(
+        self.conditions["D"] = DomainEquationCondition(
             domain="D", equation=AcousticWaveEquation(self.c)
         )
 

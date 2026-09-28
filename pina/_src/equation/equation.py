@@ -9,15 +9,16 @@ class Equation(BaseEquation):
     Implementation of the Equation class, representing a single mathematical
     equation to be satisfied by the model outputs.
 
-    It can be passed to a :class:`~pina.condition.condition.Condition` object to
-    define the conditions under which the model is trained.
+    It can be passed to a
+    :class:`~pina.condition.domain_equation_condition.DomainEquationCondition`
+    object to define the conditions under which the model is trained.
 
     :Example:
 
         >>> from pina.equation import Equation
         >>> eq = Equation(lambda x, u: u - x)
-        >>> # Use within a Condition:
-        >>> # condition = Condition(domain=domain, equation=eq)
+        >>> # Use within a DomainEquationCondition:
+        >>> # condition = DomainEquationCondition(domain=domain, equation=eq)
     """
 
     def __init__(self, equation):

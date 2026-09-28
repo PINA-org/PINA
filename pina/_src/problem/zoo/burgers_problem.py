@@ -4,7 +4,9 @@ import torch
 from pina._src.problem.time_dependent_problem import TimeDependentProblem
 from pina._src.domain.cartesian_domain import CartesianDomain
 from pina._src.problem.spatial_problem import SpatialProblem
-from pina._src.condition.condition import Condition
+from pina._src.condition.domain_equation_condition import (
+    DomainEquationCondition,
+)
 from pina._src.core.utils import check_consistency
 from pina._src.equation.equation import Equation
 from pina._src.equation.zoo.fixed_value import FixedValue
@@ -75,8 +77,8 @@ class BurgersProblem(TimeDependentProblem, SpatialProblem):
     }
 
     conditions = {
-        "boundary": Condition(domain="boundary", equation=FixedValue(0.0)),
-        "t0": Condition(domain="t0", equation=Equation(initial_condition)),
+        "boundary": DomainEquationCondition(domain="boundary", equation=FixedValue(0.0)),
+        "t0": DomainEquationCondition(domain="t0", equation=Equation(initial_condition)),
     }
 
     def __init__(self, nu=0):
@@ -97,6 +99,6 @@ class BurgersProblem(TimeDependentProblem, SpatialProblem):
                 "The viscosity ``nu`` must be a non-negative float or int."
             )
 
-        self.conditions["D"] = Condition(
+        self.conditions["D"] = DomainEquationCondition(
             domain="D", equation=BurgersEquation(nu)
         )

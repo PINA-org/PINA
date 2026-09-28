@@ -3,6 +3,7 @@
 from abc import ABCMeta
 import lightning
 import torch
+from pina import logger
 from pina._src.core.utils import labelize_forward, check_consistency
 from pina._src.solver.solver_interface import SolverInterface
 from pina._src.weighting.base_weighting import BaseWeighting
@@ -227,7 +228,7 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         self.log(
             name="train_loss",
             value=loss.item(),
-            batch_size=self.get_batch_size(batch),
+            # batch_size=self.get_batch_size(batch),
             **self.trainer.logging_kwargs,
         )
         return loss
@@ -246,7 +247,7 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         self.log(
             name="val_loss",
             value=loss.item(),
-            batch_size=self.get_batch_size(batch),
+            # batch_size=self.get_batch_size(batch),
             **self.trainer.logging_kwargs,
         )
         return loss
@@ -282,9 +283,10 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         :rtype: torch.Tensor
         """
         # Clone the input tensor if it exists to avoid in-place modifications
-        if "input" in data and hasattr(data["input"], "clone"):
-            data = dict(data)
-            data["input"] = data["input"].clone()
+        # if "input" in data and hasattr(data["input"], "clone"):
+        #     data = dict(data)
+        #     data["input"] = data["input"].clone()
+        logger.debug("Condition data before preparation: %s", data)
 
         # Prepare condition data, e.g. by enabling gradient for regularizations
         data = self._prepare_condition_data(data=data)

@@ -19,14 +19,16 @@ class DomainEquationCondition(BaseCondition):
 
     >>> from pina.domain import CartesianDomain
     >>> from pina.equation import Equation
-    >>> from pina import Condition
+    >>> from pina.condition import DomainEquationCondition
 
     >>> # Equation to be satisfied over the domain: # x^2 + y^2 - 1 = 0
     >>> def dummy_equation(pts):
     ...     return pts["x"]**2 + pts["y"]**2 - 1
 
     >>> domain = CartesianDomain({"x": [0, 1], "y": [0, 1]})
-    >>> condition = Condition(domain=domain, equation=Equation(dummy_equation))
+    >>> condition = DomainEquationCondition(
+    ...     domain=domain, equation=Equation(dummy_equation)
+    ... )
     """
 
     # Available fields, domain and equation data types
@@ -74,6 +76,20 @@ class DomainEquationCondition(BaseCondition):
         # Store domain and equation as attributes of the condition instance
         setattr(self, "domain", kwargs.get("domain"))
         setattr(self, "equation", kwargs.get("equation"))
+
+    def materialize(self, ids, device=None, batch_fn=None):
+        """
+        Materialize the data points at the given ids.
+
+        :raises NotImplementedError: Always raised since the data points are
+            not stored in a list-like structure and are sampled from the
+            domain at training time.
+        """
+        raise NotImplementedError(
+            "Data points in a DomainEquationCondition are not stored and are "
+            "sampled from the domain at training time. Therefore, the "
+            ":meth:`materialize` method is not implemented for this condition."
+        )
 
     def evaluate(self, batch, solver):
         """

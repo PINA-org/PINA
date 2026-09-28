@@ -13,8 +13,8 @@ class FixedGradient(Equation):
 
         >>> from pina.equation import FixedGradient
         >>> eq = FixedGradient(value=0.0)
-        >>> # Use within a Condition:
-        >>> # condition = Condition(domain=domain, equation=eq)
+        >>> # Use within a DomainEquationCondition:
+        >>> # condition = DomainEquationCondition(domain=domain, equation=eq)
     """
 
     def __init__(self, value, components=None, d=None):

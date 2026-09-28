@@ -1,7 +1,9 @@
 """Formulation of the diffusion-reaction problem."""
 
 import torch
-from pina._src.condition.condition import Condition
+from pina._src.condition.domain_equation_condition import (
+    DomainEquationCondition,
+)
 from pina._src.equation.equation import Equation
 from pina._src.equation.zoo.fixed_value import FixedValue
 from pina._src.problem.spatial_problem import SpatialProblem
@@ -115,8 +117,8 @@ class DiffusionReactionProblem(TimeDependentProblem, SpatialProblem):
     }
 
     conditions = {
-        "boundary": Condition(domain="boundary", equation=FixedValue(0.0)),
-        "t0": Condition(domain="t0", equation=Equation(initial_condition)),
+        "boundary": DomainEquationCondition(domain="boundary", equation=FixedValue(0.0)),
+        "t0": DomainEquationCondition(domain="t0", equation=Equation(initial_condition)),
     }
 
     def __init__(self, alpha=1e-4):
@@ -147,7 +149,7 @@ class DiffusionReactionProblem(TimeDependentProblem, SpatialProblem):
                 + ((64 * self.alpha - 1) / 8) * torch.sin(8 * x)
             )
 
-        self.conditions["D"] = Condition(
+        self.conditions["D"] = DomainEquationCondition(
             domain="D",
             equation=DiffusionReactionEquation(self.alpha, forcing_term),
         )

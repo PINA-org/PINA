@@ -22,8 +22,8 @@ class DiffusionReactionEquation(Equation):
 
         >>> from pina.equation import DiffusionReactionEquation
         >>> eq = DiffusionReactionEquation(alpha=1.0, forcing_term=lambda x: x**2)
-        >>> # Use within a Condition:
-        >>> # condition = Condition(domain=domain, equation=eq)
+        >>> # Use within a DomainEquationCondition:
+        >>> # condition = DomainEquationCondition(domain=domain, equation=eq)
     """
 
     def __init__(self, alpha, forcing_term):
