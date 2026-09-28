@@ -65,17 +65,6 @@ Conditions
     Input Target Condition <condition/input_target_condition.rst>
     Time Series Condition <condition/time_series_condition.rst>
 
-Batch and Data Managers
---------------------------
-.. toctree::
-    :titlesonly:
-
-    Batch Manager <data/manager/batch_manager.rst>
-    Data Manager Interface <data/manager/data_manager_interface.rst>
-    Data Manager <data/manager/data_manager.rst>
-    Graph Data Manager <data/manager/graph_data_manager.rst>
-    Tensor Data Manager <data/manager/tensor_data_manager.rst>
-
 Solvers
 ------------------------
 

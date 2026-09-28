@@ -14,8 +14,9 @@ class SystemEquation(BaseEquation):
     multi-component outputs or coupled problems, where multiple constraints must
     be evaluated together.
 
-    It can be passed to a :class:`~pina.condition.condition.Condition` object to
-    define the conditions under which the model is trained.
+    It can be passed to a
+    :class:`~pina.condition.domain_equation_condition.DomainEquationCondition`
+    object to define the conditions under which the model is trained.
 
     Each equation in the system must be either an instance of
     :class:`~pina.equation.equation.Equation`, or a callable function.

@@ -5,7 +5,9 @@ import torch
 from pina._src.equation.zoo.fixed_value import FixedValue
 from pina._src.domain.cartesian_domain import CartesianDomain
 from pina._src.problem.spatial_problem import SpatialProblem
-from pina._src.condition.condition import Condition
+from pina._src.condition.domain_equation_condition import (
+    DomainEquationCondition,
+)
 from pina._src.equation.zoo.poisson_equation import PoissonEquation
 
 
@@ -75,8 +77,8 @@ class Poisson2DSquareProblem(SpatialProblem):
     }
 
     conditions = {
-        "boundary": Condition(domain="boundary", equation=FixedValue(0.0)),
-        "D": Condition(
+        "boundary": DomainEquationCondition(domain="boundary", equation=FixedValue(0.0)),
+        "D": DomainEquationCondition(
             domain="D", equation=PoissonEquation(forcing_term=forcing_term)
         ),
     }

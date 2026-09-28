@@ -1,7 +1,7 @@
 """Formulation of a Supervised Problem in PINA."""
 
 from pina._src.problem.base_problem import BaseProblem
-from pina._src.condition.condition import Condition
+from pina._src.condition.input_target_condition import InputTargetCondition
 
 
 class SupervisedProblem(BaseProblem):
@@ -48,5 +48,5 @@ class SupervisedProblem(BaseProblem):
         self.output_variables = output_variables
 
         # Set the condition
-        self.conditions["data"] = Condition(input=input_, target=output_)
+        self.conditions["data"] = InputTargetCondition(input=input_, target=output_)
         super().__init__()

@@ -5,9 +5,11 @@ from copy import deepcopy
 from pina._src.problem.problem_interface import ProblemInterface
 from pina._src.domain.domain_interface import DomainInterface
 from pina._src.core.label_tensor import LabelTensor
-from pina._src.condition.condition import Condition
 from pina._src.condition.domain_equation_condition import (
     DomainEquationCondition,
+)
+from pina._src.condition.input_equation_condition import (
+    InputEquationCondition,
 )
 from pina._src.core.utils import (
     check_consistency,
@@ -224,7 +226,7 @@ class BaseProblem(ProblemInterface):
             if hasattr(cond, "domain"):
 
                 # Create a new condition with the discretised domain as input
-                new_condition = Condition(
+                new_condition = InputEquationCondition(
                     input=self.discretised_domains[cond.domain],
                     equation=cond.equation,
                 )

@@ -7,8 +7,12 @@ class ConditionInterface(metaclass=ABCMeta):
     """
     Abstract interface for all conditions.
 
-    Refer to :class:`pina.condition.condition.Condition` for a thorough
-    description of all available conditions and how to instantiate them.
+    A condition binds a set of data points (inputs, targets, equations, ...)
+    to a problem. The data module works with conditions through this interface
+    only: it shuffles sample ids and asks the condition to :meth:`materialize`
+    the requested ids into a batch. Storage and batching are therefore a
+    condition concern, and new data types can be added without touching the
+    data module.
     """
 
     @abstractmethod
@@ -23,11 +27,12 @@ class ConditionInterface(metaclass=ABCMeta):
     @abstractmethod
     def __getitem__(self, idx):
         """
-        Return the data point at the specified index.
+        Materialize the data points at the specified index (or indices).
 
-        :param int idx: The index of the data point to retrieve.
-        :return: The data point at the specified index.
-        :rtype: Any
+        :param idx: The index of the data point to retrieve.
+        :type idx: int | slice | list[int] | torch.Tensor
+        :return: The materialized batch.
+        :rtype: dict
         """
 
     @abstractmethod
@@ -37,23 +42,23 @@ class ConditionInterface(metaclass=ABCMeta):
 
         :param dict kwargs: The keyword arguments containing the data to be
             stored.
-        :return: The stored data in a suitable format.
+        :return: The stored data.
         :rtype: Any
         """
 
     @abstractmethod
-    def create_dataloader(
-        self, dataset, batch_size, automatic_batching, **kwargs
-    ):
+    def materialize(self, ids, device=None, batch_fn=None):
         """
-        Create the DataLoader for the condition.
+        Build a batch from the given data point ids.
 
-        :param _ConditionSubset dataset: The dataset for the DataLoader.
-        :param int batch_size: The batch size for the DataLoader.
-        :param bool automatic_batching: Whether to use automatic batching.
-        :param dict kwargs: Additional keyword arguments for the DataLoader.
-        :return: The DataLoader for the condition.
-        :rtype: torch.utils.data.DataLoader
+        :param ids: The ids of the data points to batch.
+        :type ids: int | list[int] | torch.Tensor
+        :param device: The target device for the batch. Default is ``None``.
+        :param batch_fn: Optional callable overriding the default batched
+            construction. It receives the selected raw data and the ids and
+            returns the batch. Default is ``None``.
+        :return: The materialized batch.
+        :rtype: dict
         """
 
     @abstractmethod
@@ -72,45 +77,9 @@ class ConditionInterface(metaclass=ABCMeta):
         :param dict batch: The batch containing the data required by the
             condition evaluation.
         :param BaseSolver solver: The solver used to perform the forward pass
-            and compute the residual. The solver provides access to the model
-            and its parameters, which may be necessary for evaluating the
-            condition residual.
+            and compute the residual.
         :return: The non-aggregated residual tensor.
         :rtype: torch.Tensor | LabelTensor
-        """
-
-    @abstractmethod
-    def switch_dataloader_fn(self, create_dataloader_fn):
-        """
-        Switch the dataloader function for the condition.
-
-        :param Callable create_dataloader_fn: The new dataloader function to use
-            for the condition.
-        :return: The new dataloader function for the condition.
-        :rtype: Callable
-        """
-
-    @classmethod
-    @abstractmethod
-    def automatic_batching_collate_fn(cls, batch):
-        """
-        Collate function for automatic batching to be used in the DataLoader.
-
-        :param list batch: A list of items from the dataset.
-        :return: A collated batch.
-        :rtype: dict
-        """
-
-    @staticmethod
-    @abstractmethod
-    def collate_fn(batch, condition):
-        """
-        Collate function for custom batching to be used in the DataLoader.
-
-        :param list batch: A list of items from the dataset.
-        :param BaseCondition condition: The condition instance.
-        :return: A collated batch.
-        :rtype: dict
         """
 
     @property

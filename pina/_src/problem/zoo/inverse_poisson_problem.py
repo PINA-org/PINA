@@ -10,7 +10,10 @@ from pina._src.domain.cartesian_domain import CartesianDomain
 from pina._src.problem.inverse_problem import InverseProblem
 from pina._src.problem.spatial_problem import SpatialProblem
 from pina._src.equation.zoo.fixed_value import FixedValue
-from pina._src.condition.condition import Condition
+from pina._src.condition.domain_equation_condition import (
+    DomainEquationCondition,
+)
+from pina._src.condition.input_target_condition import InputTargetCondition
 from pina._src.core.label_tensor import LabelTensor
 from pina._src.equation.equation import Equation
 from pina._src.core.operator import laplacian
@@ -122,8 +125,12 @@ class InversePoisson2DSquareProblem(SpatialProblem, InverseProblem):
     }
 
     conditions = {
-        "D": Condition(domain="D", equation=Equation(laplace_equation)),
-        "boundary": Condition(domain="boundary", equation=FixedValue(0.0)),
+        "D": DomainEquationCondition(
+            domain="D", equation=Equation(laplace_equation)
+        ),
+        "boundary": DomainEquationCondition(
+            domain="boundary", equation=FixedValue(0.0)
+        ),
     }
 
     def __init__(self, load=True, data_size=1.0):
@@ -171,7 +178,7 @@ class InversePoisson2DSquareProblem(SpatialProblem, InverseProblem):
             # Add the "data" condition
             if input_data is not None and output_data is not None:
                 n_data = int(input_data.shape[0] * data_size)
-                self.conditions["data"] = Condition(
+                self.conditions["data"] = InputTargetCondition(
                     input=input_data[:n_data], target=output_data[:n_data]
                 )
                 self.conditions["data"].problem = self

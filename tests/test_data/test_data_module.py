@@ -1,9 +1,9 @@
-import torch
 import pytest
-from copy import copy
-from pina.problem.zoo import SupervisedProblem, Poisson2DSquareProblem
-from pina.data import DataModule, _ConditionSubset
+import torch
+
+from pina.data import DataModule
 from pina.graph import RadiusGraph
+from pina.problem.zoo import Poisson2DSquareProblem, SupervisedProblem
 
 # Number of samples in the synthetic datasets
 n_samples = 100
@@ -67,7 +67,6 @@ def test_constructor(problem_type, batch_size, train_size, val_size, test_size):
         test_size=test_size,
         batch_size=batch_size,
         batching_mode="proportional",
-        automatic_batching=True,
         shuffle=True,
         num_workers=0,
         pin_memory=False,
@@ -138,7 +137,6 @@ def test_setup(problem_type, batch_size, train_size, val_size, test_size):
         test_size=test_size,
         batch_size=batch_size,
         batching_mode="proportional",
-        automatic_batching=True,
         shuffle=True,
         num_workers=0,
         pin_memory=False,
@@ -152,8 +150,19 @@ def test_setup(problem_type, batch_size, train_size, val_size, test_size):
         {"data"} if problem_type in ["tensor", "graph"] else {"D", "boundary"}
     )
 
-    # Iterate over datsets
-    for dataset in ["train_datasets", "val_datasets", "test_datasets"]:
+    # Expected lengths of splits
+    expected_lengths = {
+        "train": int(train_size * n_samples),
+        "val": int(val_size * n_samples),
+        "test": int(test_size * n_samples),
+    }
+
+    # Iterate over datasets
+    for dataset, split in [
+        ("train_datasets", "train"),
+        ("val_datasets", "val"),
+        ("test_datasets", "test"),
+    ]:
 
         # Assert that each dataset has been created correctly
         assert hasattr(dm, dataset)
@@ -166,5 +175,8 @@ def test_setup(problem_type, batch_size, train_size, val_size, test_size):
             # Iterate over keys in each dataset
             for key in expected_keys:
 
-                # Assert that the corresponding value is a _ConditionSubset
-                assert isinstance(getattr(dm, dataset)[key], _ConditionSubset)
+                # Assert that the corresponding value is a tensor of
+                # sample ids with the expected length
+                assert isinstance(getattr(dm, dataset)[key], torch.Tensor)
+                assert getattr(dm, dataset)[key].dtype == torch.long
+                assert len(getattr(dm, dataset)[key]) == expected_lengths[split]

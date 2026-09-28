@@ -10,8 +10,9 @@ class BaseEquation(metaclass=ABCMeta):
 
     Equations are fundamental components in PINA, representing mathematical
     constraints that must be satisfied by the model outputs. They can be passed
-    to :class:`~pina.condition.condition.Condition` objects to define the
-    conditions under which the model is trained.
+    to
+    :class:`~pina.condition.domain_equation_condition.DomainEquationCondition`
+    objects to define the conditions under which the model is trained.
 
     All specific equation types should inherit from this class and implement its
     abstract methods.

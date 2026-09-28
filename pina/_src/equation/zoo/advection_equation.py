@@ -21,8 +21,8 @@ class AdvectionEquation(Equation):
 
         >>> from pina.equation import AdvectionEquation
         >>> eq = AdvectionEquation(c=1.0)
-        >>> # Use within a Condition:
-        >>> # condition = Condition(domain=domain, equation=eq)
+        >>> # Use within a DomainEquationCondition:
+        >>> # condition = DomainEquationCondition(domain=domain, equation=eq)
     """
 
     def __init__(self, c):

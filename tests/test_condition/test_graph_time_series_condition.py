@@ -1,16 +1,9 @@
 import pytest
 import torch
-from pina.data.manager import (
-    _TensorDataManager,
-    _BatchManager,
-    _GraphDataManager,
-)
-from pina._src.core.utils import labelize_forward
-from pina.condition import TimeSeriesCondition
-from pina import LabelTensor, Condition
-from pina._src.condition.graph_time_series_condition import (
-    GraphTimeSeriesCondition,
-)
+from torch_geometric.data import Data
+
+from pina import Condition, LabelTensor
+from pina.condition import GraphTimeSeriesCondition, TimeSeriesCondition
 from pina.graph import RadiusGraph
 
 # Number of samples and time steps for testing
@@ -77,19 +70,13 @@ def _create_graph_data(use_lt):
 class DummySolver:
 
     def __init__(self, use_lt, input_vars):
-        if use_lt:
-            self.forward = labelize_forward(
-                forward=self.forward,
-                input_variables=input_vars,
-                output_variables=input_vars,
-            )
-
         self._params = None
         self._kwargs = {}
         self.aggregation_strategy = torch.mean
 
     def forward(self, samples):
-        return samples
+        # The whole graph batch goes in, the current state comes out
+        return samples.x[:, :, 0]
 
     def preprocess_step(self, current_state, **kwargs):
         return current_state
@@ -122,6 +109,10 @@ def test_constructor(use_lt, n_windows, unroll_length, randomize):
 
     # Assert correct types
     assert isinstance(condition, GraphTimeSeriesCondition)
+
+    # The condition must also be a time-series condition, so that solvers
+    # accepting TimeSeriesCondition (e.g. the autoregressive ones) take it
+    assert isinstance(condition, TimeSeriesCondition)
 
     # Assert numerical parity
     if not randomize:
@@ -213,34 +204,24 @@ def test_get_item(use_lt, n_windows, unroll_length, randomize):
         randomize=randomize,
     )
 
-    # Extract item using __getitem__
+    # Extract item using materialize
     index = 0
-    item = condition[index]
+    item = condition.materialize([index])
 
     # Assert correct types
-    assert isinstance(item, _GraphDataManager)
-    _assert_tensor_type(item.input, use_lt)
+    assert isinstance(item, dict)
+    _assert_tensor_type(item["input"], use_lt)
 
     # Assert correct shapes
     expected_shape = torch.Size([n_nodes, n_windows, unroll_length, 2])
-    assert item.input.x.shape == expected_shape
-
-    # TODO: Why this test?
-    ##################################
-    # if not randomize:
-    #     expected_tensor = _expected_unroll(
-    #         graph.x, n_windows, unroll_length, randomize
-    #     )
-    #     print(item.input.x.shape)
-    #     print(expected_tensor[index].shape)
-    #     assert torch.allclose(item.input.x, expected_tensor[index])
+    assert item["input"].x.shape == expected_shape
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
 @pytest.mark.parametrize("n_windows", [4, 6])
 @pytest.mark.parametrize("unroll_length", [3, 5])
 @pytest.mark.parametrize("randomize", [True, False])
-def test_create_batch(use_lt, n_windows, unroll_length, randomize):
+def test_materialize(use_lt, n_windows, unroll_length, randomize):
 
     # Define the condition
     graph = _create_graph_data(use_lt=use_lt)
@@ -251,39 +232,14 @@ def test_create_batch(use_lt, n_windows, unroll_length, randomize):
         randomize=randomize,
     )
 
-    """ CHECK
-    # Create batches using automatic batching or condition's collate_fn
-    idx = [0, 2]
-    print(condition.data[0])
-    print(condition.data[0].__dict__)
-    data_to_collate = [condition.data[i] for i in idx]
-    batch_auto = condition.automatic_batching_collate_fn(data_to_collate)
-    batch_collate = condition.collate_fn(idx, condition)
+    # Materialize the batch for the given ids
+    idx = [0]
+    batch = condition.materialize(idx)
 
-    # Check that the automatic batch has been properly created
-    assert isinstance(batch_auto, _BatchManager)
-    assert hasattr(batch_auto, "input")
-
-    # Check that the collate_fn batch has been properly created
-    assert isinstance(batch_collate, dict)
-    assert hasattr(batch_collate, "input")
-
-    # Assert that the automatic batch input is correct
-    expected_shape = torch.Size([len(idx), n_windows, unroll_length, 2])
-    assert batch_auto.input.shape == expected_shape
-
-    # Assert that the collate_fn batch input is correct
-    expected_shape = torch.Size([len(idx), n_windows, unroll_length, 2])
-    assert batch_collate.input.shape == expected_shape
-
-    # Create input values
-    if not randomize:
-        expected_tensor = _expected_unroll(
-            graph.x, n_windows, unroll_length, randomize
-        )
-        assert torch.allclose(batch_collate.input, expected_tensor[idx])
-        assert torch.allclose(batch_auto.input, expected_tensor[idx])
-    """
+    # Check that the batch is a dictionary holding the input data
+    assert isinstance(batch, dict)
+    assert "input" in batch
+    assert batch["input"].num_graphs == len(idx)
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
@@ -313,6 +269,7 @@ def test_evaluate(use_lt, n_windows, unroll_length, randomize):
 
     # Compute expected autoregressive step residuals
     step_residuals = []
+    print(batch["input"].x.shape)
     current_state = batch["input"].x[:, :, 0, :]
 
     for step in range(1, batch["input"].x.shape[2]):
@@ -328,3 +285,34 @@ def test_evaluate(use_lt, n_windows, unroll_length, randomize):
 
     # Assert that the evaluated residuals are correct
     assert torch.allclose(residuals, expected)
+
+
+def test_evaluate_forward_receives_graph():
+
+    graph = _create_graph_data(use_lt=False)
+    condition = GraphTimeSeriesCondition(
+        input=graph, n_windows=4, unroll_length=3
+    )
+
+    received = []
+
+    class CaptureSolver:
+        _kwargs = {}
+
+        def preprocess_step(self, state, **kwargs):
+            return state
+
+        def postprocess_step(self, state, **kwargs):
+            return state
+
+        def forward(self, samples):
+            received.append(samples)
+            return samples.x[:, :, 0]
+
+    batch = {"input": condition.input}
+    residuals = condition.evaluate(batch, CaptureSolver())
+
+    inp = received[0]
+    assert isinstance(inp, Data)
+    assert inp.x.shape == (n_nodes, 4, 3, 2)
+    assert residuals.shape == (2, n_nodes, 4, 2)

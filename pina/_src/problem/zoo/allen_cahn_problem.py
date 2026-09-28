@@ -1,7 +1,9 @@
 """Formulation of the Allen Cahn problem."""
 
 import torch
-from pina._src.condition.condition import Condition
+from pina._src.condition.domain_equation_condition import (
+    DomainEquationCondition,
+)
 from pina._src.problem.spatial_problem import SpatialProblem
 from pina._src.problem.time_dependent_problem import TimeDependentProblem
 from pina._src.equation.equation import Equation
@@ -81,7 +83,7 @@ class AllenCahnProblem(TimeDependentProblem, SpatialProblem):
     }
 
     conditions = {
-        "t0": Condition(domain="t0", equation=Equation(initial_condition)),
+        "t0": DomainEquationCondition(domain="t0", equation=Equation(initial_condition)),
     }
 
     def __init__(self, alpha=1e-4, beta=5):
@@ -99,7 +101,7 @@ class AllenCahnProblem(TimeDependentProblem, SpatialProblem):
         self.alpha = alpha
         self.beta = beta
 
-        self.conditions["D"] = Condition(
+        self.conditions["D"] = DomainEquationCondition(
             domain="D",
             equation=AllenCahnEquation(alpha=self.alpha, beta=self.beta),
         )

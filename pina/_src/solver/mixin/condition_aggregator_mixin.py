@@ -2,6 +2,8 @@
 
 import torch
 
+from pina import logger
+
 
 class ConditionAggregatorMixin:
     """
@@ -29,6 +31,7 @@ class ConditionAggregatorMixin:
         """
         # Initialize a dictionary to hold the scalar losses for each condition
         condition_losses = {}
+        logger.debug("Batch: %s", batch)
 
         # Loop through each condition in the batch and compute its scalar loss
         for condition_name, data in batch:
@@ -36,7 +39,7 @@ class ConditionAggregatorMixin:
             # Compute the scalar loss for the current condition
             condition_losses[condition_name] = self._compute_condition_loss(
                 condition=self.problem.conditions[condition_name],
-                data=dict(data),
+                data=data,
                 batch_idx=batch_idx,
             )
 
@@ -48,7 +51,7 @@ class ConditionAggregatorMixin:
             self.log(
                 name=f"{name}_loss",
                 value=value.item(),
-                batch_size=self.get_batch_size(batch),
+                # batch_size=self.get_batch_size(batch),
                 **self.trainer.logging_kwargs,
             )
 
