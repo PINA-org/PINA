@@ -29,7 +29,7 @@ The official distribution is on GitHub. Clone the repository:
 
 .. code-block:: bash
 
-    git clone https://github.com/mathLab/PINA
+    git clone https://github.com/PINA-org/PINA
 
 Then install in editable mode:
 

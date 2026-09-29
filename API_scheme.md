@@ -2,7 +2,7 @@
 
 
 Here is a high-level overview of PINA’s main modules. For full details, refer to the
-<a href="https://mathlab.github.io/PINA/"><b>documentation</b></a>.
+<a href="https://pina-org.github.io/PINA/"><b>documentation</b></a>.
   
 ```mermaid
 flowchart TB

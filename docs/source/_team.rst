@@ -25,7 +25,7 @@ A significant part of **PINA** has been written either as a by-product of funded
     :align: center
     :width: 500
 
-We also acknowledge the contribution of `Maria Strazzullo <https://mstrazzu.github.io/>`_ in the early development of the package. A special thank you goes to all the students and researchers from different universities who contributed to the package. Finally, we warmly thank all the `contributors <https://contrib.rocks/preview?repo=mathlab%2Fpina>`_ who are the real heart of **PINA**!
+We also acknowledge the contribution of `Maria Strazzullo <https://mstrazzu.github.io/>`_ in the early development of the package. A special thank you goes to all the students and researchers from different universities who contributed to the package. Finally, we warmly thank all the `contributors <https://contrib.rocks/preview?repo=PINA-org%2Fpina>`_ who are the real heart of **PINA**!
 
 .. figure:: index_files/university_dev_pina.png
     :align: center

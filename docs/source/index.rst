@@ -16,7 +16,7 @@ Welcome to PINA's documentation!
 
    <a href="_installation.html" class="btn btn-primary" style="margin: 0.25rem;">Get Started</a>
    <a href="_quickstart.html" class="btn btn-primary" style="margin: 0.25rem;">Quickstart</a>
-   <a href="https://github.com/mathLab/PINA" class="btn btn-primary" style="margin: 0.25rem;">View on GitHub</a>
+   <a href="https://github.com/PINA-org/PINA" class="btn btn-primary" style="margin: 0.25rem;">View on GitHub</a>
 
    </div>
 

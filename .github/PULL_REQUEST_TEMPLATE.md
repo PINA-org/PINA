@@ -6,7 +6,7 @@ This PR fixes #ISSUE_NUMBER. <!-- Possible other comments. -->
 
 ## Checklist
 
-- [ ] Code follows the project’s [Code Style Guidelines](https://github.com/mathLab/PINA/blob/master/CONTRIBUTING.md#code-style--guidelines)
+- [ ] Code follows the project’s [Code Style Guidelines](https://github.com/PINA-org/PINA/blob/master/CONTRIBUTING.md#code-style--guidelines)
 - [ ] Tests have been added or updated
 - [ ] Documentation has been updated if necessary
 - [ ] Pull request is linked to an open issue

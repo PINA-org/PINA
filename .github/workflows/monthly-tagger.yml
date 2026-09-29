@@ -36,8 +36,8 @@ jobs:
 
       - name: Create and push the tag
         run: |
-          python utils/mathlab_versioning.py set --only-date "post$(date +%y%m)"
-          VERS=$(python utils/mathlab_versioning.py get)
+          python utils/pina_versioning.py set --only-date "post$(date +%y%m)"
+          VERS=$(python utils/pina_versioning.py get)
           git config --global user.name 'Monthly Tag bot'
           git config --global user.email 'mtbot@noreply.github.com'
           git add pyproject.toml

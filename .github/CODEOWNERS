@@ -2,34 +2,34 @@
 
 # The default owners for everything in the repo
 # (Pull requests touching any file in "/" will require review from at least one of these)
-*                        @mathLab/pina-developers
-pina/                    @mathLab/pina-developers
-readme/                  @mathLab/pina-developers
-tests/                   @mathLab/pina-developers
-tutorials/               @mathLab/pina-developers
-pyproject.toml           @mathLab/pina-developers @ndem0
+*                        @PINA-org/pina-maintainers
+pina/                    @PINA-org/pina-maintainers
+readme/                  @PINA-org/pina-maintainers
+tests/                   @PINA-org/pina-maintainers
+tutorials/               @PINA-org/pina-maintainers
+pyproject.toml           @PINA-org/pina-committee @ndem0
 
 # Owners for documentation
-docs/                    @mathLab/pina-developers @dario-coscia
+docs/                    @PINA-org/pina-maintainers
 
 # Owners for JOSS
 joss/                    @ndem0 @annaivagnes @dario-coscia
 
 # Owners for project-wide config (GitHub workflows, formatting, etc.)
-.github/                 @ndem0 @dario-coscia
-.gitattributes           @ndem0 @dario-coscia
-.gitignore               @ndem0 @dario-coscia
+.github/                 @PINA-org/pina-committee
+.gitattributes           @PINA-org/pina-committee
+.gitignore               @PINA-org/pina-committee
 
 # Security & policy files
-CITATION.cff             @FilippoOlivo @GiovanniCanali @ndem0 @dario-coscia
-CONTRIBUTING.md          @FilippoOlivo @GiovanniCanali @ndem0 @dario-coscia
-LICENSE.rst              @FilippoOlivo @GiovanniCanali @ndem0 @dario-coscia 
-SECURITY.md              @FilippoOlivo @GiovanniCanali @ndem0 @dario-coscia
-CODE_OF_CONDUCT.md       @FilippoOlivo @GiovanniCanali @ndem0 @dario-coscia
-MAINTAINERS.md           @FilippoOlivo @GiovanniCanali @ndem0 @dario-coscia
-ANTITRUST.md             @FilippoOlivo @GiovanniCanali @ndem0 @dario-coscia
-CHARTER.md               @FilippoOlivo @GiovanniCanali @ndem0 @dario-coscia
-GOVERNANCE.md            @FilippoOlivo @GiovanniCanali @ndem0 @dario-coscia
-STEERING-COMMITTEE.md    @FilippoOlivo @GiovanniCanali @ndem0 @dario-coscia
-TRADEMARKS.md            @FilippoOlivo @GiovanniCanali @ndem0 @dario-coscia
-utils                    @FilippoOlivo @GiovanniCanali @ndem0 @dario-coscia
+CITATION.cff             @PINA-org/pina-committee
+CONTRIBUTING.md          @PINA-org/pina-committee
+LICENSE.rst              @PINA-org/pina-committee 
+SECURITY.md              @PINA-org/pina-committee
+CODE_OF_CONDUCT.md       @PINA-org/pina-committee
+MAINTAINERS.md           @PINA-org/pina-committee
+ANTITRUST.md             @PINA-org/pina-committee
+CHARTER.md               @PINA-org/pina-committee
+GOVERNANCE.md            @PINA-org/pina-committee
+STEERING-COMMITTEE.md    @PINA-org/pina-committee
+TRADEMARKS.md            @PINA-org/pina-committee
+utils                    @PINA-org/pina-committee
