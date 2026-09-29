@@ -127,7 +127,7 @@ html_theme_options = {
     "icon_links": [
         {
             "name": "GitHub",
-            "url": "https://github.com/mathLab/PINA",
+            "url": "https://github.com/PINA-org/PINA",
             "icon": "fab fa-github",
             "type": "fontawesome",
         },

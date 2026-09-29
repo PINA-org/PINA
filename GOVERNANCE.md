@@ -1,6 +1,6 @@
 # Governance Policy
 
-This document provides the governance policy for the PINA. Maintainers agree to this policy and to abide by all PINA polices, including the [code of conduct](https://github.com/mathLab/PINA/blob/master/CODE_OF_CONDUCT.md), [trademark policy](https://github.com/mathLab/PINA/blob/master/TRADEMARKS.md), and [antitrust policy](https://github.com/mathLab/PINA/blob/master/ANTITRUST.md) by adding their name to the [maintainers.md file](https://github.com/mathLab/PINA/blob/master/MAINTAINERS.md).
+This document provides the governance policy for the PINA. Maintainers agree to this policy and to abide by all PINA polices, including the [code of conduct](https://github.com/PINA-org/PINA/blob/master/CODE_OF_CONDUCT.md), [trademark policy](https://github.com/PINA-org/PINA/blob/master/TRADEMARKS.md), and [antitrust policy](https://github.com/PINA-org/PINA/blob/master/ANTITRUST.md) by adding their name to the [maintainers.md file](https://github.com/PINA-org/PINA/blob/master/MAINTAINERS.md).
 
 ## 1. Roles.
 

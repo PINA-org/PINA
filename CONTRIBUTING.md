@@ -29,7 +29,7 @@ We encourage all contributions, big or small!
 
 ## Reporting Bugs
 
-If you find a bug, please open an [issue](https://github.com/mathLab/PINA/issues) and include:
+If you find a bug, please open an [issue](https://github.com/PINA-org/PINA/issues) and include:
 - A clear and descriptive title
 - Steps to reproduce the problem
 - What you expected to happen
@@ -42,7 +42,7 @@ If you find a bug, please open an [issue](https://github.com/mathLab/PINA/issues
 ## Suggesting Enhancements
 
 We welcome new ideas! If you have an idea to improve PINA:
-1. Check the [issue tracker](https://github.com/mathLab/PINA/issues) or the [discussions](https://github.com/mathLab/PINA/discussions) to see if someone has already suggested it.
+1. Check the [issue tracker](https://github.com/PINA-org/PINA/issues) or the [discussions](https://github.com/PINA-org/PINA/discussions) to see if someone has already suggested it.
 2. If not, open a new issue describing:
    - The enhancement you'd like
    - Why it would be useful

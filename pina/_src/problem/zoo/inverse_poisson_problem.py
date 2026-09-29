@@ -154,11 +154,11 @@ class InversePoisson2DSquareProblem(SpatialProblem, InverseProblem):
 
             # Define URLs for input and output data
             input_url = (
-                "https://github.com/mathLab/PINA/raw/refs/heads/master"
+                "https://github.com/PINA-org/PINA/raw/refs/heads/master"
                 "/tutorials/tutorial7/data/pts_0.5_0.5"
             )
             output_url = (
-                "https://github.com/mathLab/PINA/raw/refs/heads/master"
+                "https://github.com/PINA-org/PINA/raw/refs/heads/master"
                 "/tutorials/tutorial7/data/pinn_solution_0.5_0.5"
             )
 

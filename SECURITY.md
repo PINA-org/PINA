@@ -16,4 +16,4 @@ Security fixes are given priority and might be enough to cause a new version to 
 
 ## Reporting a Vulnerability
 
-To ensure vulnerability reports reach the maintainers as quickly as possible, the preferred way is to use the ["Report a vulnerability"](https://github.com/mathLab/PINA/security/advisories/new) button under the "Security" tab of the associated GitHub project. This creates a private communication channel between the reporter and the maintainers.
+To ensure vulnerability reports reach the maintainers as quickly as possible, the preferred way is to use the ["Report a vulnerability"](https://github.com/PINA-org/PINA/security/advisories/new) button under the "Security" tab of the associated GitHub project. This creates a private communication channel between the reporter and the maintainers.
