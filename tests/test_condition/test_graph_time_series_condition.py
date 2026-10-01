@@ -1,16 +1,9 @@
 import pytest
 import torch
-from pina.data.manager import (
-    _TensorDataManager,
-    _BatchManager,
-    _GraphDataManager,
-)
+
+from pina import Condition, LabelTensor
 from pina._src.core.utils import labelize_forward
-from pina.condition import TimeSeriesCondition
-from pina import LabelTensor, Condition
-from pina._src.condition.graph_time_series_condition import (
-    GraphTimeSeriesCondition,
-)
+from pina.condition import GraphTimeSeriesCondition
 from pina.graph import RadiusGraph
 
 # Number of samples and time steps for testing
@@ -213,34 +206,24 @@ def test_get_item(use_lt, n_windows, unroll_length, randomize):
         randomize=randomize,
     )
 
-    # Extract item using __getitem__
+    # Extract item using materialize
     index = 0
-    item = condition[index]
+    item = condition.materialize([index])
 
     # Assert correct types
-    assert isinstance(item, _GraphDataManager)
-    _assert_tensor_type(item.input, use_lt)
+    assert isinstance(item, dict)
+    _assert_tensor_type(item["input"], use_lt)
 
     # Assert correct shapes
     expected_shape = torch.Size([n_nodes, n_windows, unroll_length, 2])
-    assert item.input.x.shape == expected_shape
-
-    # TODO: Why this test?
-    ##################################
-    # if not randomize:
-    #     expected_tensor = _expected_unroll(
-    #         graph.x, n_windows, unroll_length, randomize
-    #     )
-    #     print(item.input.x.shape)
-    #     print(expected_tensor[index].shape)
-    #     assert torch.allclose(item.input.x, expected_tensor[index])
+    assert item["input"].x.shape == expected_shape
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
 @pytest.mark.parametrize("n_windows", [4, 6])
 @pytest.mark.parametrize("unroll_length", [3, 5])
 @pytest.mark.parametrize("randomize", [True, False])
-def test_create_batch(use_lt, n_windows, unroll_length, randomize):
+def test_materialize(use_lt, n_windows, unroll_length, randomize):
 
     # Define the condition
     graph = _create_graph_data(use_lt=use_lt)
@@ -251,39 +234,14 @@ def test_create_batch(use_lt, n_windows, unroll_length, randomize):
         randomize=randomize,
     )
 
-    """ CHECK
-    # Create batches using automatic batching or condition's collate_fn
-    idx = [0, 2]
-    print(condition.data[0])
-    print(condition.data[0].__dict__)
-    data_to_collate = [condition.data[i] for i in idx]
-    batch_auto = condition.automatic_batching_collate_fn(data_to_collate)
-    batch_collate = condition.collate_fn(idx, condition)
+    # Materialize the batch for the given ids
+    idx = [0]
+    batch = condition.materialize(idx)
 
-    # Check that the automatic batch has been properly created
-    assert isinstance(batch_auto, _BatchManager)
-    assert hasattr(batch_auto, "input")
-
-    # Check that the collate_fn batch has been properly created
-    assert isinstance(batch_collate, dict)
-    assert hasattr(batch_collate, "input")
-
-    # Assert that the automatic batch input is correct
-    expected_shape = torch.Size([len(idx), n_windows, unroll_length, 2])
-    assert batch_auto.input.shape == expected_shape
-
-    # Assert that the collate_fn batch input is correct
-    expected_shape = torch.Size([len(idx), n_windows, unroll_length, 2])
-    assert batch_collate.input.shape == expected_shape
-
-    # Create input values
-    if not randomize:
-        expected_tensor = _expected_unroll(
-            graph.x, n_windows, unroll_length, randomize
-        )
-        assert torch.allclose(batch_collate.input, expected_tensor[idx])
-        assert torch.allclose(batch_auto.input, expected_tensor[idx])
-    """
+    # Check that the batch is a dictionary holding the input data
+    assert isinstance(batch, dict)
+    assert "input" in batch
+    assert batch["input"].num_graphs == len(idx)
 
 
 @pytest.mark.parametrize("use_lt", [True, False])

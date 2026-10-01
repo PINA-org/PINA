@@ -1,79 +1,87 @@
 """Module for the Input-Equation Condition class."""
 
-from pina._src.condition.base_condition import BaseCondition
-from pina._src.core.label_tensor import LabelTensor
+from torch_geometric.data import Data
+
+from pina._src.condition.base_condition import BaseCondition, _unwrap_single
+from pina._src.condition.graph_condition import GraphCondition, _is_graph
+from pina._src.condition.tensor_condition import TensorCondition
 from pina._src.core.graph import Graph
-from pina._src.equation.base_equation import BaseEquation
-from pina._src.data.manager.data_manager import _DataManager
+from pina._src.core.label_tensor import LabelTensor
 from pina._src.core.utils import check_consistency
+from pina._src.equation.base_equation import BaseEquation
 
 
 class InputEquationCondition(BaseCondition):
     """
-    The class :class:`InputEquationCondition` defines a condition based on
-    ``input`` data and an ``equation``. This condition is typically used in
-    physics-informed problems, where the model is trained to satisfy a given
-    ``equation`` through the evaluation of the residual performed at the
-    provided ``input``.
+    The class :class:`InputEquationCondition` represents a condition defined
+    by an ``input`` and an ``equation``. The ``equation`` is evaluated on the
+    ``input`` data, which can be a :class:`~pina.label_tensor.LabelTensor` or
+    a :class:`~pina.graph.Graph`.
 
     :Example:
 
-    >>> from pina import Condition, LabelTensor
-    >>> from pina.equation import Equation
+    >>> from pina import Condition
+    >>> from pina.graph import Graph
     >>> import torch
 
-    >>> # Equation to be satisfied over the input points: # x^2 + y^2 - 1 = 0
-    >>> def dummy_equation(pts):
-    ...     return pts["x"]**2 + pts["y"]**2 - 1
+    >>> pos = LabelTensor(torch.randn(50, 2), labels=["x", "y"])
+    >>> edge_index = torch.randint(0, 50, (2, 250))
+    >>> graph = Graph(pos=pos, edge_index=edge_index)
 
-    >>> pts = LabelTensor(torch.randn(100, 2), labels=["x", "y"])
-    >>> condition = Condition(input=pts, equation=Equation(dummy_equation))
+    >>> def equation(input_, output):
+    >>>     return input_.extract(["x"]) * output
+    >>> condition = Condition(input=graph, equation=equation)
     """
 
-    # Available fields, input and equation data types
+    # Available fields, input, and equation data types
     __fields__ = ["input", "equation"]
-    _avail_input_cls = (LabelTensor, Graph)
+    _avail_input_cls = (LabelTensor, Data, Graph)
     _avail_equation_cls = BaseEquation
 
     def __new__(cls, input, equation):
         """
-        Check the types of ``input`` and ``equation`` and instantiate an
-        instance of :class:`InputEquationCondition` accordingly.
+        Check the types of ``input`` and ``equation`` data and instantiate the
+        appropriate condition variant accordingly.
 
         :param input: The input data associated with the condition.
-        :type input: LabelTensor | Graph | list[Graph] | tuple[Graph]
-        :param BaseEquation equation: The equation associated with the
-            condition.
-        :raises ValueError: If ``input`` is not an instance of
-            :class:`~pina.label_tensor.LabelTensor`, or
-            :class:`~pina.graph.Graph`, nor a list or tuple of
-            :class:`~pina.graph.Graph`.
-        :raises ValueError: If ``equation`` is not an instance of
-            :class:`~pina.equation.base_equation.BaseEquation`.
-        :return: A new instance of :class:`InputEquationCondition`.
+        :param equation: The equation associated with the condition.
+        :raises ValueError: If ``input`` is not of an available type.
+        :return: A tensor or graph variant of
+            :class:`InputEquationCondition`.
         :rtype: InputEquationCondition
         """
-        # Check input type - equation is checked in the setter
+        # Check input type - if iterable, ensure it is either Data or Graph
         if isinstance(input, (list, tuple)):
-            check_consistency(input, Graph)
+            check_consistency(input, (Data, Graph))
         else:
             check_consistency(input, cls._avail_input_cls)
 
-        return super().__new__(cls)
+        # Check equation type
+        check_consistency(equation, cls._avail_equation_cls)
 
-    def store_data(self, **kwargs):
+        # Instantiate the variant matching the data type
+        variant = (
+            _GraphInputEquationCondition
+            if _is_graph(input)
+            else _TensorInputEquationCondition
+        )
+        return super().__new__(variant)
+
+    def evaluate(self, batch, solver):
         """
-        Store the input data in a dictionary-like structure.
+        Evaluate the equation of the condition on the given batch using the
+        solver.
 
-        :param dict kwargs: The keyword arguments containing the data to be
-            stored.
-        :return: A dictionary-like structure containing the stored data.
-        :rtype: _DataManager
+        :param dict batch: The batch containing the data required by the
+            condition evaluation.
+        :param BaseSolver solver: The solver used to perform the forward pass
+            and compute the residual.
+        :return: The non-aggregated residual tensor.
+        :rtype: torch.Tensor | LabelTensor
         """
-        # Save the equation as an attribute of the condition instance
-        setattr(self, "equation", kwargs.pop("equation"))
-
-        return _DataManager(**kwargs)
+        samples = batch["input"].requires_grad_(True)
+        output = solver.forward(samples)
+        return self.equation.residual(samples, output, solver._params)
 
     @property
     def input(self):
@@ -81,9 +89,19 @@ class InputEquationCondition(BaseCondition):
         The input data associated with the condition.
 
         :return: The input data.
-        :rtype: LabelTensor | Graph | list[Graph] | tuple[Graph]
+        :rtype: LabelTensor | Graph | Data
         """
-        return self.data.input
+        return _unwrap_single(self.data.input)
+
+    @input.setter
+    def input(self, value):
+        """
+        Set the input data associated with the condition.
+
+        :param value: The new input data.
+        :type value: LabelTensor | Graph | Data
+        """
+        self.data.input = value
 
     @property
     def equation(self):
@@ -93,44 +111,30 @@ class InputEquationCondition(BaseCondition):
         :return: The equation.
         :rtype: BaseEquation
         """
-        return self._equation
+        return self.data.equation
 
     @equation.setter
     def equation(self, value):
         """
-        Set the equation associated with this condition.
+        Set the equation associated with the condition.
 
-        :param BaseEquation value: The equation to associate with the condition.
+        :param value: The new equation.
+        :type value: BaseEquation
         :raises ValueError: If ``value`` is not an instance of
             :class:`~pina.equation.base_equation.BaseEquation`.
         """
         # Check consistency
         check_consistency(value, self._avail_equation_cls)
-        self._equation = value
+        self.data.equation = value
 
-    def evaluate(self, batch, solver):
-        """
-        Evaluate the residual of the condition on the given batch using the
-        solver.
 
-        This method computes the non-aggregated, element-wise residual of the
-        condition. A forward pass of the solver's model is performed on the
-        input samples, and the condition residual is evaluated accordingly.
+class _TensorInputEquationCondition(TensorCondition, InputEquationCondition):
+    """
+    Tensor variant of :class:`InputEquationCondition`.
+    """
 
-        The returned tensor is not reduced, preserving the per-sample residual
-        values.
 
-        :param dict batch: The batch containing the data required by the
-            condition evaluation.
-        :param BaseSolver solver: The solver used to perform the forward pass
-            and compute the residual. The solver provides access to the model
-            and its parameters, which may be necessary for evaluating the
-            condition residual.
-        :return: The non-aggregated residual tensor.
-        :rtype: LabelTensor
-        """
-        # Compute residuals
-        samples = batch["input"].requires_grad_(True)
-        return self.equation.residual(
-            samples, solver.forward(samples), solver._params
-        )
+class _GraphInputEquationCondition(GraphCondition, InputEquationCondition):
+    """
+    Graph variant of :class:`InputEquationCondition`.
+    """

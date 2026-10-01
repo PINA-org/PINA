@@ -95,7 +95,7 @@ class R3Refinement(BaseRefinement):
 
         # Select points with residual above the mean
         mask = (residuals >= residuals.mean()).flatten()
-        high_residual_pts = current_points[mask]
+        high_residual_pts = current_points[mask].detach()
         high_residual_pts.labels = current_points.labels
 
         # Sample new points to maintain the initial population size

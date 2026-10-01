@@ -1,11 +1,12 @@
-import torch
 import pytest
-from pina import Trainer, LabelTensor, Condition
-from pina.solver import SupervisedSingleModelSolver
+import torch
+
+from pina import Condition, LabelTensor, Trainer
 from pina.callback import DataNormalizer
-from pina.problem import BaseProblem
-from pina.model import FeedForward
 from pina.graph import RadiusGraph
+from pina.model import FeedForward
+from pina.problem import BaseProblem
+from pina.solver import SupervisedSingleModelSolver
 
 
 # Tensor-based problem
@@ -140,8 +141,8 @@ def test_routine(apply_to, stage, scale_fn, shift_fn, use_lt):
     for ds_name, dataset in datasets.items():
         for c_name in callback.normalizer.keys():
 
-            # Extract the data and container for the current condition
-            points = getattr(dataset[c_name].condition, apply_to)
+            # Extract the data for the current condition
+            points = getattr(solver.problem.conditions[c_name], apply_to)
 
             # Check normalization parameters are correct for normalized datasets
             if ds_name in expected_normalized_datasets:

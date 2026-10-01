@@ -6,11 +6,12 @@ dataset splitting, batching, and dataloader creation for PINA conditions.
 """
 
 import warnings
+
 import torch
 from lightning.pytorch import LightningDataModule
-from pina._src.data.condition_subset import _ConditionSubset
-from pina._src.data.aggregator import _Aggregator
-from pina._src.data.creator import _Creator
+
+from pina._src.data.batcher import Batcher
+from pina._src.data.loader import MultiLoader
 
 
 class DataModule(LightningDataModule):
@@ -18,14 +19,15 @@ class DataModule(LightningDataModule):
     An extension of the Lightning data module for managing PINA condition
     datasets.
 
-    The data module handles train/validation/test dataset splitting, condition
-    subset creation, dataloader construction, and batching coordination across
-    multiple conditions.
+    The data module handles train/validation/test dataset splitting, dataloader
+    construction, and batching coordination across multiple conditions.
 
-    Dataset splitting is performed independently for each condition, and the
-    resulting subsets are wrapped into :class:`_ConditionSubset` objects.
-    Dataloaders are then created and aggregated according to the selected
-    batching strategy.
+    Dataset splitting is performed independently for each condition, and each
+    resulting subset is a tensor of sample ids indexing the corresponding
+    condition. Dataloaders are created over these ids and aggregated into a
+    :class:`MultiLoader` according to the selected batching strategy. The
+    actual condition batches are materialized on device in
+    :meth:`transfer_batch_to_device`.
 
     :Example:
 
@@ -41,8 +43,7 @@ class DataModule(LightningDataModule):
         >>> problem = MyProblem()
         >>> dm = DataModule(problem, train_size=0.8, val_size=0.1,
         ...     test_size=0.1, batch_size=32, batching_mode="common_batch_size",
-        ...     automatic_batching=False, shuffle=True, num_workers=0,
-        ...     pin_memory=False)
+        ...     shuffle=True, num_workers=0, pin_memory=False)
         >>> dm.setup("fit")
         >>> list(dm.train_datasets.keys())
         ['cond1']
@@ -51,15 +52,16 @@ class DataModule(LightningDataModule):
     def __init__(
         self,
         problem,
-        train_size,
-        val_size,
-        test_size,
-        batch_size,
-        batching_mode,
-        automatic_batching,
-        shuffle,
-        num_workers,
-        pin_memory,
+        train_size=1.0,
+        val_size=0.0,
+        test_size=0.0,
+        batch_size=None,
+        batching_mode="common_batch_size",
+        shuffle=True,
+        num_workers=0,
+        pin_memory=False,
+        dataloader_cls=None,
+        collate_fn=None,
     ):
         """
         Initialization of the :class:`DataModule` class.
@@ -76,20 +78,22 @@ class DataModule(LightningDataModule):
             entire dataset is processed as a single batch.
         :param str batching_mode: The strategy used to aggregate batches across
             dataloaders. Available options are ``"common_batch_size"`` for
-            uniform batch sizes across conditions, ``"proportional"`` for batch
-            sizes proportional to dataset sizes, and ``"separate_conditions"``
-            for iterating through each condition separately.
-        :param bool automatic_batching: Whether PyTorch automatic batching
-            should be enabled. If ``True``, dataset elements are retrieved
-            individually and collated into batches by the dataloader.
-            If ``False``, entire subsets are retrieved directly from the
-            condition object.
+            uniform batch sizes across conditions, and ``"proportional"`` for
+            batch sizes proportional to dataset sizes.
         :param bool shuffle: Whether condition samples should be shuffled before
             splitting.
         :param int num_workers: The number of worker processes used by
             dataloaders.
         :param bool pin_memory: Whether pinned memory should be enabled during
             data loading.
+        :param type dataloader_cls: The dataloader class to use for each
+            condition, defaulting to :class:`torch.utils.data.DataLoader`. It
+            can also be a mapping between condition names and dataloader
+            classes. Custom classes must yield batches of sample ids.
+        :param collate_fn: Optional callable (or mapping between condition
+            names and callables) used to collapse the raw data selected by a
+            condition into a batch. It receives the selected raw data and the
+            ids, and returns the batch.
         :raises UserWarning: If ``num_workers`` is set to non-default value
             while ``batch_size`` is None.
         :raises UserWarning: If ``pin_memory`` is set to ``True`` while
@@ -101,10 +105,11 @@ class DataModule(LightningDataModule):
         self.problem = problem
         self.batch_size = batch_size
         self.batching_mode = batching_mode
-        self.automatic_batching = automatic_batching
         self.shuffle = shuffle
         self.num_workers = num_workers
         self.pin_memory = pin_memory
+        self.dataloader_cls = dataloader_cls
+        self.collate_fn = collate_fn
 
         # If batch size is None, num_workers has no effect
         if batch_size is None and num_workers != 0:
@@ -127,16 +132,15 @@ class DataModule(LightningDataModule):
         if test_size == 0:
             self.test_dataloader = super().test_dataloader
 
-        # Otherwise, create the condition splits and initialize the creator
+        # Otherwise, create the condition splits and initialize the batcher
         self._create_condition_splits(train_size, test_size)
-        self.creator = _Creator(
+        self.batcher = Batcher(
             batching_mode=self.batching_mode,
             batch_size=self.batch_size,
             shuffle=self.shuffle,
-            automatic_batching=self.automatic_batching,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
-            conditions=self.problem.conditions,
+            dataloader_cls=self.dataloader_cls,
         )
 
     def _create_condition_splits(self, train_size, test_size):
@@ -185,12 +189,12 @@ class DataModule(LightningDataModule):
 
         Depending on the selected stage, it initializes the ``train_datasets``,
         the ``val_datasets``, or the ``test_datasets`` attributes. Each dataset
-        is represented as a mapping between condition names and
-        :class:`_ConditionSubset` instances.
+        is represented as a mapping between condition names and tensors of
+        sample ids.
 
         :param str stage: The execution stage. Available options are ``"fit"``
-            for training/validation and ``"test"`` for testing. If ``None``, both
-            training/validation and testing datasets are created.
+            for training/validation and ``"test"`` for testing. If ``None``,
+            both training/validation and testing datasets are created.
             Default is ``None``.
         :raises ValueError: If the provided stage is invalid.
         """
@@ -205,24 +209,18 @@ class DataModule(LightningDataModule):
 
             # Train dataset
             self.train_datasets = {
-                name: _ConditionSubset(
-                    condition,
-                    self.split_idxs[name]["train"],
-                    automatic_batching=self.automatic_batching,
-                )
-                for name, condition in self.problem.conditions.items()
-                if len(self.split_idxs[name]["train"]) > 0
+                name: torch.tensor(ids, dtype=torch.long)
+                for name, split in self.split_idxs.items()
+                if len(split["train"]) > 0
+                for ids in [split["train"]]
             }
 
             # Validation dataset
             self.val_datasets = {
-                name: _ConditionSubset(
-                    condition,
-                    self.split_idxs[name]["val"],
-                    automatic_batching=self.automatic_batching,
-                )
-                for name, condition in self.problem.conditions.items()
-                if len(self.split_idxs[name]["val"]) > 0
+                name: torch.tensor(ids, dtype=torch.long)
+                for name, split in self.split_idxs.items()
+                if len(split["val"]) > 0
+                for ids in [split["val"]]
             }
 
         # Test stage: create testing dataset
@@ -230,24 +228,37 @@ class DataModule(LightningDataModule):
 
             # Test dataset
             self.test_datasets = {
-                name: _ConditionSubset(
-                    condition,
-                    self.split_idxs[name]["test"],
-                    automatic_batching=self.automatic_batching,
-                )
-                for name, condition in self.problem.conditions.items()
-                if len(self.split_idxs[name]["test"]) > 0
+                name: torch.tensor(ids, dtype=torch.long)
+                for name, split in self.split_idxs.items()
+                if len(split["test"]) > 0
+                for ids in [split["test"]]
             }
+
+    def _resolve(self, name):
+        """
+        Resolve the per-condition collate function.
+
+        :param str name: The condition name.
+        :return: The collate function associated with the condition, or
+            ``None`` if none was provided.
+        :rtype: Callable | None
+        """
+        collate_fn = self.collate_fn
+        if isinstance(collate_fn, dict):
+            return collate_fn.get(name)
+
+        return collate_fn
 
     def transfer_batch_to_device(self, batch, device, _):
         """
         Transfer a batch to the target device.
 
-        The method transfers all condition batches contained in the aggregated
-        batch dictionary to the specified device.
+        The method materializes the batches of each condition by selecting the
+        corresponding sample ids from the condition, and transfers them to the
+        specified device.
 
         :param dict batch: The mapping between the condition names and the
-            condition batches.
+            tensors of sample ids.
         :param torch.device device: The target device.
         :param _: Placeholder argument, not used.
         :return: A list of tuples containing condition names and transferred
@@ -255,9 +266,28 @@ class DataModule(LightningDataModule):
         :rtype: list[tuple[str, Any]]
         """
         return [
-            (condition_name, condition.to(device))
-            for condition_name, condition in batch.items()
+            (
+                name,
+                self.problem.conditions[name].materialize(
+                    ids.tolist(),
+                    device=device,
+                    batch_fn=self._resolve(name),
+                ),
+            )
+            for name, ids in batch.items()
         ]
+
+    def _build_multi_loader(self, subsets):
+        """
+        Build the aggregated dataloader for the given subsets.
+
+        :param dict[str, torch.Tensor] subsets: The mapping between condition
+            names and tensors of sample ids.
+        :return: The aggregated dataloader coordinating all condition
+            dataloaders.
+        :rtype: MultiLoader
+        """
+        return MultiLoader(self.batcher(subsets))
 
     def train_dataloader(self):
         """
@@ -265,24 +295,19 @@ class DataModule(LightningDataModule):
 
         :return: The aggregated dataloader coordinating all train condition
             dataloaders.
-        :rtype: _Aggregator
+        :rtype: MultiLoader
         """
-        return _Aggregator(
-            self.creator(self.train_datasets),
-            batching_mode=self.batching_mode,
-        )
+        return self._build_multi_loader(self.train_datasets)
 
     def val_dataloader(self):
         """
         Create the aggregated validation dataloader.
 
-        :return: The aggregated dataloader coordinating all validation condition
-            dataloaders.
-        :rtype: _Aggregator
+        :return: The aggregated dataloader coordinating all validation
+            condition dataloaders.
+        :rtype: MultiLoader
         """
-        return _Aggregator(
-            self.creator(self.val_datasets), batching_mode=self.batching_mode
-        )
+        return self._build_multi_loader(self.val_datasets)
 
     def test_dataloader(self):
         """
@@ -290,9 +315,6 @@ class DataModule(LightningDataModule):
 
         :return: The aggregated dataloader coordinating all test condition
             dataloaders.
-        :rtype: _Aggregator
+        :rtype: MultiLoader
         """
-        return _Aggregator(
-            self.creator(self.test_datasets),
-            batching_mode=self.batching_mode,
-        )
+        return self._build_multi_loader(self.test_datasets)
