@@ -30,11 +30,38 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         "sum": lambda x: x.sum(),
     }
 
-    def __init__(self, problem, use_lt=True):
+    def __init__(
+        self,
+        problem,
+        models,
+        optimizers=None,
+        schedulers=None,
+        weighting=None,
+        loss=None,
+        use_lt=True,
+    ):
         """
         Initialization of the :class:`BaseSolver` class.
 
         :param BaseProblem problem: The problem to be solved.
+        :param models: The model or list of models used by the solver.
+        :type models: torch.nn.Module | list[torch.nn.Module]
+        :param optimizers: The optimizer or list of optimizers used by the
+            solver. If ``None``, the ``torch.optim.Adam`` optimizer with a
+            learning rate of ``0.001`` is used for each model.
+            Default is ``None``.
+        :type optimizers: TorchOptimizer | list[TorchOptimizer]
+        :param schedulers: The scheduler or list of schedulers used by the
+            solver. If ``None``, the ``torch.optim.lr_scheduler.ConstantLR``
+            scheduler with a factor of ``1.0`` is used for each model.
+            Default is ``None``.
+        :type schedulers: TorchScheduler | list[TorchScheduler]
+        :param BaseWeighting weighting: The weighting strategy used to combine
+            condition losses. If ``None``, no weighting is applied. Default is
+            ``None``.
+        :param loss: The loss function used to compute residual losses.
+            If ``None``, :class:`torch.nn.MSELoss` is used. Default is ``None``.
+        :type loss: torch.nn.Module | BaseDualLoss
         :param bool use_lt: If ``True``, the solver uses LabelTensors as input.
             Default is ``True``.
         :raises ValueError: If ``use_lt`` is not a boolean.
@@ -55,7 +82,7 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         for condition in problem.conditions.values():
             check_consistency(condition, self.accepted_conditions_types)
 
-        # Initialize the solver components
+        # Store problem and use_lt
         self._pina_problem = problem
         self._use_lt = use_lt
 
@@ -74,6 +101,27 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
                 input_variables=problem.input_variables,
                 output_variables=problem.output_variables,
             )
+
+        # Initialize solver components (models, optimizers, schedulers)
+        self._init_solver_components(
+            models=models,
+            optimizers=optimizers,
+            schedulers=schedulers,
+        )
+
+        # Initialize the weighting scheme and loss function
+        self._init_weighting_and_loss(weighting=weighting, loss=loss)
+
+    def forward(self, x):
+        """
+        Default forward pass: evaluates the first model on the input.
+
+        :param x: The input data.
+        :type x: torch.Tensor | LabelTensor | Data | Graph
+        :return: The output of the first model.
+        :rtype: torch.Tensor | LabelTensor | Data | Graph
+        """
+        return self._pina_models[0](x)
 
     def reset(self):
         """
@@ -298,8 +346,16 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         # Compute the tensor loss from the residual tensor
         condition_tensor_loss = self._loss_from_residual(condition_name)
 
-        # Optional regularization hook, e.g gradient-enhanced or residual-based
+        # Additive regularization hook, e.g. gradient-enhanced penalty
         condition_tensor_loss = self._regularize_condition_loss(
+            condition_tensor_loss=condition_tensor_loss,
+            condition_name=condition_name,
+            data=data,
+            batch_idx=batch_idx,
+        )
+
+        # Multiplicative weighting hook, e.g. residual-based attention
+        condition_tensor_loss = self._weight_condition_loss(
             condition_tensor_loss=condition_tensor_loss,
             condition_name=condition_name,
             data=data,
@@ -331,10 +387,9 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         batch_idx,
     ):
         """
-        Regularize the condition loss if needed. This method can be overridden
-        by mixins to implement specific regularization strategies, such as
-        adding a gradient penalty in gradient-enhanced solvers or applying
-        residual-based attention.
+        Additive regularization hook for the condition loss. Override this to
+        implement additive regularization strategies such as gradient-enhanced
+        penalties.
 
         :param condition_tensor_loss: The original tensor loss for the
             condition.
@@ -343,6 +398,28 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         :param dict data: The data corresponding to the condition.
         :param int batch_idx: The index of the current batch.
         :return: The regularized tensor loss for the condition.
+        :rtype: torch.Tensor | LabelTensor
+        """
+        return condition_tensor_loss
+
+    def _weight_condition_loss(
+        self,
+        condition_tensor_loss,
+        condition_name,
+        data,
+        batch_idx,
+    ):
+        """
+        Multiplicative weighting hook for the condition loss. Override this to
+        implement multiplicative weighting strategies such as residual-based
+        attention.
+
+        :param condition_tensor_loss: The tensor loss for the condition.
+        :type condition_tensor_loss: torch.Tensor | LabelTensor
+        :param str condition_name: The name of the condition.
+        :param dict data: The data corresponding to the condition.
+        :param int batch_idx: The index of the current batch.
+        :return: The weighted tensor loss for the condition.
         :rtype: torch.Tensor | LabelTensor
         """
         return condition_tensor_loss
