@@ -229,6 +229,166 @@ def test_vstack_2D():
     assert lt_stacked.full_labels[1]["name"] == "second"
 
 
+def test_stack_2D():
+    data_1 = torch.rand(20, 3)
+    labels = {1: {"dof": ["x", "y", "z"], "name": "vars"}}
+    lt1 = LabelTensor(data_1, labels)
+    lt2 = LabelTensor(data_1, labels)
+
+    # Test default dim=0
+    lt_stacked_0 = LabelTensor.stack([lt1, lt2], dim=0)
+    assert lt_stacked_0.shape == (2, 20, 3)
+    assert lt_stacked_0.full_labels[0]["dof"] == range(2)
+    assert lt_stacked_0.full_labels[0]["name"] == 0
+    assert lt_stacked_0.full_labels[1]["dof"] == range(20)
+    assert lt_stacked_0.full_labels[1]["name"] == 1
+    assert lt_stacked_0.full_labels[2]["dof"] == ["x", "y", "z"]
+    assert lt_stacked_0.full_labels[2]["name"] == "vars"
+    assert lt_stacked_0.stored_labels == {
+        2: {"dof": ["x", "y", "z"], "name": "vars"}
+    }
+    assert lt_stacked_0.labels == ["x", "y", "z"]
+
+    # Test dim=1
+    lt_stacked_1 = LabelTensor.stack([lt1, lt2], dim=1)
+    assert lt_stacked_1.shape == (20, 2, 3)
+    assert lt_stacked_1.full_labels[0]["dof"] == range(20)
+    assert lt_stacked_1.full_labels[0]["name"] == 0
+    assert lt_stacked_1.full_labels[1]["dof"] == range(2)
+    assert lt_stacked_1.full_labels[1]["name"] == 1
+    assert lt_stacked_1.full_labels[2]["dof"] == ["x", "y", "z"]
+    assert lt_stacked_1.full_labels[2]["name"] == "vars"
+    assert lt_stacked_1.stored_labels == {
+        2: {"dof": ["x", "y", "z"], "name": "vars"}
+    }
+    assert lt_stacked_1.labels == ["x", "y", "z"]
+
+    # Test dim=2 and negative dim=-1
+    lt_stacked_2 = LabelTensor.stack([lt1, lt2], dim=2)
+    lt_stacked_neg = LabelTensor.stack([lt1, lt2], dim=-1)
+    for lt_s in [lt_stacked_2, lt_stacked_neg]:
+        assert lt_s.shape == (20, 3, 2)
+        assert lt_s.full_labels[0]["dof"] == range(20)
+        assert lt_s.full_labels[0]["name"] == 0
+        assert lt_s.full_labels[1]["dof"] == ["x", "y", "z"]
+        assert lt_s.full_labels[1]["name"] == "vars"
+        assert lt_s.full_labels[2]["dof"] == range(2)
+        assert lt_s.full_labels[2]["name"] == 2
+        assert lt_s.stored_labels == {
+            1: {"dof": ["x", "y", "z"], "name": "vars"}
+        }
+        assert lt_s.labels is None
+
+
+def test_stack_3D():
+    data_1 = torch.rand(20, 3, 2)
+    labels_1 = {
+        1: {"dof": ["a", "b", "c"], "name": "first"},
+        2: {"dof": ["x", "y"], "name": "second"},
+    }
+    lt1 = LabelTensor(data_1, labels_1)
+    data_2 = torch.rand(20, 3, 2)
+    lt2 = LabelTensor(data_2, labels_1)
+
+    # Test dim=0 (and dim=-4)
+    lt_stacked_0 = LabelTensor.stack([lt1, lt2], dim=0)
+    lt_stacked_neg4 = LabelTensor.stack([lt1, lt2], dim=-4)
+    for lt_s in [lt_stacked_0, lt_stacked_neg4]:
+        assert lt_s.shape == (2, 20, 3, 2)
+        assert lt_s.full_labels[0]["dof"] == range(2)
+        assert lt_s.full_labels[0]["name"] == 0
+        assert lt_s.full_labels[1]["dof"] == range(20)
+        assert lt_s.full_labels[1]["name"] == 1
+        assert lt_s.full_labels[2]["dof"] == ["a", "b", "c"]
+        assert lt_s.full_labels[2]["name"] == "first"
+        assert lt_s.full_labels[3]["dof"] == ["x", "y"]
+        assert lt_s.full_labels[3]["name"] == "second"
+        assert lt_s.stored_labels == {
+            2: {"dof": ["a", "b", "c"], "name": "first"},
+            3: {"dof": ["x", "y"], "name": "second"},
+        }
+        assert lt_s.labels == ["x", "y"]
+
+    # Test dim=1 (and dim=-3)
+    lt_stacked_1 = LabelTensor.stack([lt1, lt2], dim=1)
+    lt_stacked_neg3 = LabelTensor.stack([lt1, lt2], dim=-3)
+    for lt_s in [lt_stacked_1, lt_stacked_neg3]:
+        assert lt_s.shape == (20, 2, 3, 2)
+        assert lt_s.full_labels[0]["dof"] == range(20)
+        assert lt_s.full_labels[0]["name"] == 0
+        assert lt_s.full_labels[1]["dof"] == range(2)
+        assert lt_s.full_labels[1]["name"] == 1
+        assert lt_s.full_labels[2]["dof"] == ["a", "b", "c"]
+        assert lt_s.full_labels[2]["name"] == "first"
+        assert lt_s.full_labels[3]["dof"] == ["x", "y"]
+        assert lt_s.full_labels[3]["name"] == "second"
+        assert lt_s.stored_labels == {
+            2: {"dof": ["a", "b", "c"], "name": "first"},
+            3: {"dof": ["x", "y"], "name": "second"},
+        }
+        assert lt_s.labels == ["x", "y"]
+
+    # Test dim=2 (and dim=-2)
+    lt_stacked_2 = LabelTensor.stack([lt1, lt2], dim=2)
+    lt_stacked_neg2 = LabelTensor.stack([lt1, lt2], dim=-2)
+    for lt_s in [lt_stacked_2, lt_stacked_neg2]:
+        assert lt_s.shape == (20, 3, 2, 2)
+        assert lt_s.full_labels[0]["dof"] == range(20)
+        assert lt_s.full_labels[0]["name"] == 0
+        assert lt_s.full_labels[1]["dof"] == ["a", "b", "c"]
+        assert lt_s.full_labels[1]["name"] == "first"
+        assert lt_s.full_labels[2]["dof"] == range(2)
+        assert lt_s.full_labels[2]["name"] == 2
+        assert lt_s.full_labels[3]["dof"] == ["x", "y"]
+        assert lt_s.full_labels[3]["name"] == "second"
+        assert lt_s.stored_labels == {
+            1: {"dof": ["a", "b", "c"], "name": "first"},
+            3: {"dof": ["x", "y"], "name": "second"},
+        }
+        assert lt_s.labels == ["x", "y"]
+
+    # Test dim=3 (and dim=-1)
+    lt_stacked_3 = LabelTensor.stack([lt1, lt2], dim=3)
+    lt_stacked_neg1 = LabelTensor.stack([lt1, lt2], dim=-1)
+    for lt_s in [lt_stacked_3, lt_stacked_neg1]:
+        assert lt_s.shape == (20, 3, 2, 2)
+        assert lt_s.full_labels[0]["dof"] == range(20)
+        assert lt_s.full_labels[0]["name"] == 0
+        assert lt_s.full_labels[1]["dof"] == ["a", "b", "c"]
+        assert lt_s.full_labels[1]["name"] == "first"
+        assert lt_s.full_labels[2]["dof"] == ["x", "y"]
+        assert lt_s.full_labels[2]["name"] == "second"
+        assert lt_s.full_labels[3]["dof"] == range(2)
+        assert lt_s.full_labels[3]["name"] == 3
+        assert lt_s.stored_labels == {
+            1: {"dof": ["a", "b", "c"], "name": "first"},
+            2: {"dof": ["x", "y"], "name": "second"},
+        }
+        assert lt_s.labels is None
+
+
+def test_stack_errors():
+    data_1 = torch.rand(20, 3)
+    lt1 = LabelTensor(data_1, {1: {"dof": ["x", "y", "z"], "name": "vars"}})
+    lt2 = LabelTensor(data_1, {1: {"dof": ["a", "b", "c"], "name": "vars"}})
+
+    # Empty list
+    assert LabelTensor.stack([]) == []
+
+    # Single tensor
+    assert LabelTensor.stack([lt1]) is lt1
+
+    # Out of range dim
+    with pytest.raises(IndexError):
+        LabelTensor.stack([lt1, lt1], dim=3)
+    with pytest.raises(IndexError):
+        LabelTensor.stack([lt1, lt1], dim=-4)
+
+    # Inconsistent labels
+    with pytest.raises(RuntimeError):
+        LabelTensor.stack([lt1, lt2])
+
+
 def test_sorting():
     data = torch.ones(20, 5)
     data[:, 0] = data[:, 0] * 4

@@ -374,24 +374,52 @@ class LabelTensor(torch.Tensor):
         return cat_tensor
 
     @staticmethod
-    def stack(tensors):
+    def stack(tensors, dim=0):
         """
         Stacks a list of tensors along a new dimension. For more details, see
         :meth:`torch.stack`.
 
         :param list[LabelTensor] tensors: A list of tensors to stack.
             All tensors must have the same shape.
+        :param int dim: Dimension along which to stack the tensors. Default is 0.
         :return: A new :class:`~pina.label_tensor.LabelTensor` instance obtained
             by stacking the input tensors.
         :rtype: LabelTensor
         """
+        if not tensors:
+            return []
+        if len(tensors) == 1:
+            return tensors[0]
+
+        # In PyTorch, stacking adds a new dimension, so valid dims are - (ndim + 1) <= dim <= ndim
+        ndim = tensors[0].ndim
+        if dim < 0:
+            dim = ndim + 1 + dim
+        if dim < 0 or dim > ndim:
+            raise IndexError(
+                f"Dimension out of range (expected to be in range of [{-(ndim + 1)}, {ndim}], but got {dim})"
+            )
+
+        # Check that all tensors have consistent labels
+        tensors_labels = [tensor.stored_labels for tensor in tensors]
+        for key in tensors_labels[0]:
+            if any(
+                tensors_labels[i].get(key) != tensors_labels[0][key]
+                for i in range(len(tensors_labels))
+            ):
+                raise RuntimeError("All tensors must have the same labels.")
 
         # Perform stacking in torch
-        new_tensor = torch.stack(tensors)
+        new_tensor = torch.stack(tensors, dim=dim)
 
-        # Increase labels keys by 1
-        labels = tensors[0]._labels
-        labels = {key + 1: value for key, value in labels.items()}
+        # Shift label dimension indices at or after `dim` by +1
+        labels = {}
+        for key, value in tensors[0]._labels.items():
+            if key >= dim:
+                labels[key + 1] = value
+            else:
+                labels[key] = value
+
         new_tensor._labels = labels
         return new_tensor
 
