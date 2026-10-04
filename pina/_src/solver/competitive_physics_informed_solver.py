@@ -195,17 +195,6 @@ class CompetitivePhysicsInformedSolver(PhysicsInformedMixin, MultiModelSolver):
 
         return loss
 
-    def forward(self, x):
-        """
-        Forward pass through the model.
-
-        :param x: The input data.
-        :type x: torch.Tensor | LabelTensor | Data | Graph
-        :return: The output of the model.
-        :rtype: torch.Tensor | LabelTensor | Data | Graph
-        """
-        return self.model(x)
-
     def _compute_condition_loss(self, condition, data, batch_idx):
         """
         Compute the scalar loss for a given condition and its data.
