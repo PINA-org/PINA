@@ -100,7 +100,7 @@ Congratulations on completing the ..., here are a few directions you can explore
 
 3. **...and many more!** — Other suggestions ....
 
-For more resources and tutorials, check out the [PINA Documentation](https://mathlab.github.io/PINA/).
+For more resources and tutorials, check out the [PINA Documentation](https://PINA-org.github.io/PINA/).
 ```
 
 ## Writing Style
@@ -116,7 +116,7 @@ For more resources and tutorials, check out the [PINA Documentation](https://mat
 
 Every tutorial should:
 - Be executable from top to bottom.
-- Use the `tutorial` requirements in the [`pyproject.toml`](https://github.com/mathLab/PINA/blob/6ed3ca04fee3ae3673d53ea384437ce270f008da/pyproject.toml#L40) file.
+- Use the `tutorial` requirements in the [`pyproject.toml`](https://github.com/PINA-org/PINA/blob/6ed3ca04fee3ae3673d53ea384437ce270f008da/pyproject.toml#L40) file.
 
 
 ## Contributing Checklist
