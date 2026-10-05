@@ -1,16 +1,18 @@
 """Module for the Graph Time-Series Condition class."""
 
-import torch
-
-from pina._src.condition.base_condition import _unwrap_single
+from pina._src.condition.base_condition import BaseCondition
 from pina._src.condition.graph_condition import GraphCondition
-from pina._src.condition.time_series_condition import _unroll_windows
+from pina._src.condition.time_series_condition import (
+    TimeSeriesCondition,
+    _check_time_series_params,
+    _unroll_windows,
+)
 from pina._src.core.graph import Graph
-from pina._src.core.utils import check_consistency, check_positive_integer
+from pina._src.core.utils import check_consistency
 from torch_geometric.data import Data
 
 
-class GraphTimeSeriesCondition(GraphCondition):
+class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
     """
     The :class:`GraphTimeSeriesCondition` class represents an autoregressive
     time series condition defined by temporal ``input`` data. The input is
@@ -24,7 +26,13 @@ class GraphTimeSeriesCondition(GraphCondition):
     available trajectories.
 
     Internally, the unrolled data is stored as a tensor of shape
-    ``[trajectories, n_windows, unroll_length, *features]``.
+    ``[trajectories, n_windows, unroll_length, *features]``, attached to the
+    graph attribute given by ``key``.
+
+    The temporal logic (window extraction and autoregressive residual) is
+    inherited from :class:`~pina.condition.TimeSeriesCondition`, while storage
+    and batching of the graphs are inherited from
+    :class:`~pina.condition.GraphCondition`.
 
     Supported data types include :class:`~pina.graph.Graph` and
     :class:`~torch_geometric.data.Data`.
@@ -43,25 +51,57 @@ class GraphTimeSeriesCondition(GraphCondition):
     __fields__ = ["input", "unroll_length", "n_windows", "key", "randomize"]
     _avail_input_cls = (Data, Graph)
 
+    # Name of the graph attribute holding the temporal data
+    _key = "x"
+
     def __new__(cls, input, n_windows, unroll_length, key="x", randomize=False):
+        """
+        Check the graph input and the time-series parameters.
+
+        :param input: The graph holding the temporal data.
+        :type input: Graph | Data
+        :param int n_windows: The maximum number of temporal windows to extract.
+        :param int unroll_length: The number of time steps in each window.
+        :param str key: The name of the graph attribute holding the temporal
+            data. Default is ``"x"``.
+        :param bool randomize: If ``True``, randomly permute the valid starting
+            indices before selecting the windows. Default is ``False``.
+        :raises ValueError: If ``input`` is not of type :class:`~pina.graph.Graph`
+            or :class:`~torch_geometric.data.Data`.
+        :raises ValueError: If ``key`` is not a string value.
+        :raises ValueError: If ``input`` has no attribute named ``key``.
+        :raises ValueError: If the temporal data is not a valid time series, or
+            if the windowing parameters are not valid.
+        :return: A new :class:`GraphTimeSeriesCondition` instance.
+        :rtype: GraphTimeSeriesCondition
+        """
         # Check consistency
         check_consistency(input, cls._avail_input_cls)
-        check_consistency(randomize, bool)
         check_consistency(key, str)
-        check_positive_integer(n_windows, strict=True)
-        check_positive_integer(unroll_length, strict=True)
+        if not hasattr(input, key):
+            raise ValueError(
+                f"The provided graph does not have the specified key '{key}'."
+            )
 
-        return super().__new__(cls)
+        # Check the time-series parameters on the temporal data of the graph
+        _check_time_series_params(
+            data=getattr(input, key),
+            n_windows=n_windows,
+            unroll_length=unroll_length,
+            randomize=randomize,
+        )
+
+        return BaseCondition.__new__(cls)
 
     def store_data(self, **kwargs):
         """
-        Store the unrolled time-series input data.
+        Store the graph data, with its temporal windows already extracted.
 
-        The method extracts the time-series input data and creates the temporal
-        windows based on the specified ``unroll_length`` and ``n_windows``.
+        The temporal windows replace the data held by the ``key`` attribute of
+        the graph, and the resulting graph is then stored by
+        :class:`~pina.condition.GraphCondition`.
 
-        :param dict kwargs: The keyword arguments containing the data to be
-            stored.
+        :param dict kwargs: The keyword arguments containing the graph data.
         :return: A namespace-like structure containing the stored data.
         :rtype: SimpleNamespace
         """
@@ -69,90 +109,33 @@ class GraphTimeSeriesCondition(GraphCondition):
         unroll_length = kwargs.get("unroll_length")
         n_windows = kwargs.get("n_windows")
         randomize = kwargs.get("randomize", False)
-        key = kwargs.get("key", "x")
+        key = kwargs.get("key", self._key)
         graph = kwargs.get("input")
 
-        # Create unrolled windows from the input data
-        if not hasattr(graph, key):
-            raise ValueError(
-                f"The provided graph does not have the specified key '{key}'."
-            )
+        # Keep the key available for later retrieval of the temporal data
+        self._key = key
 
-        unrolled_data = _unroll_windows(
-            data=graph.__getattribute__(key),
-            n_windows=n_windows,
-            unroll_length=unroll_length,
-            randomize=randomize,
+        # Create unrolled windows and attach them to the graph
+        setattr(
+            graph,
+            key,
+            _unroll_windows(
+                data=getattr(graph, key),
+                n_windows=n_windows,
+                unroll_length=unroll_length,
+                randomize=randomize,
+            ),
         )
-        graph.__setattr__(key, unrolled_data)
 
-        return super().store_data(input=graph)
+        return GraphCondition.store_data(self, input=graph)
 
-    def evaluate(self, batch, solver):
+    def _get_series(self, batch):
         """
-        Evaluate the residual of the condition on the given batch using the
-        solver.
+        Return the unrolled time-series data carried by the given batch.
 
-        This method computes the per-step residuals through autoregressive
-        unrolling. A forward pass of the solver's model is performed at each
-        time step, and the per-step residuals (predicted - target) are
-        returned as a stacked tensor.
-
-        The returned tensor preserves all per-step residual values without
-        reduction or loss aggregation.
-
-        :param dict batch: The batch containing the data required by the
-            condition evaluation.
-        :param SolverInterface solver: The solver used to perform the forward
-            pass and compute the residual. The solver provides access to the
-            model and its parameters, which may be necessary for evaluating the
-            condition residual.
-        :raises ValueError: If the input tensor in the batch has less than 4
-            dimensions.
-        :return: The stacked per-step residual tensor of shape
-            ``[time_steps - 1, trajectories, windows, *features]``.
+        :param dict batch: The batch to extract the time-series data from.
+        :return: The unrolled data, of shape
+            ``[nodes, n_windows, unroll_length, *features]``.
         :rtype: torch.Tensor | LabelTensor
         """
-        # Raise error if input tensor does not have at least 4 dimensions
-        if batch["input"].x.dim() < 4:
-            raise ValueError(
-                "The provided input tensor must have at least 4 dimensions:"
-                " [trajectories, windows, time_steps, *features]."
-                f" Got shape {batch['input'].shape}."
-            )
-
-        # Copy the kwargs to avoid modifying the original settings
-        kwargs = solver._kwargs.copy()
-
-        # Extract the initial state and initialize the step-wise residuals list
-        current_state = batch["input"].x[:, :, 0, :]
-        residuals = []
-
-        # Iterate over the time steps
-        for step in range(1, batch["input"].x.shape[2]):
-
-            # Pre-process, forward, and post-process the current state
-            processed_input = solver.preprocess_step(current_state, **kwargs)
-            output = solver.forward(processed_input)
-            predicted_state = solver.postprocess_step(output, **kwargs)
-
-            # Retrieve the target and compute the step-wise residual
-            target_state = batch["input"].x[:, :, step, :]
-            step_residual = predicted_state - target_state
-            residuals.append(step_residual)
-
-            # Update the current state for the next iteration
-            current_state = predicted_state
-
-        # Stack the step-wise residuals
-        return torch.stack(residuals).as_subclass(torch.Tensor)
-
-    @property
-    def input(self):
-        """
-        The input data associated with the condition.
-
-        :return: The (unrolled) graph data.
-        :rtype: Graph | Data
-        """
-        return _unwrap_single(self.data.input)
+        return getattr(batch["input"], self._key)

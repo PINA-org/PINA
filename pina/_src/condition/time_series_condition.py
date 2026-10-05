@@ -2,9 +2,47 @@
 
 import torch
 
+from pina._src.condition.base_condition import BaseCondition, _unwrap_single
 from pina._src.condition.tensor_condition import TensorCondition
 from pina._src.core.label_tensor import LabelTensor
 from pina._src.core.utils import check_consistency, check_positive_integer
+
+
+def _check_time_series_params(data, n_windows, unroll_length, randomize):
+    """
+    Check the temporal data and the parameters defining its windows.
+
+    :param data: The temporal data, of shape
+        ``[trajectories, time_steps, *features]``.
+    :type data: torch.Tensor | LabelTensor
+    :param int n_windows: The maximum number of temporal windows to extract.
+    :param int unroll_length: The number of time steps in each window.
+    :param bool randomize: If ``True``, randomly permute the valid starting
+        indices before selecting the windows.
+    :raises AssertionError: If ``unroll_length`` or ``n_windows`` is not a
+        positive integer.
+    :raises ValueError: If ``randomize`` is not a boolean value.
+    :raises ValueError: If ``data`` has fewer than three dimensions.
+    :raises ValueError: If ``unroll_length`` is lower than 2.
+    """
+    # Check consistency
+    check_consistency(randomize, bool)
+    check_positive_integer(n_windows, strict=True)
+    check_positive_integer(unroll_length, strict=True)
+
+    # Check the data shape
+    if data.dim() < 3:
+        raise ValueError(
+            "The provided data tensor must have at least 3 dimensions: "
+            f"[trajectories, time, *features]. Got shape {data.shape}."
+        )
+
+    # Check the unroll length
+    if unroll_length < 2:
+        raise ValueError(
+            f"unroll_length must be strictly greater than 1 to create "
+            f"temporal windows. Got unroll_length={unroll_length}."
+        )
 
 
 def _unroll_windows(data, n_windows, unroll_length, randomize):
@@ -126,25 +164,14 @@ class TimeSeriesCondition(TensorCondition):
         """
         # Check consistency
         check_consistency(input, cls._avail_input_cls)
-        check_consistency(randomize, bool)
-        check_positive_integer(n_windows, strict=True)
-        check_positive_integer(unroll_length, strict=True)
+        _check_time_series_params(
+            data=input,
+            n_windows=n_windows,
+            unroll_length=unroll_length,
+            randomize=randomize,
+        )
 
-        # Validate input
-        if input.dim() < 3:
-            raise ValueError(
-                "The provided data tensor must have at least 3 dimensions: "
-                f"[trajectories, time, *features]. Got shape {input.shape}."
-            )
-
-        # Validate unroll_length
-        if unroll_length < 2:
-            raise ValueError(
-                f"unroll_length must be strictly greater than 1 to create "
-                f"temporal windows. Got unroll_length={unroll_length}."
-            )
-
-        return super().__new__(cls)
+        return BaseCondition.__new__(cls)
 
     def store_data(self, **kwargs):
         """
@@ -172,7 +199,18 @@ class TimeSeriesCondition(TensorCondition):
             randomize=randomize,
         )
 
-        return super().store_data(input=unrolled_data)
+        return TensorCondition.store_data(self, input=unrolled_data)
+
+    def _get_series(self, batch):
+        """
+        Return the unrolled time-series data carried by the given batch.
+
+        :param dict batch: The batch to extract the time-series data from.
+        :return: The unrolled data, of shape
+            ``[trajectories, n_windows, unroll_length, *features]``.
+        :rtype: torch.Tensor | LabelTensor
+        """
+        return batch["input"]
 
     def evaluate(self, batch, solver):
         """
@@ -193,29 +231,31 @@ class TimeSeriesCondition(TensorCondition):
             and compute the residual. The solver provides access to the model
             and its parameters, which may be necessary for evaluating the
             condition residual.
-        :raises ValueError: If the input tensor in the batch has less than 4
-            dimensions.
+        :raises ValueError: If the unrolled data has less than 4 dimensions.
         :return: The stacked per-step residual tensor of shape
             ``[time_steps - 1, trajectories, windows, *features]``.
         :rtype: torch.Tensor | LabelTensor
         """
-        # Raise error if input tensor does not have at least 4 dimensions
-        if batch["input"].dim() < 4:
+        # Extract the unrolled time-series data from the batch
+        series = self._get_series(batch)
+
+        # Raise error if the unrolled data does not have at least 4 dimensions
+        if series.dim() < 4:
             raise ValueError(
                 "The provided input tensor must have at least 4 dimensions:"
                 " [trajectories, windows, time_steps, *features]."
-                f" Got shape {batch['input'].shape}."
+                f" Got shape {series.shape}."
             )
 
         # Copy the kwargs to avoid modifying the original settings
         kwargs = solver._kwargs.copy()
 
         # Extract the initial state and initialize the step-wise residuals list
-        current_state = batch["input"][:, :, 0]
+        current_state = series[:, :, 0]
         residuals = []
 
         # Iterate over the time steps
-        for step in range(1, batch["input"].shape[2]):
+        for step in range(1, series.shape[2]):
 
             # Pre-process, forward, and post-process the current state
             processed_input = solver.preprocess_step(current_state, **kwargs)
@@ -223,7 +263,7 @@ class TimeSeriesCondition(TensorCondition):
             predicted_state = solver.postprocess_step(output, **kwargs)
 
             # Retrieve the target and compute the step-wise residual
-            target_state = batch["input"][:, :, step]
+            target_state = series[:, :, step]
             step_residual = predicted_state - target_state
             residuals.append(step_residual)
 
@@ -241,4 +281,4 @@ class TimeSeriesCondition(TensorCondition):
         :return: The unrolled input data.
         :rtype: torch.Tensor | LabelTensor
         """
-        return self.data.input
+        return _unwrap_single(self.data.input)

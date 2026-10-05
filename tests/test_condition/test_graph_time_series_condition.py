@@ -3,7 +3,7 @@ import torch
 
 from pina import Condition, LabelTensor
 from pina._src.core.utils import labelize_forward
-from pina.condition import GraphTimeSeriesCondition
+from pina.condition import GraphTimeSeriesCondition, TimeSeriesCondition
 from pina.graph import RadiusGraph
 
 # Number of samples and time steps for testing
@@ -115,6 +115,10 @@ def test_constructor(use_lt, n_windows, unroll_length, randomize):
 
     # Assert correct types
     assert isinstance(condition, GraphTimeSeriesCondition)
+
+    # The condition must also be a time-series condition, so that solvers
+    # accepting TimeSeriesCondition (e.g. the autoregressive ones) take it
+    assert isinstance(condition, TimeSeriesCondition)
 
     # Assert numerical parity
     if not randomize:
