@@ -44,17 +44,54 @@ class GraphCondition(BaseCondition):
         """
         Store the graph data and the associated per-graph tensors.
 
-        Tensor fields is attached to each graph, so that batching concatenates
-        them node-wise alongside the graph structures. The field is kept
-        available as an attribute of the stored data as well.
+        When ``sampler`` is provided, the graph data is split into subgraphs
+        with :meth:`~pina.graph.Graph.create_subgraph` and the subgraphs are
+        stored as the samples of the condition, otherwise the graph data is
+        stored as it is.
 
-        :param dict kwargs: The keyword arguments containing the graph data and
-            the associated tensor fields.
-        :raises ValueError: If the number of graphs does not match the number
-            of samples of a tensor field.
+        Tensor fields are attached to each stored graph, so that batching
+        concatenates them node-wise alongside the graph structures. The field
+        is kept available as an attribute of the stored data as well.
+
+        :param dict kwargs: The keyword arguments containing the graph data
+            and the associated tensor fields. The optional sampling
+            parameters ``sampler``, ``batch_size`` and ``seed_nodes`` are
+            consumed here and are not stored.
+        :raises TypeError: If ``sampler`` is provided and the graph data is
+            not a single :class:`~pina.graph.Graph`.
+        :raises ValueError: If ``batch_size`` or ``seed_nodes`` are provided
+            without ``sampler``, or if the number of graphs does not match
+            the number of samples of a tensor field.
         :return: The stored data.
         :rtype: SimpleNamespace
         """
+        sampler = kwargs.pop("sampler", None)
+        batch_size = kwargs.pop("batch_size", None)
+        seed_nodes = kwargs.pop("seed_nodes", None)
+
+        if sampler is not None:
+            graph_key = next(
+                key
+                for key, value in kwargs.items()
+                if isinstance(value, (Graph, Data, list, tuple))
+            )
+            graph = kwargs[graph_key]
+            if not isinstance(graph, Graph):
+                raise TypeError(
+                    "When 'sampler' is provided the graph data must be a "
+                    f"single pina Graph, got '{type(graph).__name__}'."
+                )
+            kwargs[graph_key] = graph.create_subgraph(
+                sampler,
+                batch_size=1 if batch_size is None else batch_size,
+                seed_nodes=seed_nodes,
+            )
+        elif batch_size is not None or seed_nodes is not None:
+            raise ValueError(
+                "'batch_size' and 'seed_nodes' are only available when "
+                "'sampler' is provided."
+            )
+
         # Identify the unique graph field
         self.graph_key = next(
             key
