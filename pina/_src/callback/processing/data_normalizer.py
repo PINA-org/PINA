@@ -104,13 +104,15 @@ class DataNormalizer(Callback):
         :param Trainer trainer: The trainer instance managing the execution.
         :param BaseSolver pl_module: The solver module being executed.
         :param str stage: Current execution stage.
-        :raises NotImplementedError: If the dataset is graph-based and
-            therefore unsupported.
+        :raises NotImplementedError: If any condition contains graph-based data
+            and is therefore unsupported.
         """
+        # The conditions of the underlying problem
+        conditions = pl_module.problem.conditions
+
         # Check if any condition contains graph-based data
         if any(
-            hasattr(ds.condition.data, "graph_key")
-            for ds in trainer.datamodule.train_datasets.values()
+            hasattr(condition, "graph_key") for condition in conditions.values()
         ):
             raise NotImplementedError(
                 "DataNormalizer is not compatible with graph-based datasets."
@@ -119,7 +121,7 @@ class DataNormalizer(Callback):
         # Extract input-target conditions
         conditions_to_normalize = [
             name
-            for name, cond in pl_module.problem.conditions.items()
+            for name, cond in conditions.items()
             if isinstance(cond, InputTargetCondition)
         ]
 
@@ -131,7 +133,7 @@ class DataNormalizer(Callback):
 
             # Iterate over conditions and compute normalization parameters
             for cond in conditions_to_normalize:
-                pts = self._get_data(dataset, cond)
+                pts = self._get_data(conditions, cond)
                 shift = self.shift_fn(pts)
                 scale = self.scale_fn(pts)
 
@@ -142,57 +144,60 @@ class DataNormalizer(Callback):
 
         # Apply normalization to training datasets
         if stage == "fit" and self.stage in ["train", "all"]:
-            self.normalize_dataset(trainer.datamodule.train_datasets)
+            self.normalize_dataset(
+                conditions, trainer.datamodule.train_datasets
+            )
 
         if stage == "fit" and self.stage in ["validate", "all"]:
-            self.normalize_dataset(trainer.datamodule.val_datasets)
+            self.normalize_dataset(conditions, trainer.datamodule.val_datasets)
 
         if stage == "test" and self.stage in ["test", "all"]:
-            self.normalize_dataset(trainer.datamodule.test_datasets)
+            self.normalize_dataset(conditions, trainer.datamodule.test_datasets)
 
         return super().setup(trainer, pl_module, stage)
 
-    def normalize_dataset(self, dataset):
+    def normalize_dataset(self, conditions, dataset):
         """
-        Apply normalization to all datasets in-place.
+        Apply normalization to all conditions in-place.
 
         Each condition is updated using precomputed normalization parameters.
         The transformation preserves tensor types.
 
+        :param dict conditions: The mapping between condition names and their
+            associated conditions.
         :param dict dataset: The mapping between condition names and their
             associated dataset subsets.
         """
         # Iterate over conditions and apply normalization
         for cond, norm_params in self.normalizer.items():
-            if cond in self._normalized_conditions:
+            if cond in self._normalized_conditions or cond not in dataset:
                 continue
 
-            # Extract the points to normalize and the normalization parameters
-            data_container = getattr(dataset[cond].condition, self.apply_to)
-            points = data_container.data
+            # Extract the points to normalize, the scale and the shift
+            points = getattr(conditions[cond].data, self.apply_to)
             scale = norm_params["scale"]
             shift = norm_params["shift"]
 
             # Apply normalization
             scaled_pts = (points - shift) / scale
-            if isinstance(data_container, LabelTensor):
-                scaled_pts = LabelTensor(scaled_pts, data_container.labels)
+            if isinstance(points, LabelTensor):
+                scaled_pts = LabelTensor(scaled_pts, points.labels)
 
-            # Update the dataset in-place
-            data_container.data = scaled_pts
+            # Update the condition data in-place
+            setattr(conditions[cond].data, self.apply_to, scaled_pts)
             self._normalized_conditions.add(cond)
 
-    def _get_data(self, dataset, cond):
+    def _get_data(self, conditions, cond):
         """
-        Extract the selected data field from the dataset for a given condition.
+        Extract the selected data field for a given condition.
 
-        :param dict dataset: The mapping between condition names and their
-            associated dataset subsets.
+        :param dict conditions: The mapping between condition names and their
+            associated conditions.
         :param str cond: The condition name.
         :return: The selected input or target data.
         :rtype: torch.Tensor
         """
-        return getattr(dataset[cond].condition, self.apply_to).data
+        return getattr(conditions[cond].data, self.apply_to)
 
     @property
     def normalizer(self):

@@ -101,8 +101,7 @@ class BaseRefinement(Callback, RefinementInterface):
         # Initialize dataset and compute initial population size
         self._dataset = trainer.datamodule.train_datasets
         self._initial_population_size = {
-            cond: self.dataset[cond].dataset_length
-            for cond in self._condition_to_update
+            cond: len(self.dataset[cond]) for cond in self._condition_to_update
         }
 
     def on_train_epoch_end(self, trainer, solver):

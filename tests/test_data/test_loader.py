@@ -1,13 +1,13 @@
 import pytest
-from pina.data import _Aggregator
 
+from pina.data import MultiLoader
 
 """
 Note: this test intentionally avoids relying on the actual DataLoader
-implementation in order to keep the test focused on the aggregator logic itself
-and independent from the behavior of external classes. The full pipeline is 
-tested in the DataLoader tests, which ensures that the aggregator works
-correctly when used in the intended context.
+implementation in order to keep the test focused on the loader aggregation logic
+itself and independent from the behavior of external classes. The full pipeline
+is tested in the DataModule tests, which ensures that the loader works correctly
+when used in the intended context.
 """
 
 
@@ -57,8 +57,7 @@ expected_batches3 = [
 ]
 
 
-@pytest.mark.parametrize("batching_mode", ["common_batch_size", "proportional"])
-def test_constructor(batching_mode):
+def test_constructor():
 
     # Create dummy dataloaders
     dataloaders = {
@@ -66,29 +65,10 @@ def test_constructor(batching_mode):
         "condition_2": DummyDataloader([10, 20]),
     }
 
-    # Initialize the aggregator
-    _Aggregator(dataloaders, batching_mode=batching_mode)
-
-    # Should raise NotImplementedError for separate_conditions mode
-    with pytest.raises(NotImplementedError):
-        _Aggregator(dataloaders, batching_mode="separate_conditions")
+    # Initialize the loader
+    MultiLoader(dataloaders)
 
 
-@pytest.mark.parametrize("batching_mode", ["common_batch_size", "proportional"])
-def test_len(batching_mode):
-
-    # Create dummy dataloaders
-    dataloaders = {
-        "condition_1": DummyDataloader([1, 2]),
-        "condition_2": DummyDataloader([10, 20, 30]),
-    }
-
-    # Initialize the aggregator and check its length
-    aggregator = _Aggregator(dataloaders, batching_mode=batching_mode)
-    assert len(aggregator) == 3
-
-
-@pytest.mark.parametrize("batching_mode", ["common_batch_size", "proportional"])
 @pytest.mark.parametrize(
     "dataloaders, expected",
     [
@@ -97,16 +77,16 @@ def test_len(batching_mode):
         (data_loaders3, expected_batches3),
     ],
 )
-def test_iter(batching_mode, dataloaders, expected):
+def test_len_and_iter(dataloaders, expected):
 
-    # Initialize the aggregator
-    aggregator = _Aggregator(dataloaders, batching_mode=batching_mode)
+    # Initialize the loader
+    loader = MultiLoader(dataloaders)
+
+    # Check that the number of yielded batches matches len(loader)
+    assert len(expected) == len(loader)
 
     # Check yielded batches
-    assert list(aggregator) == expected
+    assert list(loader) == expected
 
-    # Check that the number of yielded batches matches len(aggregator)
-    assert len(expected) == len(aggregator)
-
-    # Check that the aggregator can be iterated multiple times
-    assert list(aggregator) == expected
+    # Check that the loader can be iterated multiple times
+    assert list(loader) == expected

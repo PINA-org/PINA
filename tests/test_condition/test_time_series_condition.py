@@ -1,9 +1,9 @@
 import pytest
 import torch
-from pina.data.manager import _TensorDataManager, _BatchManager
+
+from pina import Condition, LabelTensor
 from pina._src.core.utils import labelize_forward
 from pina.condition import TimeSeriesCondition
-from pina import LabelTensor, Condition
 
 # Number of samples and time steps for testing
 n_samples = 5
@@ -80,6 +80,7 @@ class DummySolver:
         return 1.0
 
 
+# Verify the unroll semantics of the condition w.r.t. the stored input
 @pytest.mark.parametrize("use_lt", [True, False])
 @pytest.mark.parametrize("n_windows", [4, 6])
 @pytest.mark.parametrize("unroll_length", [3, 5])
@@ -98,6 +99,10 @@ def test_constructor(use_lt, n_windows, unroll_length, randomize):
     # Assert correct types
     assert isinstance(condition, TimeSeriesCondition)
     _assert_tensor_type(condition.input, use_lt)
+
+    # Assert correct shape
+    expected_shape = torch.Size([n_samples, n_windows, unroll_length, 2])
+    assert condition.input.shape == expected_shape
 
     # Assert numerical parity
     if not randomize:
@@ -191,29 +196,30 @@ def test_get_item(use_lt, n_windows, unroll_length, randomize):
 
     # Extract item using __getitem__
     index = 0
-    item = condition[index]
+    item = condition.materialize([index])
 
     # Assert correct types
-    assert isinstance(item, _TensorDataManager)
-    _assert_tensor_type(item.input, use_lt)
+    assert isinstance(item, dict)
+    assert "input" in item
+    _assert_tensor_type(item["input"], use_lt)
 
     # Assert correct shapes
-    expected_shape = torch.Size([n_windows, unroll_length, 2])
-    assert item.input.shape == expected_shape
+    expected_shape = torch.Size([1, n_windows, unroll_length, 2])
+    assert item["input"].shape == expected_shape
 
     # Assert numerical parity
     if not randomize:
         expected_tensor = _expected_unroll(
             input_tensor, n_windows, unroll_length, randomize
         )
-        assert torch.allclose(item.input, expected_tensor[index])
+        assert torch.allclose(item["input"], expected_tensor[index : index + 1])
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
 @pytest.mark.parametrize("n_windows", [4, 6])
 @pytest.mark.parametrize("unroll_length", [3, 5])
 @pytest.mark.parametrize("randomize", [True, False])
-def test_create_batch(use_lt, n_windows, unroll_length, randomize):
+def test_materialize(use_lt, n_windows, unroll_length, randomize):
 
     # Define the condition
     input_tensor = _create_tensor_data(use_lt)
@@ -224,35 +230,24 @@ def test_create_batch(use_lt, n_windows, unroll_length, randomize):
         randomize=randomize,
     )
 
-    # Create batches using automatic batching or condition's collate_fn
+    # Materialize the batch for the given ids
     idx = [0, 2]
-    data_to_collate = [condition.data[i] for i in idx]
-    batch_auto = condition.automatic_batching_collate_fn(data_to_collate)
-    batch_collate = condition.collate_fn(idx, condition)
+    batch = condition.materialize(idx)
 
-    # Check that the automatic batch has been properly created
-    assert isinstance(batch_auto, _BatchManager)
-    assert hasattr(batch_auto, "input")
+    # Check that the batch is a dictionary holding the input data
+    assert isinstance(batch, dict)
+    assert "input" in batch
 
-    # Check that the collate_fn batch has been properly created
-    assert isinstance(batch_collate, dict)
-    assert hasattr(batch_collate, "input")
-
-    # Assert that the automatic batch input is correct
+    # Assert that the batch input is correct
     expected_shape = torch.Size([len(idx), n_windows, unroll_length, 2])
-    assert batch_auto.input.shape == expected_shape
-
-    # Assert that the collate_fn batch input is correct
-    expected_shape = torch.Size([len(idx), n_windows, unroll_length, 2])
-    assert batch_collate.input.shape == expected_shape
+    assert batch["input"].shape == expected_shape
 
     # Create input values
     if not randomize:
         expected_tensor = _expected_unroll(
             input_tensor, n_windows, unroll_length, randomize
         )
-        assert torch.allclose(batch_collate.input, expected_tensor[idx])
-        assert torch.allclose(batch_auto.input, expected_tensor[idx])
+        assert torch.allclose(batch["input"], expected_tensor[idx])
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
