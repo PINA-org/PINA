@@ -1,8 +1,8 @@
 import pytest
 import torch
+from torch_geometric.data import Data
 
 from pina import Condition, LabelTensor
-from pina._src.core.utils import labelize_forward
 from pina.condition import GraphTimeSeriesCondition, TimeSeriesCondition
 from pina.graph import RadiusGraph
 
@@ -70,19 +70,13 @@ def _create_graph_data(use_lt):
 class DummySolver:
 
     def __init__(self, use_lt, input_vars):
-        if use_lt:
-            self.forward = labelize_forward(
-                forward=self.forward,
-                input_variables=input_vars,
-                output_variables=input_vars,
-            )
-
         self._params = None
         self._kwargs = {}
         self.aggregation_strategy = torch.mean
 
     def forward(self, samples):
-        return samples
+        # The whole graph batch goes in, the current state comes out
+        return samples.x[:, :, 0]
 
     def preprocess_step(self, current_state, **kwargs):
         return current_state
@@ -275,6 +269,7 @@ def test_evaluate(use_lt, n_windows, unroll_length, randomize):
 
     # Compute expected autoregressive step residuals
     step_residuals = []
+    print(batch["input"].x.shape)
     current_state = batch["input"].x[:, :, 0, :]
 
     for step in range(1, batch["input"].x.shape[2]):
@@ -290,3 +285,34 @@ def test_evaluate(use_lt, n_windows, unroll_length, randomize):
 
     # Assert that the evaluated residuals are correct
     assert torch.allclose(residuals, expected)
+
+
+def test_evaluate_forward_receives_graph():
+
+    graph = _create_graph_data(use_lt=False)
+    condition = GraphTimeSeriesCondition(
+        input=graph, n_windows=4, unroll_length=3
+    )
+
+    received = []
+
+    class CaptureSolver:
+        _kwargs = {}
+
+        def preprocess_step(self, state, **kwargs):
+            return state
+
+        def postprocess_step(self, state, **kwargs):
+            return state
+
+        def forward(self, samples):
+            received.append(samples)
+            return samples.x[:, :, 0]
+
+    batch = {"input": condition.input}
+    residuals = condition.evaluate(batch, CaptureSolver())
+
+    inp = received[0]
+    assert isinstance(inp, Data)
+    assert inp.x.shape == (n_nodes, 4, 3, 2)
+    assert residuals.shape == (2, n_nodes, 4, 2)

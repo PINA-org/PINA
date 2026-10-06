@@ -1,5 +1,7 @@
 """Module for the Graph Time-Series Condition class."""
 
+import torch
+
 from pina._src.condition.base_condition import BaseCondition
 from pina._src.condition.graph_condition import GraphCondition
 from pina._src.condition.time_series_condition import (
@@ -78,6 +80,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         # Check consistency
         check_consistency(input, cls._avail_input_cls)
         check_consistency(key, str)
+        print(input.x)
         if not hasattr(input, key):
             raise ValueError(
                 f"The provided graph does not have the specified key '{key}'."
@@ -139,3 +142,58 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         :rtype: torch.Tensor | LabelTensor
         """
         return getattr(batch["input"], self._key)
+
+    def evaluate(self, batch, solver):
+        """
+        Evaluate the residual of the condition on the given batch using the
+        solver.
+
+        This method computes the per-step residuals through autoregressive
+        unrolling. At each time step the whole graph batch (carrying the
+        unrolled series on the attribute given by ``key``) is passed to the
+        solver, which must return the predicted state as a tensor of shape
+        ``[trajectories, n_windows, *features]``. The per-step residuals
+        (predicted - target) are returned as a stacked tensor.
+
+        :param dict batch: The batch containing the data required by the
+            condition evaluation.
+        :param BaseSolver solver: The solver used to perform the forward pass
+            and compute the residual.
+        :raises ValueError: If the unrolled data has less than 4 dimensions.
+        :return: The stacked per-step residual tensor of shape
+            ``[time_steps - 1, trajectories, windows, *features]``.
+        :rtype: torch.Tensor | LabelTensor
+        """
+        # Extract the unrolled time-series data carried by the graph
+        series = self._get_series(batch)
+
+        # Raise error if the unrolled data does not have at least 4 dimensions
+        if series.dim() < 4:
+            raise ValueError(
+                "The provided input tensor must have at least 4 dimensions:"
+                " [trajectories, windows, time_steps, *features]."
+                f" Got shape {series.shape}."
+            )
+
+        # Copy the kwargs to avoid modifying the original settings
+        kwargs = solver._kwargs.copy()
+
+        # Extract the graph batch and initialize the step-wise residuals list
+        graph = batch["input"]
+        residuals = []
+
+        # Iterate over the time steps
+        for step in range(1, series.shape[2]):
+
+            # Pre-process, forward, and post-process the graph batch
+            processed_input = solver.preprocess_step(graph, **kwargs)
+            output = solver.forward(processed_input)
+            predicted_state = solver.postprocess_step(output, **kwargs)
+
+            # Retrieve the target and compute the step-wise residual
+            target_state = series[:, :, step]
+            step_residual = predicted_state - target_state
+            residuals.append(step_residual)
+
+        # Stack the step-wise residuals
+        return torch.stack(residuals).as_subclass(torch.Tensor)
