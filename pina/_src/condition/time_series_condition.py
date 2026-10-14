@@ -142,36 +142,36 @@ class TimeSeriesCondition(TensorCondition):
     __fields__ = ["input", "unroll_length", "n_windows", "randomize"]
     _avail_input_cls = (torch.Tensor, LabelTensor)
 
-    def __new__(cls, input, n_windows, unroll_length, randomize=False):
-        """
-        Validate the input data and time-series parameters.
+    # def __new__(cls, input, n_windows, unroll_length, randomize=False):
+    #     """
+    #     Validate the input data and time-series parameters.
 
-        :param input: The temporal input data.
-        :type input: torch.Tensor | LabelTensor
-        :param int n_windows: The maximum number of temporal windows to extract.
-        :param int unroll_length: The number of time steps in each window.
-        :param bool randomize: If ``True``, randomly permute the valid starting
-            indices before selecting the windows. Default is ``False``.
-        :raises ValueError: If ``input`` is not of type :class:`torch.Tensor` or
-            :class:`~pina.label_tensor.LabelTensor`.
-        :raises AssertionError: If ``unroll_length`` is not a positive integer.
-        :raises AssertionError: If ``n_windows`` is not a positive integer.
-        :raises ValueError: If ``randomize`` is not a boolean value.
-        :raises ValueError: If ``input`` has fewer than three dimensions.
-        :raises ValueError: If ``unroll_length`` is lower than 2.
-        :return: A new :class:`TimeSeriesCondition` instance.
-        :rtype: TimeSeriesCondition
-        """
-        # Check consistency
-        check_consistency(input, cls._avail_input_cls)
-        _check_time_series_params(
-            data=input,
-            n_windows=n_windows,
-            unroll_length=unroll_length,
-            randomize=randomize,
-        )
+    #     :param input: The temporal input data.
+    #     :type input: torch.Tensor | LabelTensor
+    #     :param int n_windows: The maximum number of temporal windows to extract.
+    #     :param int unroll_length: The number of time steps in each window.
+    #     :param bool randomize: If ``True``, randomly permute the valid starting
+    #         indices before selecting the windows. Default is ``False``.
+    #     :raises ValueError: If ``input`` is not of type :class:`torch.Tensor` or
+    #         :class:`~pina.label_tensor.LabelTensor`.
+    #     :raises AssertionError: If ``unroll_length`` is not a positive integer.
+    #     :raises AssertionError: If ``n_windows`` is not a positive integer.
+    #     :raises ValueError: If ``randomize`` is not a boolean value.
+    #     :raises ValueError: If ``input`` has fewer than three dimensions.
+    #     :raises ValueError: If ``unroll_length`` is lower than 2.
+    #     :return: A new :class:`TimeSeriesCondition` instance.
+    #     :rtype: TimeSeriesCondition
+    #     """
+    #     # Check consistency
+    #     check_consistency(input, cls._avail_input_cls)
+    #     _check_time_series_params(
+    #         data=input,
+    #         n_windows=n_windows,
+    #         unroll_length=unroll_length,
+    #         randomize=randomize,
+    #     )
 
-        return BaseCondition.__new__(cls)
+    #     return BaseCondition.__new__(cls)
 
     def store_data(self, **kwargs):
         """

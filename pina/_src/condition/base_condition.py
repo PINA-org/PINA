@@ -40,6 +40,15 @@ class BaseCondition(ConditionInterface):
         super().__init__()
         self.data = self.store_data(**kwargs)
 
+    # def setup(self, **kwargs):
+    #     """
+    #     Setup the condition with the given data.
+
+    #     :param dict kwargs: The keyword arguments representing the data to be
+    #         stored in the condition.
+    #     """
+    #     self.data = self.store_data(**kwargs)
+
     @property
     def problem(self):
         """

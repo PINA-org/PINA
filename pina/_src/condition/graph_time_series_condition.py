@@ -57,45 +57,45 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
     # Name of the graph attribute holding the temporal data
     _key = "x"
 
-    def __new__(cls, input, n_windows, unroll_length, key="x", randomize=False):
-        """
-        Check the graph input and the time-series parameters.
+    # def __new__(cls, input, n_windows, unroll_length, key="x", randomize=False):
+    #     """
+    #     Check the graph input and the time-series parameters.
 
-        :param input: The graph holding the temporal data.
-        :type input: Graph | Data
-        :param int n_windows: The maximum number of temporal windows to extract.
-        :param int unroll_length: The number of time steps in each window.
-        :param str key: The name of the graph attribute holding the temporal
-            data. Default is ``"x"``.
-        :param bool randomize: If ``True``, randomly permute the valid starting
-            indices before selecting the windows. Default is ``False``.
-        :raises ValueError: If ``input`` is not of type :class:`~pina.graph.Graph`
-            or :class:`~torch_geometric.data.Data`.
-        :raises ValueError: If ``key`` is not a string value.
-        :raises ValueError: If ``input`` has no attribute named ``key``.
-        :raises ValueError: If the temporal data is not a valid time series, or
-            if the windowing parameters are not valid.
-        :return: A new :class:`GraphTimeSeriesCondition` instance.
-        :rtype: GraphTimeSeriesCondition
-        """
-        # Check consistency
-        check_consistency(input, cls._avail_input_cls)
-        check_consistency(key, str)
-        print(input.x)
-        if not hasattr(input, key):
-            raise ValueError(
-                f"The provided graph does not have the specified key '{key}'."
-            )
+    #     :param input: The graph holding the temporal data.
+    #     :type input: Graph | Data
+    #     :param int n_windows: The maximum number of temporal windows to extract.
+    #     :param int unroll_length: The number of time steps in each window.
+    #     :param str key: The name of the graph attribute holding the temporal
+    #         data. Default is ``"x"``.
+    #     :param bool randomize: If ``True``, randomly permute the valid starting
+    #         indices before selecting the windows. Default is ``False``.
+    #     :raises ValueError: If ``input`` is not of type :class:`~pina.graph.Graph`
+    #         or :class:`~torch_geometric.data.Data`.
+    #     :raises ValueError: If ``key`` is not a string value.
+    #     :raises ValueError: If ``input`` has no attribute named ``key``.
+    #     :raises ValueError: If the temporal data is not a valid time series, or
+    #         if the windowing parameters are not valid.
+    #     :return: A new :class:`GraphTimeSeriesCondition` instance.
+    #     :rtype: GraphTimeSeriesCondition
+    #     """
+    #     # Check consistency
+    #     check_consistency(input, cls._avail_input_cls)
+    #     check_consistency(key, str)
+    #     if not hasattr(input, key):
+    #         raise ValueError(
+    #             f"The provided graph does not have the specified key '{key}'."
+    #         )
 
-        # Check the time-series parameters on the temporal data of the graph
-        _check_time_series_params(
-            data=getattr(input, key),
-            n_windows=n_windows,
-            unroll_length=unroll_length,
-            randomize=randomize,
-        )
+    #     # Check the time-series parameters on the temporal data of the graph
+    #     _check_time_series_params(
+    #         data=getattr(input, key),
+    #         n_windows=n_windows,
+    #         unroll_length=unroll_length,
+    #         randomize=randomize,
+    #     )
 
-        return BaseCondition.__new__(cls)
+    #     return BaseCondition.__new__(cls)
+
 
     def store_data(self, **kwargs):
         """
@@ -110,11 +110,11 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         :rtype: SimpleNamespace
         """
         # Extract unrolling parameters from kwargs
-        unroll_length = kwargs.get("unroll_length")
-        n_windows = kwargs.get("n_windows")
-        randomize = kwargs.get("randomize", False)
-        key = kwargs.get("key", self._key)
-        graph = kwargs.get("input")
+        unroll_length = kwargs.pop("unroll_length")
+        n_windows = kwargs.pop("n_windows")
+        randomize = kwargs.pop("randomize", False)
+        key = kwargs.pop("key", self._key)
+        graph = kwargs.pop("input")
 
         # Keep the key available for later retrieval of the temporal data
         self._key = key
