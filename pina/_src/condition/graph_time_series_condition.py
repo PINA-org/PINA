@@ -12,6 +12,7 @@ from pina._src.condition.time_series_condition import (
 from pina._src.core.graph import Graph
 from pina._src.core.utils import check_consistency
 from torch_geometric.data import Data
+from pina._src.core.label_tensor import LabelTensor
 
 
 class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
@@ -119,16 +120,20 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         self._key = key
 
         # Create unrolled windows and attach them to the graph
-        setattr(
-            graph,
-            key,
-            _unroll_windows(
-                data=getattr(graph, key),
-                n_windows=n_windows,
-                unroll_length=unroll_length,
-                randomize=randomize,
-            ),
+        unrolled_series = _unroll_windows(
+            data=getattr(graph, key),
+            n_windows=n_windows,
+            unroll_length=unroll_length,
+            randomize=randomize,
         )
+        print("unrolled_series shape before permute:", unrolled_series)
+        old_labels = getattr(graph, key).labels
+        print("old_labels shape:", old_labels)
+
+        unrolled_series = torch.permute(unrolled_series, (1, 2, 0, 3))
+        unrolled_series = LabelTensor(unrolled_series, old_labels)
+        print("unrolled_series shape after permute and labeling:", unrolled_series)
+        setattr(graph, key, unrolled_series)
 
         return GraphCondition.store_data(self, input=graph)
 
@@ -171,7 +176,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         if series.dim() < 4:
             raise ValueError(
                 "The provided input tensor must have at least 4 dimensions:"
-                " [trajectories, windows, time_steps, *features]."
+                " [windows, time_steps, nodes, *features]."
                 f" Got shape {series.shape}."
             )
 
@@ -182,16 +187,20 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         graph = batch["input"]
         residuals = []
 
+        setattr(graph, "series", series)
+        setattr(graph, 'x', series[:, 0, :, :])
+
         # Iterate over the time steps
-        for step in range(1, series.shape[2]):
+        for step in range(1, series.shape[1]):
 
             # Pre-process, forward, and post-process the graph batch
-            processed_input = solver.preprocess_step(graph, **kwargs)
-            output = solver.forward(processed_input)
-            predicted_state = solver.postprocess_step(output, **kwargs)
+            #processed_input = solver.preprocess_step(graph, **kwargs)
+            predicted_state = solver.forward(graph)
+            #predicted_state = solver.postprocess_step(output, **kwargs)
+            setattr(graph, 'x', predicted_state)
 
             # Retrieve the target and compute the step-wise residual
-            target_state = series[:, :, step]
+            target_state = series[:, step, :, :]
             step_residual = predicted_state - target_state
             residuals.append(step_residual)
 
