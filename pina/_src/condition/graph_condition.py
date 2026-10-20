@@ -65,6 +65,7 @@ class GraphCondition(BaseCondition):
         :return: The stored data.
         :rtype: SimpleNamespace
         """
+
         sampler = kwargs.pop("sampler", None)
         batch_size = kwargs.pop("batch_size", None)
         seed_nodes = kwargs.pop("seed_nodes", None)

@@ -52,6 +52,7 @@ class DataModule(LightningDataModule):
     def __init__(
         self,
         problem,
+        problem_setting=None,
         train_size=1.0,
         val_size=0.0,
         test_size=0.0,
@@ -110,6 +111,9 @@ class DataModule(LightningDataModule):
         self.pin_memory = pin_memory
         self.dataloader_cls = dataloader_cls
         self.collate_fn = collate_fn
+        self.train_size = train_size
+        self.test_size = test_size
+        self.val_size = val_size
 
         # If batch size is None, num_workers has no effect
         if batch_size is None and num_workers != 0:
@@ -121,27 +125,38 @@ class DataModule(LightningDataModule):
             warnings.warn("pin_memory has no effect when batch_size is None.")
             self.pin_memory = False
 
+        if problem_setting is None:
+            problem_setting = {
+                'time': {
+                    'n_windows': 10,
+                    'unroll_length': 5,
+                    'batch_size': 10
+                }
+            }
+        self.problem_setting = problem_setting
+
+
         # Move domain discretisation into conditions subsets
-        self.problem.move_discretisation_into_conditions()
+        #self.problem.move_discretisation_into_conditions()
 
         # If no splits are defined, use the default dataloaders
-        if train_size == 0:
-            self.train_dataloader = super().train_dataloader
-        if val_size == 0:
-            self.val_dataloader = super().val_dataloader
-        if test_size == 0:
-            self.test_dataloader = super().test_dataloader
+        # if train_size == 0:
+        #     self.train_dataloader = super().train_dataloader
+        # if val_size == 0:
+        #     self.val_dataloader = super().val_dataloader
+        # if test_size == 0:
+        #     self.test_dataloader = super().test_dataloader
 
         # Otherwise, create the condition splits and initialize the batcher
-        self._create_condition_splits(train_size, test_size)
-        self.batcher = Batcher(
-            batching_mode=self.batching_mode,
-            batch_size=self.batch_size,
-            shuffle=self.shuffle,
-            num_workers=self.num_workers,
-            pin_memory=self.pin_memory,
-            dataloader_cls=self.dataloader_cls,
-        )
+        # self._create_condition_splits(train_size, test_size)
+        # self.batcher = Batcher(
+        #     batching_mode=self.batching_mode,
+        #     batch_size=self.batch_size,
+        #     shuffle=self.shuffle,
+        #     num_workers=self.num_workers,
+        #     pin_memory=self.pin_memory,
+        #     dataloader_cls=self.dataloader_cls,
+        # )
 
     def _create_condition_splits(self, train_size, test_size):
         """
@@ -203,6 +218,15 @@ class DataModule(LightningDataModule):
             raise ValueError(
                 f"Invalid stage. Got {stage}, expected either 'fit' or  'test'."
             )
+
+        for condition_name, condition in self.problem.conditions.items():
+            condition.store_data(**self.problem_setting[condition_name])
+
+        self._create_condition_splits(self.train_size, self.val_size)
+        print(self.split_idxs)
+        ggg
+
+
 
         # Fit stage: create training and validation datasets
         if stage in ("fit", None):

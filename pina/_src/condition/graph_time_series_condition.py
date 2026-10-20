@@ -96,6 +96,11 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
 
     #     return BaseCondition.__new__(cls)
 
+    def __init__(self, graph, output_feature, conditional_feature=None):
+        self.graph = graph
+        self.output_feature = output_feature
+        self.conditional_feature = conditional_feature
+
 
     def store_data(self, **kwargs):
         """
@@ -109,34 +114,64 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         :return: A namespace-like structure containing the stored data.
         :rtype: SimpleNamespace
         """
+        print("store_data called with kwargs:", kwargs)
         # Extract unrolling parameters from kwargs
         unroll_length = kwargs.pop("unroll_length")
         n_windows = kwargs.pop("n_windows")
         randomize = kwargs.pop("randomize", False)
-        key = kwargs.pop("key", self._key)
-        graph = kwargs.pop("input")
 
         # Keep the key available for later retrieval of the temporal data
-        self._key = key
+        key = self.output_feature
+        graph = self.graph
 
         # Create unrolled windows and attach them to the graph
         unrolled_series = _unroll_windows(
-            data=getattr(graph, key),
+            data=graph.x,
             n_windows=n_windows,
             unroll_length=unroll_length,
             randomize=randomize,
         )
-        print("unrolled_series shape before permute:", unrolled_series)
-        old_labels = getattr(graph, key).labels
-        print("old_labels shape:", old_labels)
+        old_labels = graph.x.labels
 
         unrolled_series = torch.permute(unrolled_series, (1, 2, 0, 3))
         unrolled_series = LabelTensor(unrolled_series, old_labels)
-        print("unrolled_series shape after permute and labeling:", unrolled_series)
         setattr(graph, key, unrolled_series)
 
-        return GraphCondition.store_data(self, input=graph)
+        from torch_geometric.utils import k_hop_subgraph
 
+        n_batches = 4
+        start_nodes = torch.randint(0, graph.num_nodes, (n_batches,))
+        subgraphs = []
+        for start_node in start_nodes:
+            subset = k_hop_subgraph(
+                node_idx=start_node.item(),
+                num_hops=5,
+                edge_index=graph.edge_index,
+                relabel_nodes=True,
+                num_nodes=graph.num_nodes,
+            )[0]  # only the subset of nodes is needed
+            subgraph = graph.subgraph(subset)
+            print("subgraph:", subgraph)
+            subgraphs.append(subgraph)
+
+
+        self.data = subgraphs
+        # subset, edge_index, mapping, edge_mask = k_hop_subgraph(
+        #     node_idx=10,
+        #     num_hops=5,
+        #     edge_index=graph.edge_index,
+        #     relabel_nodes=True,
+        #     num_nodes=graph.num_nodes,
+        # )
+
+        # subgraph = graph.subgraph(subset)
+        # print("subgraph:", subgraph)
+        # fff
+
+        # self.data = GraphCondition.store_data(self, input=graph)
+
+    def __len__(self):
+        return len(self.data)
     def _get_series(self, batch):
         """
         Return the unrolled time-series data carried by the given batch.
@@ -146,7 +181,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
             ``[nodes, n_windows, unroll_length, *features]``.
         :rtype: torch.Tensor | LabelTensor
         """
-        return getattr(batch["input"], self._key)
+        return getattr(batch["input"], self.output_feature)
 
     def evaluate(self, batch, solver):
         """

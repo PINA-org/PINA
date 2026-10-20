@@ -38,7 +38,7 @@ class BaseCondition(ConditionInterface):
             stored in the condition.
         """
         super().__init__()
-        self.data = self.store_data(**kwargs)
+        # self.data = self.store_data(**kwargs)
 
     # def setup(self, **kwargs):
     #     """
