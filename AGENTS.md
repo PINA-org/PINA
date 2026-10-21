@@ -75,5 +75,4 @@ ruff check .           # lint
 
 ## Rules
 
-- Never modify source code (`pina/`, `tests/`, `docs/`). Skills are read-only guidance.
 - Stay conversational — walk through the workflow naturally.

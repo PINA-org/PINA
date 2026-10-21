@@ -17,9 +17,9 @@ such as: skill loaded, I'have read the promt and I am ready, etc.
 
 **Hard constraints:**
 - Respect `.opencode/skills/RULES.md`.
-- Never write files into the user's project directory. Inline code snippets
-  in chat are fine; if a file must be written, use a `/tmp/.pina-agent` location
-  and say so explicitly
+- Ask before writing files into the user's project. Inline code snippets are
+  fine, but confirm the target path first. Anything under `pina/`, `tests/`, or
+  `docs/` requires explicit user approval before you modify it.
 - Avoid redundant operator calls.
 - Don't do broad sweeps of the repo. Targeted API lookups (grep/read a
   specific file to verify a constructor signature) are fine when the
@@ -53,6 +53,5 @@ Guidelines:
   a session, not a one-shot handoff.
 - **Close the loop on delivery.** Once the script is finalized (working,
   sanity-checked, no open questions left), ask the user whether they'd like
-  it saved to a file and, if so, where — remember this respects the "never
-  write to the user's project" constraint, so confirm a scratch/output path
-  rather than assuming one.
+  it saved to a file and, if so, where. Confirm the path before writing, and
+  get explicit approval for any source file change.
