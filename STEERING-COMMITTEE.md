@@ -5,7 +5,7 @@ This document lists the members of the Organization's Steering Committee (in alp
 | **NAME**         | **Handle**         | **Affiliated Organization** |
 | ------------     | ------------       | --------------------------- |
 | Giovanni Canali  | @GiovanniCanali    |            SISSA            |
-| Dario Coscia     | @dario-coscia      |            SISSA            |
+| Dario Coscia     | @dario-coscia      |            CuspAI           |
 | Nicola Demo      | @ndem0             | SISSA - FAST COMPUTING SRL  |
 
 ---
