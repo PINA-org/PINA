@@ -2,18 +2,7 @@
 
 These rules apply to **every skill** in this repository.
 
-1. **No source code modification** — Never modify, create, or delete any source
-   code files (`.py`, `.cpp`, `.js`, `.ts`, `.rs`, etc.) or any files under
-   `pina/`, `tests/`, `docs/`, or similar source directories.
-
-2. **Read-only guidance** — Skills exist solely to provide guidance, templates,
-   and interactive Q&A. Output explanations, code snippets for the user to
-   copy, and checklists — never write files to the user's project.
-
-3. **Scope** — If the user asks to edit or write source files, politely decline
-   and explain that this skill only provides guidance.
-
-4. **Avoid redundant operator calls in equations** — Differential operators
+1. **Avoid redundant operator calls in equations** — Differential operators
    (`grad`, `div`, `laplacian`, etc.) are **not cached**: every call triggers a
    new backward pass through the autograd graph.  Always compute an operator
    once for all relevant components and extract what you need, rather than
@@ -43,7 +32,7 @@ These rules apply to **every skill** in this repository.
    This also applies to spatial gradients, divergences, and any other
    operator that can be computed for all components at once.
 
-5. **Inference goes through the solver, not the raw model** — Always call
+2. **Inference goes through the solver, not the raw model** — Always call
    `solver(input_tensor)` for evaluation at inference time,
    not `model(input_tensor)` or `solver.model(input_tensor)`.
    The solver handles label propagation and any post-processing internally.
@@ -51,12 +40,12 @@ These rules apply to **every skill** in this repository.
    specific reason (e.g., multiple models with different forward passes at
    training vs. inference).
 
-6. **Prefer solver defaults, acknowledge in chat** — Use the default values
+3. **Prefer solver defaults, acknowledge in chat** — Use the default values
    for solver parameters (optimizer, scheduler, loss, weighting, etc.) unless
    the user explicitly provides different values. Let the user know in chat
    which defaults are active so they're aware of what's running under the hood.
 
-7. **Use float values in domain fixed-point variables** —
+4. **Use float values in domain fixed-point variables** —
    `CartesianDomain({"t": 0})` or `EllipsoidDomain({"t": 0})` stores the value
    `0` as a Python `int`, causing `torch.full` to produce an int64 tensor. This
    later fails when `requires_grad_()` is called (int tensors don't support
@@ -74,7 +63,7 @@ These rules apply to **every skill** in this repository.
    EllipsoidDomain({"t": 0.0})
    ```
 
-8. **Detach LabelTensors before converting to NumPy** —
+5. **Detach LabelTensors before converting to NumPy** —
    A `LabelTensor` with `requires_grad=True` cannot be passed to
    `matplotlib` or `numpy` directly — PyTorch raises
    `"Can't call numpy() on Tensor that requires grad"`. Always call
@@ -91,12 +80,15 @@ These rules apply to **every skill** in this repository.
     plt.plot(theta.detach().numpy(), dtheta_dt.detach().numpy())
     ```
 
-9. **Don't call `problem.move_discretisation_into_conditions()` in user scripts** —
+6. **Don't call `problem.move_discretisation_into_conditions()` in user scripts** —
    The Trainer calls this internally before training — the user doesn't need
    to invoke it manually. Keep user-facing scripts simple:
    `problem.discretise_domain(...)` per domain and nothing more.
 
-10. **Smoke-Test Training Runs** - Before delivering training code, run a short 
+7. **Smoke-Test Training Runs** - Before delivering training code, run a short 
    smoke test using only a few epochs to confirm that the pipeline executes 
    successfully and does not fail. After the test passes, restore the final 
    configuration to the intended number of training epochs.
+
+8. **Modify files** - If the request will modify source files (`pina`, `tests`), 
+   announce which files and wait for the user's explicit approval before editing.
