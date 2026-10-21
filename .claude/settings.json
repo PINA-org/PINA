@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/source_edit_guard.py"],
+            "timeout": 10,
+            "statusMessage": "Checking source edit approval..."
+          }
+        ]
+      }
+    ]
+  }
+}
