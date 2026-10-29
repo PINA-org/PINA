@@ -1,16 +1,11 @@
-import torch
 import pytest
-from pina._src.core.utils import labelize_forward
-from pina._src.core.graph import LabelBatch
-from pina.graph import RadiusGraph, Graph
-from pina.condition import DataCondition
-from pina import LabelTensor, Condition
-from pina.data.manager import (
-    _TensorDataManager,
-    _GraphDataManager,
-    _BatchManager,
-)
+import torch
 
+from pina import Condition, LabelTensor
+from pina._src.core.graph import LabelBatch
+from pina._src.core.utils import labelize_forward
+from pina.condition import DataCondition
+from pina.graph import RadiusGraph
 
 # Number of graphs and tensor samples for testing
 n_samples = 10
@@ -212,20 +207,22 @@ def test_get_item(case, use_lt, conditional_variables):
             input=input_tensor, conditional_variables=cond_vars
         )
 
-        # Extract item using __getitem__
+        # Extract item using materialize
         index = 0
-        item = condition[index]
+        item = condition.materialize([index])
 
         # Assert correct types
-        assert isinstance(item, _TensorDataManager)
-        _assert_tensor_type(item.input, use_lt)
+        assert isinstance(item, dict)
+        _assert_tensor_type(item["input"], use_lt)
         if cond_vars is not None:
-            _assert_tensor_type(item.conditional_variables, use_lt)
+            _assert_tensor_type(item["conditional_variables"], use_lt)
 
         # Assert numerical parity
-        assert torch.allclose(item.input, input_tensor[index])
+        assert torch.allclose(item["input"][0], input_tensor[index])
         if cond_vars is not None:
-            assert torch.allclose(item.conditional_variables, cond_vars[index])
+            assert torch.allclose(
+                item["conditional_variables"][0], cond_vars[index]
+            )
 
     # Graph input case
     elif case == "graph":
@@ -238,28 +235,30 @@ def test_get_item(case, use_lt, conditional_variables):
             input=input_graph, conditional_variables=cond_vars
         )
 
-        # Extract item using __getitem__
+        # Extract item using materialize
         index = 0
-        item = condition[index]
+        item = condition.materialize([index])
 
         # Assert correct types
-        assert isinstance(item, _GraphDataManager)
-        assert isinstance(item.input, Graph)
-        _assert_tensor_type(item.input.x, use_lt)
+        assert isinstance(item, dict)
+        assert isinstance(item["input"], LabelBatch)
+        assert item["input"].num_graphs == 1
         if cond_vars is not None:
-            _assert_tensor_type(item.conditional_variables, use_lt)
+            _assert_tensor_type(item["conditional_variables"], use_lt)
 
         # Assert numerical parity
-        assert torch.allclose(item.input.x, input_graph[index].x)
-        assert torch.allclose(item.input.pos, input_graph[index].pos)
+        assert torch.allclose(item["input"].x, input_graph[index].x)
+        assert torch.allclose(item["input"].pos, input_graph[index].pos)
         if cond_vars is not None:
-            assert torch.allclose(item.conditional_variables, cond_vars[index])
+            assert torch.allclose(
+                item["conditional_variables"], cond_vars[index]
+            )
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
 @pytest.mark.parametrize("conditional_variables", [False, True])
 @pytest.mark.parametrize("case", ["tensor", "graph"])
-def test_create_batch(case, use_lt, conditional_variables):
+def test_materialize(case, use_lt, conditional_variables):
 
     # Tensor case
     if case == "tensor":
@@ -272,23 +271,15 @@ def test_create_batch(case, use_lt, conditional_variables):
     # Define the condition
     condition = Condition(input=input_, conditional_variables=cond_vars)
 
-    # Create batches using automatic batching or condition's collate_fn
+    # Materialize the batch for the given ids
     idx = [0, 2]
-    data_to_collate = [condition.data[i] for i in idx]
-    batch_auto = condition.automatic_batching_collate_fn(data_to_collate)
-    batch_collate = condition.collate_fn(idx, condition)
+    batch = condition.materialize(idx)
 
-    # Check that the automatic batch has been properly created
-    assert isinstance(batch_auto, _BatchManager)
-    assert hasattr(batch_auto, "input")
+    # Check that the batch is a dictionary holding the data
+    assert isinstance(batch, dict)
+    assert "input" in batch
     if cond_vars is not None:
-        assert hasattr(batch_auto, "conditional_variables")
-
-    # Check that the collate_fn batch has been properly created
-    assert isinstance(batch_collate, dict)
-    assert hasattr(batch_collate, "input")
-    if cond_vars is not None:
-        assert hasattr(batch_collate, "conditional_variables")
+        assert "conditional_variables" in batch
 
     # Retrieve tensor class for expected batch creation
     cls = LabelTensor if use_lt else torch
@@ -301,43 +292,26 @@ def test_create_batch(case, use_lt, conditional_variables):
         if cond_vars is not None:
             exp_cond = cls.stack([cond_vars[i] for i in idx])
 
-        # Assert that the automatic batch input is correct
-        assert torch.allclose(batch_auto.input, expected_input)
-        assert batch_auto.input.shape == expected_input.shape
+        # Assert that the batch input is correct
+        assert torch.allclose(batch["input"], expected_input)
+        assert batch["input"].shape == expected_input.shape
         if cond_vars is not None:
-            assert torch.allclose(batch_auto.conditional_variables, exp_cond)
-            assert batch_auto.conditional_variables.shape == exp_cond.shape
-
-        # Assert that the collate_fn batch input is correct
-        assert torch.allclose(batch_collate.input, expected_input)
-        assert batch_collate.input.shape == expected_input.shape
-        if cond_vars is not None:
-            assert torch.allclose(batch_collate.conditional_variables, exp_cond)
-            assert batch_collate.conditional_variables.shape == exp_cond.shape
+            assert torch.allclose(batch["conditional_variables"], exp_cond)
+            assert batch["conditional_variables"].shape == exp_cond.shape
 
     # Validate batch contents for graph case
     elif case == "graph":
 
-        # Create expected input batch
-        expected_input = [condition.data[i].input for i in idx]
         if cond_vars is not None:
             exp_cond = cls.cat([cond_vars[i] for i in idx])
 
-        # Assert that the automatic batch input is correct
-        for i, graph in enumerate(expected_input):
-            assert torch.allclose(batch_auto.input[i].x, graph.x)
-        assert batch_auto.input.num_graphs == len(idx)
+        # Assert that the batch input is correct
+        for pos, i in enumerate(idx):
+            assert torch.allclose(batch["input"][pos].x, input_[i].x)
+        assert batch["input"].num_graphs == len(idx)
         if cond_vars is not None:
-            assert torch.allclose(batch_auto.conditional_variables, exp_cond)
-            assert batch_auto.conditional_variables.shape == exp_cond.shape
-
-        # Assert that the collate_fn batch input is correct
-        for i, graph in enumerate(expected_input):
-            assert torch.allclose(batch_collate.input[i].x, graph.x)
-        assert batch_collate.input.num_graphs == len(idx)
-        if cond_vars is not None:
-            assert torch.allclose(batch_collate.conditional_variables, exp_cond)
-            assert batch_collate.conditional_variables.shape == exp_cond.shape
+            assert torch.allclose(batch["conditional_variables"], exp_cond)
+            assert batch["conditional_variables"].shape == exp_cond.shape
 
 
 @pytest.mark.parametrize("use_lt", [True, False])

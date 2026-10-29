@@ -3,6 +3,47 @@ import torch
 from pina import LabelTensor
 from pina.graph import RadiusGraph, KNNGraph, Graph
 from torch_geometric.data import Data
+from torch_geometric.sampler import BaseSampler, SamplerOutput
+
+
+# Deterministic sampler returning the induced subgraph of the seed nodes
+class InducedSampler(BaseSampler):
+    def __init__(self, data):
+        self.data = data
+
+    def sample_from_nodes(self, index, **kwargs):
+        seeds = index.node
+        edge_index = self.data.edge_index
+        mask = torch.isin(edge_index[0], seeds) & torch.isin(
+            edge_index[1], seeds
+        )
+        mapping = torch.full((self.data.num_nodes,), -1, dtype=torch.long)
+        mapping[seeds] = torch.arange(seeds.numel())
+        edge = mask.nonzero(as_tuple=False).view(-1)
+        return SamplerOutput(
+            node=seeds,
+            row=mapping[edge_index[0][mask]],
+            col=mapping[edge_index[1][mask]],
+            edge=edge,
+        )
+
+
+# Sampler returning an invalid object instead of a SamplerOutput
+class InvalidOutputSampler(BaseSampler):
+    def sample_from_nodes(self, index, **kwargs):
+        return "not a sampler output"
+
+
+# Sampler not providing the sampled edge ids
+class NoEdgeIdSampler(BaseSampler):
+    def sample_from_nodes(self, index, **kwargs):
+        seeds = index.node
+        return SamplerOutput(
+            node=seeds,
+            row=torch.arange(seeds.numel()),
+            col=torch.arange(seeds.numel()),
+            edge=None,
+        )
 
 
 def build_edge_attr(pos, edge_index):
@@ -364,3 +405,117 @@ def test_additional_params_knn_graph(x, pos, y):
         assert graph.y.labels == y.labels
     else:
         assert isinstance(graph.y, torch.Tensor)
+
+
+@pytest.mark.parametrize(
+    "x, pos",
+    [
+        (torch.rand(10, 2), torch.rand(10, 3)),
+        (
+            LabelTensor(torch.rand(10, 2), ["u", "v"]),
+            LabelTensor(torch.rand(10, 3), ["x", "y", "z"]),
+        ),
+    ],
+)
+def test_create_subgraph(x, pos):
+    graph = KNNGraph(
+        x=x,
+        pos=pos,
+        neighbours=3,
+        edge_attr=True,
+        scale=torch.tensor(0.5),
+    )
+    subgraphs = graph.create_subgraph(InducedSampler(graph), batch_size=4)
+
+    # The seed nodes are split into chunks of batch_size nodes
+    assert len(subgraphs) == 3
+    covered = torch.cat([sub.seed_n_id for sub in subgraphs])
+    assert torch.equal(covered, torch.arange(10))
+
+    for sub in subgraphs:
+        seeds = sub.seed_n_id
+        assert isinstance(sub, Graph)
+        assert sub.num_nodes == seeds.numel()
+
+        # Node-level attributes are sliced with the sampled nodes
+        assert torch.allclose(sub.x, graph.x[seeds])
+        assert torch.allclose(sub.pos, graph.pos[seeds])
+        if isinstance(x, LabelTensor):
+            assert isinstance(sub.x, LabelTensor)
+            assert sub.x.labels == x.labels
+            assert isinstance(sub.pos, LabelTensor)
+            assert sub.pos.labels == pos.labels
+
+        # Edge-level attributes are sliced with the sampled edges
+        assert torch.allclose(sub.edge_attr, graph.edge_attr[sub.e_id])
+        assert sub.edge_attr.shape[0] == sub.edge_index.shape[1]
+
+        # Graph-level attributes are copied as they are
+        assert torch.allclose(sub.scale, graph.scale)
+
+        # Provenance attributes
+        assert torch.equal(sub.n_id, seeds)
+        assert sub.seed_n_id.numel() <= 4
+
+        # The local edge index refers to the subgraph nodes
+        assert sub.edge_index.min() >= 0
+        assert sub.edge_index.max() < sub.num_nodes
+        original_edges = set(
+            zip(
+                graph.edge_index[0].tolist(),
+                graph.edge_index[1].tolist(),
+            )
+        )
+        for row, col in zip(
+            seeds[sub.edge_index[0]].tolist(),
+            seeds[sub.edge_index[1]].tolist(),
+        ):
+            assert (row, col) in original_edges
+
+
+def test_create_subgraph_seed_nodes():
+    graph = KNNGraph(x=torch.rand(10, 2), pos=torch.rand(10, 3), neighbours=3)
+    subgraphs = graph.create_subgraph(
+        InducedSampler(graph), batch_size=2, seed_nodes=[8, 9, 1]
+    )
+    assert len(subgraphs) == 2
+    assert subgraphs[0].seed_n_id.tolist() == [8, 9]
+    assert subgraphs[1].seed_n_id.tolist() == [1]
+    assert torch.allclose(subgraphs[0].x, graph.x[torch.tensor([8, 9])])
+
+
+def test_create_subgraph_no_edge_attr():
+    # Without edge-level attributes the sampler does not need edge ids
+    graph = KNNGraph(x=torch.rand(10, 2), pos=torch.rand(10, 3), neighbours=3)
+    subgraphs = graph.create_subgraph(NoEdgeIdSampler(), seed_nodes=[0, 1])
+    assert len(subgraphs) == 2
+    assert "e_id" not in subgraphs[0]
+
+
+def test_create_subgraph_invalid_sampler():
+    graph = KNNGraph(x=torch.rand(10, 2), pos=torch.rand(10, 3), neighbours=3)
+    with pytest.raises(TypeError, match="sample_from_nodes"):
+        graph.create_subgraph(object())
+    with pytest.raises(TypeError, match="sample_from_nodes"):
+        graph.create_subgraph(InducedSampler)
+    with pytest.raises(TypeError, match="SamplerOutput"):
+        graph.create_subgraph(InvalidOutputSampler())
+
+
+def test_create_subgraph_invalid_batch_size():
+    graph = KNNGraph(x=torch.rand(10, 2), pos=torch.rand(10, 3), neighbours=3)
+    with pytest.raises(ValueError, match="batch_size"):
+        graph.create_subgraph(InducedSampler(graph), batch_size=0)
+    with pytest.raises(ValueError, match="batch_size"):
+        graph.create_subgraph(InducedSampler(graph), batch_size=1.5)
+
+
+def test_create_subgraph_missing_edge_ids():
+    graph = KNNGraph(
+        x=torch.rand(10, 2),
+        pos=torch.rand(10, 3),
+        neighbours=3,
+        edge_attr=True,
+    )
+    with pytest.raises(ValueError, match="edge-level"):
+        graph.create_subgraph(NoEdgeIdSampler(), seed_nodes=[0, 1, 2])

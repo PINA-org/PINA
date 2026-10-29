@@ -75,6 +75,20 @@ class DomainEquationCondition(BaseCondition):
         setattr(self, "domain", kwargs.get("domain"))
         setattr(self, "equation", kwargs.get("equation"))
 
+    def materialize(self, ids, device=None, batch_fn=None):
+        """
+        Materialize the data points at the given ids.
+
+        :raises NotImplementedError: Always raised since the data points are
+            not stored in a list-like structure and are sampled from the
+            domain at training time.
+        """
+        raise NotImplementedError(
+            "Data points in a DomainEquationCondition are not stored and are "
+            "sampled from the domain at training time. Therefore, the "
+            ":meth:`materialize` method is not implemented for this condition."
+        )
+
     def evaluate(self, batch, solver):
         """
         Evaluate the residual of the condition on the given batch using the

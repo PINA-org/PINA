@@ -40,7 +40,6 @@ class Trainer(lightning.pytorch.Trainer):
     _AVAIL_BATCHING_MODES = {
         "common_batch_size",
         "proportional",
-        "separate_conditions",
     }
 
     def __init__(
@@ -51,10 +50,11 @@ class Trainer(lightning.pytorch.Trainer):
         test_size=0.0,
         val_size=0.0,
         batching_mode="common_batch_size",
-        automatic_batching=False,
         num_workers=0,
         pin_memory=False,
         shuffle=True,
+        dataloader_cls=None,
+        collate_fn=None,
         **kwargs,
     ):
         """
@@ -74,21 +74,27 @@ class Trainer(lightning.pytorch.Trainer):
             split. Must belong to the interval ``[0, 1]``. Default is ``0.0``.
         :param str batching_mode: The strategy used to aggregate batches across
             dataloaders. Available options are ``"common_batch_size"`` for
-            uniform batch sizes across conditions, ``"proportional"`` for batch
-            sizes proportional to dataset sizes, and ``"separate_conditions"``
-            for iterating through each condition separately.
+            uniform batch sizes across conditions, and ``"proportional"`` for
+            batch sizes proportional to dataset sizes.
             Default is ``"common_batch_size"``.
-        :param bool automatic_batching: Whether PyTorch automatic batching
-            should be enabled. If ``True``, dataset elements are retrieved
-            individually and collated into batches by the dataloader.
-            If ``False``, entire subsets are retrieved directly from the
-            condition object. Default is ``False``.
         :param int num_workers: The number of worker processes used by
             dataloaders. Default is ``0`` for sequential loading.
         :param bool pin_memory: Whether pinned memory should be enabled during
             data loading. Default is ``False``.
         :param bool shuffle: Whether condition samples should be shuffled before
             splitting. Default is ``True``.
+        :param dataloader_cls: The dataloader class to use for each condition,
+            defaulting to :class:`torch.utils.data.DataLoader`. It can either
+            be a single class applied to all conditions, or a mapping between
+            condition names and dataloader classes. Custom classes must accept
+            the ``batch_size``, ``sampler``, ``num_workers``, and ``pin_memory``
+            arguments and yield batches of sample ids. Default is ``None``.
+        :type dataloader_cls: type | dict[str, type] | None
+        :param collate_fn: Optional callable (or mapping between condition
+            names and callables) used to collapse the raw data selected by a
+            condition into a batch. It receives the selected raw data and the
+            ids, and returns the batch. Default is ``None``.
+        :type collate_fn: Callable | dict[str, Callable] | None
         :param dict kwargs: Additional keyword arguments forwarded to the
             Lightning trainer.
         :raises ValueError: If ``solver`` is not a PINA solver.
@@ -96,13 +102,14 @@ class Trainer(lightning.pytorch.Trainer):
             not a float in the interval ``[0, 1]``.
         :raises ValueError: If the sum of ``train_size``, ``val_size``, and
             ``test_size`` is not equal to 1.
-        :raises ValueError: If ``automatic_batching``, ``pin_memory``, or
-            ``shuffle`` is not a boolean.
+        :raises ValueError: If ``pin_memory`` or ``shuffle`` is not a boolean.
         :raises AssertionError: If ``num_workers`` is a negative integer.
         :raises ValueError: If ``batch_size``, when provided, is not a positive
             integer.
         :raises ValueError: If ``batching_mode`` is not one of the available
              options.
+        :raises ValueError: If ``dataloader_cls`` or ``collate_fn`` is a mapping
+            referring to unknown conditions.
         :raises UserWarning: If the provided ``batching_mode`` is incompatible
             with the ``batch_size``.
         :raises RuntimeError: If any domain in the problem has not been
@@ -123,7 +130,6 @@ class Trainer(lightning.pytorch.Trainer):
         check_consistency(train_size, float)
         check_consistency(test_size, float)
         check_consistency(val_size, float)
-        check_consistency(automatic_batching, bool)
         check_consistency(pin_memory, bool)
         check_consistency(shuffle, bool)
         check_positive_integer(num_workers, strict=False)
@@ -143,6 +149,14 @@ class Trainer(lightning.pytorch.Trainer):
                 f"Invalid batching mode '{batching_mode}'. "
                 f"Expected one of: {sorted(self._AVAIL_BATCHING_MODES)}."
             )
+
+        # Normalize dataloader_cls and collate_fn to per-condition mappings
+        conditions = set(solver.problem.conditions)
+        dataloader_cls, collate_fn = self._resolve_dataloader_options(
+            dataloader_cls=dataloader_cls,
+            collate_fn=collate_fn,
+            conditions=conditions,
+        )
 
         # Set inference mode to false when usiing physics-informed mixin
         if isinstance(solver, PhysicsInformedMixin):
@@ -220,10 +234,11 @@ class Trainer(lightning.pytorch.Trainer):
             val_size=val_size,
             batch_size=self.batch_size,
             batching_mode=batching_mode,
-            automatic_batching=automatic_batching,
             num_workers=num_workers,
             pin_memory=pin_memory,
             shuffle=shuffle,
+            dataloader_cls=dataloader_cls,
+            collate_fn=collate_fn,
         )
 
         # Set logging kwargs
@@ -235,6 +250,44 @@ class Trainer(lightning.pytorch.Trainer):
             "prog_bar": bool(kwargs["enable_progress_bar"]),
             "on_epoch": True,
         }
+
+    @staticmethod
+    def _resolve_dataloader_options(dataloader_cls, collate_fn, conditions):
+        """
+        Normalize the dataloader and collate options to per-condition mappings.
+
+        :param dataloader_cls: The dataloader class to use. It can be a single
+            class applied to all conditions, or a mapping between condition
+            names and dataloader classes.
+        :type dataloader_cls: type | dict[str, type] | None
+        :param collate_fn: The collate function to use. It can be a single
+            callable applied to all conditions, or a mapping between condition
+            names and callables.
+        :type collate_fn: Callable | dict[str, Callable] | None
+        :param set[str] conditions: The names of the problem conditions.
+        :raises ValueError: If a mapping refers to unknown conditions.
+        :return: The normalized per-condition mappings.
+        :rtype: tuple[dict[str, type | None], dict[str, Callable | None]]
+        """
+
+        def _normalize(value, label):
+            if value is None:
+                return {name: None for name in conditions}
+
+            if isinstance(value, dict):
+                if not set(value).issubset(conditions):
+                    raise ValueError(
+                        f"The {label} mapping refers to unknown conditions. "
+                        f"Valid conditions are: {sorted(conditions)}."
+                    )
+                return value
+
+            return {name: value for name in conditions}
+
+        dataloader_cls = _normalize(dataloader_cls, "dataloader_cls")
+        collate_fn = _normalize(collate_fn, "collate_fn")
+
+        return dataloader_cls, collate_fn
 
     def _move_to_device(self):
         """

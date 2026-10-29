@@ -1,16 +1,11 @@
-import torch
 import pytest
+import torch
+
+from pina import Condition, LabelTensor
+from pina._src.core.graph import LabelBatch
 from pina._src.core.utils import labelize_forward
 from pina.condition import InputTargetCondition
-from pina._src.core.graph import LabelBatch
-from pina.graph import RadiusGraph, Graph
-from pina import LabelTensor, Condition
-from pina.data.manager import (
-    _TensorDataManager,
-    _GraphDataManager,
-    _BatchManager,
-)
-
+from pina.graph import RadiusGraph
 
 # Number of graphs and tensor samples for testing
 n_samples = 10
@@ -231,13 +226,13 @@ def test_get_item(use_lt, case):
         item = condition[index]
 
         # Assert correct types
-        assert isinstance(item, _TensorDataManager)
-        _assert_tensor_type(item.input, use_lt)
-        _assert_tensor_type(item.target, use_lt)
+        assert isinstance(item, dict)
+        _assert_tensor_type(item["input"], use_lt)
+        _assert_tensor_type(item["target"], use_lt)
 
         # Assert numerical parity
-        assert torch.allclose(item.input, input_tensor[index])
-        assert torch.allclose(item.target, target_tensor[index])
+        assert torch.allclose(item["input"][0], input_tensor[index])
+        assert torch.allclose(item["target"][0], target_tensor[index])
 
     # Tensor - graph
     elif case == ["tensor", "graph"]:
@@ -253,14 +248,14 @@ def test_get_item(use_lt, case):
         item = condition[index]
 
         # Assert correct types
-        assert isinstance(item, _GraphDataManager)
-        _assert_tensor_type(item.input, use_lt)
-        assert isinstance(item.target, Graph)
-        _assert_tensor_type(item.target.y, use_lt)
+        assert isinstance(item, dict)
+        _assert_tensor_type(item["input"], use_lt)
+        assert isinstance(item["target"], LabelBatch)
+        assert item["target"].num_graphs == 1
 
         # Assert numerical parity
-        assert torch.allclose(item.input, input_tensor[index])
-        assert torch.allclose(item.target.y, target_graph[index].y)
+        assert torch.allclose(item["input"], input_tensor[index])
+        assert torch.allclose(item["target"].y, target_graph[index].y)
 
     # Graph - tensor
     elif case == ["graph", "tensor"]:
@@ -276,21 +271,21 @@ def test_get_item(use_lt, case):
         item = condition[index]
 
         # Assert correct types
-        assert isinstance(item, _GraphDataManager)
-        assert isinstance(item.input, Graph)
-        _assert_tensor_type(item.input.x, use_lt)
-        _assert_tensor_type(item.target, use_lt)
+        assert isinstance(item, dict)
+        assert isinstance(item["input"], LabelBatch)
+        assert item["input"].num_graphs == 1
+        _assert_tensor_type(item["target"], use_lt)
 
         # Assert numerical parity
-        assert torch.allclose(item.target, target_tensor[index])
-        assert torch.allclose(item.input.x, input_graph[index].x)
+        assert torch.allclose(item["target"], target_tensor[index])
+        assert torch.allclose(item["input"].x, input_graph[index].x)
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
 @pytest.mark.parametrize(
     "case", [["tensor", "tensor"], ["tensor", "graph"], ["graph", "tensor"]]
 )
-def test_create_batch(use_lt, case):
+def test_materialize(use_lt, case):
 
     # Tensor - tensor
     if case == ["tensor", "tensor"]:
@@ -299,37 +294,24 @@ def test_create_batch(use_lt, case):
         input_tensor, target_tensor = _create_tensor_data(use_lt=use_lt)
         condition = Condition(input=input_tensor, target=target_tensor)
 
-        # Create batches using automatic batching or condition's collate_fn
+        # Materialize the batch for the given ids
         idx = [0, 2]
-        data_to_collate = [condition.data[i] for i in idx]
-        batch_auto = condition.automatic_batching_collate_fn(data_to_collate)
-        batch_collate = condition.collate_fn(idx, condition)
+        batch = condition.materialize(idx)
 
-        # Check that the automatic batch has been properly created
-        assert isinstance(batch_auto, _BatchManager)
-        assert hasattr(batch_auto, "input")
-        assert hasattr(batch_auto, "target")
-
-        # Check that the collate_fn batch has been properly created
-        assert isinstance(batch_collate, dict)
-        assert hasattr(batch_collate, "input")
-        assert hasattr(batch_collate, "target")
+        # Check that the batch is a dictionary holding the data
+        assert isinstance(batch, dict)
+        assert "input" in batch
+        assert "target" in batch
 
         # Create expected input and target batches
         expected_input = torch.stack([input_tensor[i] for i in idx])
         expected_target = torch.stack([target_tensor[i] for i in idx])
 
-        # Assert that the automatic batch input and target are correct
-        assert torch.allclose(batch_auto.input, expected_input)
-        assert torch.allclose(batch_auto.target, expected_target)
-        assert batch_auto.input.shape == expected_input.shape
-        assert batch_auto.target.shape == expected_target.shape
-
-        # Assert that the collate_fn batch input and target are correct
-        assert torch.allclose(batch_collate.input, expected_input)
-        assert torch.allclose(batch_collate.target, expected_target)
-        assert batch_collate.input.shape == expected_input.shape
-        assert batch_collate.target.shape == expected_target.shape
+        # Assert that the batch input and target are correct
+        assert torch.allclose(batch["input"], expected_input)
+        assert torch.allclose(batch["target"], expected_target)
+        assert batch["input"].shape == expected_input.shape
+        assert batch["target"].shape == expected_target.shape
 
     # Tensor - graph
     elif case == ["tensor", "graph"]:
@@ -340,39 +322,26 @@ def test_create_batch(use_lt, case):
         )
         condition = Condition(input=input_tensor, target=target_graph)
 
-        # Create batches using automatic batching or condition's collate_fn
+        # Materialize the batch for the given ids
         idx = [0, 2]
-        data_to_collate = [condition.data[i] for i in idx]
-        batch_auto = condition.automatic_batching_collate_fn(data_to_collate)
-        batch_collate = condition.collate_fn(idx, condition)
+        batch = condition.materialize(idx)
 
-        # Check that the automatic batch has been properly created
-        assert isinstance(batch_auto, _BatchManager)
-        assert hasattr(batch_auto, "input")
-        assert hasattr(batch_auto, "target")
-
-        # Check that the collate_fn batch has been properly created
-        assert isinstance(batch_collate, dict)
-        assert hasattr(batch_collate, "input")
-        assert hasattr(batch_collate, "target")
+        # Check that the batch is a dictionary holding the data
+        assert isinstance(batch, dict)
+        assert "input" in batch
+        assert "target" in batch
 
         # Create expected input and target batches
         expected_input = torch.cat([input_tensor[i] for i in idx])
-        expected_target = [target_graph[i] for i in idx]
 
-        # Assert that the automatic batch input and target are correct
-        assert torch.allclose(batch_auto.input, expected_input)
-        for i, graph in enumerate(expected_target):
-            assert torch.allclose(batch_auto.target[i].y, graph.y)
-        assert batch_auto.input.shape == expected_input.shape
-        assert batch_auto.target.num_graphs == len(idx)
-
-        # Assert that the collate_fn batch input and target are correct
-        assert torch.allclose(batch_collate.input, expected_input)
-        for i, graph in enumerate(expected_target):
-            assert torch.allclose(batch_collate.target[i].y, graph.y)
-        assert batch_collate.input.shape == expected_input.shape
-        assert batch_collate.target.num_graphs == len(idx)
+        # Assert that the batch input and target are correct
+        assert torch.allclose(batch["input"], expected_input)
+        assert batch["input"].shape == expected_input.shape
+        assert batch["target"].num_graphs == len(idx)
+        assert torch.allclose(
+            batch["target"].y,
+            torch.cat([g.y for g in [target_graph[i] for i in idx]]),
+        )
 
     # Graph - tensor
     elif case == ["graph", "tensor"]:
@@ -383,39 +352,26 @@ def test_create_batch(use_lt, case):
         )
         condition = Condition(input=input_graph, target=target_tensor)
 
-        # Create batches using automatic batching or condition's collate_fn
+        # Materialize the batch for the given ids
         idx = [0, 2]
-        data_to_collate = [condition.data[i] for i in idx]
-        batch_auto = condition.automatic_batching_collate_fn(data_to_collate)
-        batch_collate = condition.collate_fn(idx, condition)
+        batch = condition.materialize(idx)
 
-        # Check that the automatic batch has been properly created
-        assert isinstance(batch_auto, _BatchManager)
-        assert hasattr(batch_auto, "input")
-        assert hasattr(batch_auto, "target")
-
-        # Check that the collate_fn batch has been properly created
-        assert isinstance(batch_collate, dict)
-        assert hasattr(batch_collate, "input")
-        assert hasattr(batch_collate, "target")
+        # Check that the batch is a dictionary holding the data
+        assert isinstance(batch, dict)
+        assert "input" in batch
+        assert "target" in batch
 
         # Create expected input and target batches
-        expected_input = [input_graph[i] for i in idx]
         expected_target = torch.cat([target_tensor[i] for i in idx])
 
-        # Assert that the automatic batch input and target are correct
-        for i, graph in enumerate(expected_input):
-            assert torch.allclose(batch_auto.input[i].x, graph.x)
-        assert torch.allclose(batch_auto.target, expected_target)
-        assert batch_auto.input.num_graphs == len(idx)
-        assert batch_auto.target.shape == expected_target.shape
-
-        # Assert that the collate_fn batch input and target are correct
-        for i, graph in enumerate(expected_input):
-            assert torch.allclose(batch_collate.input[i].x, graph.x)
-        assert torch.allclose(batch_collate.target, expected_target)
-        assert batch_collate.input.num_graphs == len(idx)
-        assert batch_collate.target.shape == expected_target.shape
+        # Assert that the batch input and target are correct
+        assert batch["input"].num_graphs == len(idx)
+        assert torch.allclose(
+            batch["input"].x,
+            torch.cat([g.x for g in [input_graph[i] for i in idx]]),
+        )
+        assert torch.allclose(batch["target"], expected_target)
+        assert batch["target"].shape == expected_target.shape
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
