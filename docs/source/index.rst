@@ -185,7 +185,7 @@ Physics-Informed Neural Networks (PINNs), Neural Operators, and more.
    API <_rst/_code>
    Tutorials <_tutorial>
    Contributing <_contributing>
-   Team & Foundings <_team.rst>
+   Team & Fundings <_team.rst>
    Installing <_installation>
    Cite PINA <_cite.rst>
    License <_LICENSE.rst>
