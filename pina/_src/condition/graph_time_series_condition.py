@@ -116,8 +116,8 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         """
         print("store_data called with kwargs:", kwargs)
         # Extract unrolling parameters from kwargs
-        unroll_length = kwargs.pop("unroll_length")
-        n_windows = kwargs.pop("n_windows")
+        unroll_length = kwargs.pop("unroll_length", 10)
+        n_windows = kwargs.pop("n_windows", 4)
         randomize = kwargs.pop("randomize", False)
 
         # Keep the key available for later retrieval of the temporal data
@@ -139,7 +139,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
 
         from torch_geometric.utils import k_hop_subgraph
 
-        n_batches = 4
+        n_batches = 10
         start_nodes = torch.randint(0, graph.num_nodes, (n_batches,))
         subgraphs = []
         for start_node in start_nodes:
@@ -151,7 +151,6 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                 num_nodes=graph.num_nodes,
             )[0]  # only the subset of nodes is needed
             subgraph = graph.subgraph(subset)
-            print("subgraph:", subgraph)
             subgraphs.append(subgraph)
 
 

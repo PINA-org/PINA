@@ -29,6 +29,7 @@ class ConditionAggregatorMixin:
         """
         # Initialize a dictionary to hold the scalar losses for each condition
         condition_losses = {}
+        print(batch)
 
         # Loop through each condition in the batch and compute its scalar loss
         for condition_name, data in batch:

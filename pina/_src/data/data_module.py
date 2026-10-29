@@ -12,6 +12,7 @@ from lightning.pytorch import LightningDataModule
 
 from pina._src.data.batcher import Batcher
 from pina._src.data.loader import MultiLoader
+from torch.utils.data import DataLoader
 
 
 class DataModule(LightningDataModule):
@@ -53,8 +54,8 @@ class DataModule(LightningDataModule):
         self,
         problem,
         problem_setting=None,
-        train_size=1.0,
-        val_size=0.0,
+        train_size=.8,
+        val_size=.2,
         test_size=0.0,
         batch_size=None,
         batching_mode="common_batch_size",
@@ -158,7 +159,7 @@ class DataModule(LightningDataModule):
         #     dataloader_cls=self.dataloader_cls,
         # )
 
-    def _create_condition_splits(self, train_size, test_size):
+    def create_datasets(self, train_size, test_size):
         """
         Create train/validation/test index splits for each condition.
 
@@ -172,7 +173,9 @@ class DataModule(LightningDataModule):
             split. Must belong to the interval ``[0, 1]``.
         """
         # Initialize the dictionary to store the split idx for each condition
-        self.split_idxs = {}
+        self.train_dataset = []
+        self.test_dataset = []
+        self.val_dataset = []
 
         # Iterate through conditions and create the splits
         for condition_name, condition in self.problem.conditions.items():
@@ -192,11 +195,44 @@ class DataModule(LightningDataModule):
             test_end = train_end + int(test_size * condition_length)
 
             # Store the computed split indices in the dictionary
-            self.split_idxs[condition_name] = {
-                "train": indices[:train_end],
-                "test": indices[train_end:test_end],
-                "val": indices[test_end:],
-            }
+            # self.split_idxs[condition_name] = {
+            #     "train": indices[:train_end],
+            #     "test": indices[train_end:test_end],
+            #     "val": indices[test_end:],
+            # }
+            condition_id = self.condition_name_to_idx[condition_name]
+
+            train_condition = torch.stack([
+                torch.ones(len(indices[:train_end])) * condition_id,
+                torch.tensor(indices[:train_end])
+            ]).long().T
+            self.train_dataset.extend(train_condition)
+
+            test_condition = torch.stack([
+                torch.ones(len(indices[train_end:test_end])) * condition_id,
+                torch.tensor(indices[train_end:test_end])
+            ]).long().T
+            self.test_dataset.extend(test_condition)
+
+            val_condition = torch.stack([
+                torch.ones(len(indices[test_end:])) * condition_id,
+                torch.tensor(indices[test_end:])
+            ]).long().T
+            self.val_dataset.extend(val_condition)
+    
+        self.train_dataset = torch.stack(self.train_dataset)
+        self.test_dataset = torch.stack(self.test_dataset) if self.test_dataset else None
+        self.val_dataset = torch.stack(self.val_dataset) if self.val_dataset else None
+
+    def enumerate_condition(self):
+
+        if hasattr(self, 'condition_name_to_idx'):
+            return self.condition_name_to_idx
+
+        self.condition_name_to_idx = {
+            name: idx for idx, name in enumerate(self.problem.conditions.keys())
+        }
+        return self.condition_name_to_idx
 
     def setup(self, stage=None):
         """
@@ -222,41 +258,57 @@ class DataModule(LightningDataModule):
         for condition_name, condition in self.problem.conditions.items():
             condition.store_data(**self.problem_setting[condition_name])
 
-        self._create_condition_splits(self.train_size, self.val_size)
-        print(self.split_idxs)
-        ggg
+        self.enumerate_condition()
+
+        self.create_datasets(self.train_size, self.val_size)
 
 
 
-        # Fit stage: create training and validation datasets
-        if stage in ("fit", None):
+        # # Fit stage: create training and validation datasets
+        # if stage in ("fit", None):
+        #     self.train_dataset = self._merge_datasets(
+        #         target="train"
+        #     )
 
-            # Train dataset
-            self.train_datasets = {
-                name: torch.tensor(ids, dtype=torch.long)
-                for name, split in self.split_idxs.items()
-                if len(split["train"]) > 0
-                for ids in [split["train"]]
-            }
+        #     # # Train dataset
+        #     # self.train_datasets = {
+        #     #     name: torch.tensor(ids, dtype=torch.long)
+        #     #     for name, split in self.split_idxs.items()
+        #     #     if len(split["train"]) > 0
+        #     #     for ids in [split["train"]]
+        #     # }
 
-            # Validation dataset
-            self.val_datasets = {
-                name: torch.tensor(ids, dtype=torch.long)
-                for name, split in self.split_idxs.items()
-                if len(split["val"]) > 0
-                for ids in [split["val"]]
-            }
+        #     # # Validation dataset
+        #     # self.val_datasets = {
+        #     #     name: torch.tensor(ids, dtype=torch.long)
+        #     #     for name, split in self.split_idxs.items()
+        #     #     if len(split["val"]) > 0
+        #     #     for ids in [split["val"]]
+        #     # }
+        #     # print('val datasets:', self.val_datasets)
+        #     # dddddd
 
-        # Test stage: create testing dataset
-        if stage in ("test", None):
+        # # Test stage: create testing dataset
+        # if stage in ("test", None):
 
-            # Test dataset
-            self.test_datasets = {
-                name: torch.tensor(ids, dtype=torch.long)
-                for name, split in self.split_idxs.items()
-                if len(split["test"]) > 0
-                for ids in [split["test"]]
-            }
+        #     # Test dataset
+        #     self.test_datasets = {
+        #         name: torch.tensor(ids, dtype=torch.long)
+        #         for name, split in self.split_idxs.items()
+        #         if len(split["test"]) > 0
+        #         for ids in [split["test"]]
+        #     }
+
+    # def _merge_datasets(self, target):
+    #     datasets = [
+    #         torch.tensor(ids, dtype=torch.long)
+    #         for name, split in self.split_idxs.items()
+    #         if len(split[target]) > 0
+    #         for ids in [split[target]]
+    #     ]
+    #     print(f"Merging datasets for stage '{target}':", datasets)
+    #     merged = torch.cat(datasets, dim=0)
+    #     return merged
 
     def _resolve(self, name):
         """
@@ -289,17 +341,33 @@ class DataModule(LightningDataModule):
             batches.
         :rtype: list[tuple[str, Any]]
         """
+        print("Transferring batch to device:", batch)
+        tmp = {
+            0: 'time'
+        }
+
         return [
             (
-                name,
-                self.problem.conditions[name].materialize(
-                    ids.tolist(),
+                'time',
+                self.problem.conditions['time'].materialize(
+                    idx_sample.tolist(),
                     device=device,
-                    batch_fn=self._resolve(name),
-                ),
+                    batch_fn=self._resolve('time'),
+                )
             )
-            for name, ids in batch.items()
+            for idx_condition, idx_sample in batch
         ]
+        # return [
+        #     (
+        #         tmp[],
+        #         self.problem.conditions[name].materialize(
+        #             ids.tolist(),
+        #             device=device,
+        #             batch_fn=self._resolve(name),
+        #         ),
+        #     )
+        #     for name, ids in batch.items()
+        # ]
 
     def _build_multi_loader(self, subsets):
         """
@@ -311,7 +379,7 @@ class DataModule(LightningDataModule):
             dataloaders.
         :rtype: MultiLoader
         """
-        return MultiLoader(self.batcher(subsets))
+        return MultiLoader(subsets)
 
     def train_dataloader(self):
         """
@@ -321,7 +389,7 @@ class DataModule(LightningDataModule):
             dataloaders.
         :rtype: MultiLoader
         """
-        return self._build_multi_loader(self.train_datasets)
+        return DataLoader(self.train_dataset)
 
     def val_dataloader(self):
         """
@@ -331,7 +399,9 @@ class DataModule(LightningDataModule):
             condition dataloaders.
         :rtype: MultiLoader
         """
-        return self._build_multi_loader(self.val_datasets)
+        if self.val_dataset is None:
+            return []
+        return DataLoader(self.val_dataset)
 
     def test_dataloader(self):
         """
