@@ -381,6 +381,76 @@ If you would like to contribute, please read the
 <hr/>
 </details>
 
+
+<details>
+  <summary>
+    <h2>Fundings</h2>
+  </summary>
+
+  <p>
+    A significant part of PINA has been developed either as a
+    by-product of funded research projects or through contributions
+    from researchers holding university-funded positions.
+    We gratefully acknowledge this support, particularly from:
+  </p>
+
+  <ul>
+    <li>
+      <a href="https://people.sissa.it/~grozza/aroma-cfd/">
+        H2020 ERC CoG 2015 AROMA-CFD project (Grant No. 681447)
+      </a>,
+      led by Principal Investigator
+      <a href="https://mathlab.sissa.it/people/gianluigi-rozza">
+        Prof. Gianluigi Rozza
+      </a>
+      at
+      <a href="https://mathlab.sissa.it/">
+        SISSA MathLab
+      </a>.
+    </li>
+    <li>
+      <a href="https://www.agenziacoesione.gov.it/dossier_tematici/nextgenerationeu-e-pnrr/">
+        Next Generation EU
+      </a>,
+      supporting Italy's environmental and digital transitions.
+    </li>
+  </ul>
+
+  <div style="display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            margin: 20px 0;">
+
+  <img src="docs/source/index_files/fundings.png"
+       alt="ERC Logo"
+       style="height: 80px; width: auto;">
+
+  </div>
+
+  <p>
+    We also acknowledge the contribution of <a href="https://mstrazzu.github.io/">Maria Strazzullo</a> to the early development of the package.
+    Special thanks go to all the students and researchers from different universities who have contributed to its development.
+    Finally, we warmly thank all the <a href="https://contrib.rocks/image?repo=PINA-org/PINA"> contributors </a>
+    who are the true heart of PINA!
+  </p>
+
+  <div style="display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            margin: 20px 0;">
+
+  <img src="docs/source/index_files/university_dev_pina.png"
+       alt="Contributing Universities"
+       style="height: 80px; width: auto;">
+
+  </div>
+
+  <hr>
+</details>
+
+
 <details>
 <summary>
   <h2>Citation</h2>
