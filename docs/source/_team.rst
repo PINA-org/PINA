@@ -5,23 +5,12 @@
 PINA Team
 ==========
 
-**PINA** is part of the `PyTorch ecosystem <https://pytorch.landscape2.io/?item=modeling--ai-for-science-and-engineering--pina>`_ .
-
-.. image:: https://img.shields.io/badge/PyTorch%20ecosystem-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white&labelColor=555
-    :target: https://pytorch.landscape2.io/?item=modeling--ai-for-science-and-engineering--pina
-    :align: center
-    :width: 300
-
-.. figure:: index_files/fast_mathlab.png
-    :align: center
-    :width: 500
-
-A significant part of **PINA** has been written either as a by-product of funded projects or by people on university-funded positions. We are very grateful for this support. In particular, we acknowledge:
+**PINA** is part of the `PyTorch ecosystem <https://pytorch.landscape2.io/?item=modeling--ai-for-science-and-engineering--pina>`_ . A significant part of **PINA** has been written either as a by-product of funded projects or by people on university-funded positions. We are very grateful for this support. In particular, we acknowledge:
 
 * `H2020 ERC CoG 2015 AROMA-CFD project 681447 <https://people.sissa.it/~grozza/aroma-cfd/>`_, P.I. Professor `Prof. Gianluigi Rozza <https://mathlab.sissa.it/people/gianluigi-rozza>`_ at `SISSA MathLab <https://mathlab.sissa.it/>`_.
 * `Next Generation EU <https://www.agenziacoesione.gov.it/dossier_tematici/nextgenerationeu-e-pnrr/>`_ for environmental and digital transition in Italy.
 
-.. figure:: index_files/foudings.png
+.. figure:: index_files/fundings.png
     :align: center
     :width: 500
 
