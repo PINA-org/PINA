@@ -250,25 +250,21 @@ class LabelTensor(torch.Tensor):
             """
             if isinstance(labels_te, (int, str)):
                 labels_te = [labels_te]
-            return (
-                [dim_labels.index(label) for label in labels_te]
-                if len(labels_te) > 1
-                else slice(
-                    dim_labels.index(labels_te[0]),
-                    dim_labels.index(labels_te[0]) + 1,
-                )
-            )
+            if len(labels_te) > 1:
+                return [dim_labels.index(label) for label in labels_te]
+            start = dim_labels.index(labels_te[0])
+            return slice(start, start + 1)
 
         # Ensure labels_to_extract is a list or dict
         if isinstance(labels_to_extract, (str, int)):
             labels_to_extract = [labels_to_extract]
 
-        labels = copy(self._labels)
+        labels = dict(self._labels)
 
         # Get the dimension names and the respective dimension index
-        dim_names = {labels[dim]["name"]: dim for dim in labels}
-        ndim = super().ndim
-        tensor = self.tensor.as_subclass(torch.Tensor)
+        dim_names = {label["name"]: dim for dim, label in labels.items()}
+        tensor = self.as_subclass(Tensor)
+        ndim = tensor.ndim
 
         # Convert list/tuple to a dict for the last dimension if applicable
         if isinstance(labels_to_extract, (list, tuple)):
@@ -283,6 +279,7 @@ class LabelTensor(torch.Tensor):
             )
 
         # Perform the extraction for each specified dimension
+        extracted_dims = set()
         for dim_name, labels_te in labels_to_extract.items():
             if dim_name not in dim_names:
                 raise ValueError(
@@ -299,8 +296,27 @@ class LabelTensor(torch.Tensor):
             tensor = tensor[tuple(extractor)]
 
             labels[idx_dim] = {"dof": labels_te, "name": dim_name}
+            extracted_dims.add(idx_dim)
 
-        return LabelTensor(tensor, labels)
+        # Only the extracted dimensions changed, so validate just those (in
+        # the same order the constructor would) instead of re-checking all
+        shape = tensor.shape
+        for dim, label in labels.items():
+            if dim not in extracted_dims:
+                continue
+            dof = label["dof"]
+            dof_list = dof if isinstance(dof, (list, range)) else [dof]
+            if len(dof_list) != len(set(dof_list)):
+                raise ValueError("dof must be unique")
+            if len(dof_list) != shape[dim]:
+                raise ValueError(
+                    f"Number of dof ({len(dof_list)}) does not match "
+                    f"tensor shape ({shape[dim]})"
+                )
+
+        result = LabelTensor.__new__(LabelTensor, tensor, None)
+        result._labels = labels
+        return result
 
     def __str__(self):
         """
