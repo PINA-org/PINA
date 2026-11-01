@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Lp Loss &#8212; pina-mathlab 0.3.2 documentation</title>
+    <title>Lp Loss &#8212; pina-mathlab 0.3.2.post2611 documentation</title>
   
   
   
@@ -41,7 +41,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../_static/documentation_options.js?v=71d9d8e6"></script>
+    <script src="../../_static/documentation_options.js?v=e5965c9f"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -56,8 +56,8 @@
     <link rel="prev" title="Base Dual Loss" href="base_dual_loss.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.3.2" />
-    <meta name="docbuild:last-update" content="Jul 17, 2026"/>
+  <meta name="docsearch:version" content="0.3.2.post2611" />
+    <meta name="docbuild:last-update" content="Nov 01, 2026"/>
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -127,8 +127,8 @@
     
     
     
-    <img src="../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.2 documentation - Home"/>
-    <img src="../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.2 documentation - Home"/>
+    <img src="../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.2.post2611 documentation - Home"/>
+    <img src="../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.2.post2611 documentation - Home"/>
   
   
 </a></div>
@@ -173,7 +173,7 @@
 
 <li class="nav-item ">
   <a class="nav-link nav-internal" href="../../_team.html">
-    Team & Foundings
+    Team & Fundings
   </a>
 </li>
 
@@ -238,7 +238,7 @@
           
           
           
-          <a href="https://github.com/mathLab/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+          <a href="https://github.com/PINA-org/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
         </li>
         <li class="nav-item">
           
@@ -340,7 +340,7 @@
 
 <li class="nav-item ">
   <a class="nav-link nav-internal" href="../../_team.html">
-    Team & Foundings
+    Team & Fundings
   </a>
 </li>
 
@@ -386,7 +386,7 @@
           
           
           
-          <a href="https://github.com/mathLab/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+          <a href="https://github.com/PINA-org/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
         </li>
         <li class="nav-item">
           
@@ -747,23 +747,23 @@ is aggregated accordingly:</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The order of the norm. It can be a numeric value for standard
+<li><p><strong>p</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a>) – The order of the norm. It can be a numeric value for standard
 p-norms or one of the following strings: <code class="docutils literal notranslate"><span class="pre">&quot;inf&quot;</span></code> for maximum
 absolute value, <code class="docutils literal notranslate"><span class="pre">&quot;-inf&quot;</span></code> for minimum absolute value. The values
 <code class="docutils literal notranslate"><span class="pre">&quot;inf&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;-inf&quot;</span></code> are internally converted to their floating
 counterparts. Default is <code class="docutils literal notranslate"><span class="pre">2</span></code>.</p></li>
-<li><p><strong>reduction</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – The reduction method to aggregate pointwise loss
+<li><p><strong>reduction</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a>) – The reduction method to aggregate pointwise loss
 values. Available options include: <code class="docutils literal notranslate"><span class="pre">&quot;none&quot;</span></code> for unreduced loss,
 <code class="docutils literal notranslate"><span class="pre">&quot;mean&quot;</span></code> for the average of the loss values, and <code class="docutils literal notranslate"><span class="pre">&quot;sum&quot;</span></code> for
 their total sum. Default is <code class="docutils literal notranslate"><span class="pre">&quot;mean&quot;</span></code>.</p></li>
-<li><p><strong>relative</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, computes the relative error.
+<li><p><strong>relative</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, computes the relative error.
 Default is <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><ul class="simple">
-<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">relative</span></code> is not a boolean.</p></li>
-<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">p</span></code> is not a valid norm order.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">relative</span></code> is not a boolean.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">p</span></code> is not a valid norm order.</p></li>
 </ul>
 </dd>
 </dl>
@@ -774,15 +774,15 @@ Default is <code class="docutils literal notranslate"><span class="pre">False</s
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>input</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)"><em>torch.Tensor</em></a>) – The input tensor.</p></li>
-<li><p><strong>target</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)"><em>torch.Tensor</em></a>) – The target tensor.</p></li>
+<li><p><strong>input</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.15)"><em>torch.Tensor</em></a>) – The input tensor.</p></li>
+<li><p><strong>target</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.15)"><em>torch.Tensor</em></a>) – The target tensor.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>The computed loss.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)">torch.Tensor</a></p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.15)">torch.Tensor</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -851,7 +851,7 @@ Default is <code class="docutils literal notranslate"><span class="pre">False</s
         <div id="credits" style="width: 50%; float: left">
             <p>
                 &#169; Copyright 2021-2026, <a
-                    href="https://github.com/mathLab/PINA/">PINA Developers</a>.<br />
+                    href="https://github.com/PINA-org/PINA/">PINA Developers</a>.<br />
                 Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> and the <a
                     href="https://pydata-sphinx-theme.readthedocs.io/en/stable/">PyData Theme</a>.<br />
             </p>

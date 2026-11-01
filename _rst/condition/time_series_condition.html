@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Time Series Condition &#8212; pina-mathlab 0.3.2 documentation</title>
+    <title>Time Series Condition &#8212; pina-mathlab 0.3.2.post2611 documentation</title>
   
   
   
@@ -41,7 +41,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../_static/documentation_options.js?v=71d9d8e6"></script>
+    <script src="../../_static/documentation_options.js?v=e5965c9f"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -55,8 +55,8 @@
     <link rel="prev" title="Input Target Condition" href="input_target_condition.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.3.2" />
-    <meta name="docbuild:last-update" content="Jul 17, 2026"/>
+  <meta name="docsearch:version" content="0.3.2.post2611" />
+    <meta name="docbuild:last-update" content="Nov 01, 2026"/>
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -126,8 +126,8 @@
     
     
     
-    <img src="../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.2 documentation - Home"/>
-    <img src="../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.2 documentation - Home"/>
+    <img src="../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.2.post2611 documentation - Home"/>
+    <img src="../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.2.post2611 documentation - Home"/>
   
   
 </a></div>
@@ -172,7 +172,7 @@
 
 <li class="nav-item ">
   <a class="nav-link nav-internal" href="../../_team.html">
-    Team & Foundings
+    Team & Fundings
   </a>
 </li>
 
@@ -237,7 +237,7 @@
           
           
           
-          <a href="https://github.com/mathLab/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+          <a href="https://github.com/PINA-org/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
         </li>
         <li class="nav-item">
           
@@ -339,7 +339,7 @@
 
 <li class="nav-item ">
   <a class="nav-link nav-internal" href="../../_team.html">
-    Team & Foundings
+    Team & Fundings
   </a>
 </li>
 
@@ -385,7 +385,7 @@
           
           
           
-          <a href="https://github.com/mathLab/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+          <a href="https://github.com/PINA-org/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
         </li>
         <li class="nav-item">
           
@@ -720,7 +720,7 @@ available trajectories.</p>
 <p>Internally, the unrolled data is stored as a tensor of shape
 <code class="docutils literal notranslate"><span class="pre">[trajectories,</span> <span class="pre">n_windows,</span> <span class="pre">unroll_length,</span> <span class="pre">*features]</span></code>.</p>
 <p>Supported data types include <code class="xref py py-class docutils literal notranslate"><span class="pre">LabelTensor</span></code> and
-<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">torch.Tensor</span></code></a>.</p>
+<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">torch.Tensor</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Example<span class="colon">:</span></dt>
 <dd class="field-odd"><p></p></dd>
@@ -736,7 +736,7 @@ available trajectories.</p>
 <p>Initialization of the <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseCondition</span></code> class.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>) – The keyword arguments representing the data to be
+<dd class="field-odd"><p><strong>kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#dict" title="(in Python v3.15)"><em>dict</em></a>) – The keyword arguments representing the data to be
 stored in the condition.</p>
 </dd>
 </dl>
@@ -748,7 +748,7 @@ stored in the condition.</p>
 windows based on the specified <code class="docutils literal notranslate"><span class="pre">unroll_length</span></code> and <code class="docutils literal notranslate"><span class="pre">n_windows</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>) – The keyword arguments containing the data to be
+<dd class="field-odd"><p><strong>kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#dict" title="(in Python v3.15)"><em>dict</em></a>) – The keyword arguments containing the data to be
 stored.</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -774,7 +774,7 @@ reduction or loss aggregation.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>batch</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>) – The batch containing the data required by the
+<li><p><strong>batch</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#dict" title="(in Python v3.15)"><em>dict</em></a>) – The batch containing the data required by the
 condition evaluation.</p></li>
 <li><p><strong>solver</strong> (<em>BaseSolver</em>) – The solver used to perform the forward pass
 and compute the residual. The solver provides access to the model
@@ -783,7 +783,7 @@ condition residual.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the input tensor in the batch has less than 4
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – If the input tensor in the batch has less than 4
 dimensions.</p>
 </dd>
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
@@ -791,7 +791,7 @@ dimensions.</p>
 <code class="docutils literal notranslate"><span class="pre">[time_steps</span> <span class="pre">-</span> <span class="pre">1,</span> <span class="pre">trajectories,</span> <span class="pre">windows,</span> <span class="pre">*features]</span></code>.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)">torch.Tensor</a> | <a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor">LabelTensor</a></p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.15)">torch.Tensor</a> | <a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor">LabelTensor</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -805,7 +805,7 @@ dimensions.</p>
 <dd class="field-odd"><p>The input data.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.13)">torch.Tensor</a> | <a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor">LabelTensor</a></p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.15)">torch.Tensor</a> | <a class="reference internal" href="../label_tensor.html#pina._src.core.label_tensor.LabelTensor" title="pina._src.core.label_tensor.LabelTensor">LabelTensor</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -876,7 +876,7 @@ dimensions.</p>
         <div id="credits" style="width: 50%; float: left">
             <p>
                 &#169; Copyright 2021-2026, <a
-                    href="https://github.com/mathLab/PINA/">PINA Developers</a>.<br />
+                    href="https://github.com/PINA-org/PINA/">PINA Developers</a>.<br />
                 Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> and the <a
                     href="https://pydata-sphinx-theme.readthedocs.io/en/stable/">PyData Theme</a>.<br />
             </p>

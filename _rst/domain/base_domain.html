@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>BaseDomain &#8212; pina-mathlab 0.3.2 documentation</title>
+    <title>BaseDomain &#8212; pina-mathlab 0.3.2.post2611 documentation</title>
   
   
   
@@ -41,7 +41,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../_static/documentation_options.js?v=71d9d8e6"></script>
+    <script src="../../_static/documentation_options.js?v=e5965c9f"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -55,8 +55,8 @@
     <link rel="prev" title="DomainInterface" href="domain_interface.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.3.2" />
-    <meta name="docbuild:last-update" content="Jul 17, 2026"/>
+  <meta name="docsearch:version" content="0.3.2.post2611" />
+    <meta name="docbuild:last-update" content="Nov 01, 2026"/>
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -126,8 +126,8 @@
     
     
     
-    <img src="../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.2 documentation - Home"/>
-    <img src="../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.2 documentation - Home"/>
+    <img src="../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.2.post2611 documentation - Home"/>
+    <img src="../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.2.post2611 documentation - Home"/>
   
   
 </a></div>
@@ -172,7 +172,7 @@
 
 <li class="nav-item ">
   <a class="nav-link nav-internal" href="../../_team.html">
-    Team & Foundings
+    Team & Fundings
   </a>
 </li>
 
@@ -237,7 +237,7 @@
           
           
           
-          <a href="https://github.com/mathLab/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+          <a href="https://github.com/PINA-org/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
         </li>
         <li class="nav-item">
           
@@ -339,7 +339,7 @@
 
 <li class="nav-item ">
   <a class="nav-link nav-internal" href="../../_team.html">
-    Team & Foundings
+    Team & Fundings
   </a>
 </li>
 
@@ -385,7 +385,7 @@
           
           
           
-          <a href="https://github.com/mathLab/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+          <a href="https://github.com/PINA-org/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
         </li>
         <li class="nav-item">
           
@@ -715,7 +715,7 @@ abstract methods of <code class="xref py py-class docutils literal notranslate">
 <p>Initialization of the <a class="reference internal" href="#pina._src.domain.base_domain.BaseDomain" title="pina._src.domain.base_domain.BaseDomain"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseDomain</span></code></a> class.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>variables_dict</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em> | </em><em>None</em>) – A dictionary where the keys are the variable
+<dd class="field-odd"><p><strong>variables_dict</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#dict" title="(in Python v3.15)"><em>dict</em></a><em> | </em><em>None</em>) – A dictionary where the keys are the variable
 names and the values are the domain extrema. The domain extrema can
 be either a list or tuple with two elements or a single number. If
 the domain extrema is a single number, the variable is fixed to that
@@ -723,11 +723,11 @@ value.</p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><ul class="simple">
-<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#TypeError" title="(in Python v3.14)"><strong>TypeError</strong></a> – If the domain dictionary is not a dictionary.</p></li>
-<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the domain dictionary is empty.</p></li>
-<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the domain dictionary contains variables with
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#TypeError" title="(in Python v3.15)"><strong>TypeError</strong></a> – If the domain dictionary is not a dictionary.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – If the domain dictionary is empty.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – If the domain dictionary contains variables with
 invalid ranges.</p></li>
-<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If the domain dictionary contains values that are
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – If the domain dictionary contains values that are
 neither numbers nor lists/tuples of numbers of length 2.</p></li>
 </ul>
 </dd>
@@ -744,7 +744,7 @@ can be used for update.</p>
 into the current one.</p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#TypeError" title="(in Python v3.14)"><strong>TypeError</strong></a> – If the provided domain is not of the same type as
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#TypeError" title="(in Python v3.15)"><strong>TypeError</strong></a> – If the provided domain is not of the same type as
 the current one.</p>
 </dd>
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
@@ -765,7 +765,7 @@ the current one.</p>
 <dd class="field-odd"><p>The list of available sampling modes.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#list" title="(in Python v3.15)">list</a>[<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)">str</a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -779,7 +779,7 @@ the current one.</p>
 <dd class="field-odd"><p>The list of variables of the domain.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#list" title="(in Python v3.15)">list</a>[<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)">str</a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -793,7 +793,7 @@ the current one.</p>
 <dd class="field-odd"><p>The dictionary representing the domain.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a></p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#dict" title="(in Python v3.15)">dict</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -807,7 +807,7 @@ the current one.</p>
 <dd class="field-odd"><p>The range variables of the domain.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a></p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#dict" title="(in Python v3.15)">dict</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -821,7 +821,7 @@ the current one.</p>
 <dd class="field-odd"><p>The fixed variables of the domain.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a></p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#dict" title="(in Python v3.15)">dict</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -895,7 +895,7 @@ the current one.</p>
         <div id="credits" style="width: 50%; float: left">
             <p>
                 &#169; Copyright 2021-2026, <a
-                    href="https://github.com/mathLab/PINA/">PINA Developers</a>.<br />
+                    href="https://github.com/PINA-org/PINA/">PINA Developers</a>.<br />
                 Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> and the <a
                     href="https://pydata-sphinx-theme.readthedocs.io/en/stable/">PyData Theme</a>.<br />
             </p>

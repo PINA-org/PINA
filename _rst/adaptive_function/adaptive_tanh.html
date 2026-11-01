@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Adaptive Tanh &#8212; pina-mathlab 0.3.2 documentation</title>
+    <title>Adaptive Tanh &#8212; pina-mathlab 0.3.2.post2611 documentation</title>
   
   
   
@@ -41,7 +41,7 @@
   <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../_static/documentation_options.js?v=71d9d8e6"></script>
+    <script src="../../_static/documentation_options.js?v=e5965c9f"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -56,8 +56,8 @@
     <link rel="prev" title="Adaptive Softmin" href="adaptive_softmin.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.3.2" />
-    <meta name="docbuild:last-update" content="Jul 17, 2026"/>
+  <meta name="docsearch:version" content="0.3.2.post2611" />
+    <meta name="docbuild:last-update" content="Nov 01, 2026"/>
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -127,8 +127,8 @@
     
     
     
-    <img src="../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.2 documentation - Home"/>
-    <img src="../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.2 documentation - Home"/>
+    <img src="../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.2.post2611 documentation - Home"/>
+    <img src="../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.2.post2611 documentation - Home"/>
   
   
 </a></div>
@@ -173,7 +173,7 @@
 
 <li class="nav-item ">
   <a class="nav-link nav-internal" href="../../_team.html">
-    Team & Foundings
+    Team & Fundings
   </a>
 </li>
 
@@ -238,7 +238,7 @@
           
           
           
-          <a href="https://github.com/mathLab/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+          <a href="https://github.com/PINA-org/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
         </li>
         <li class="nav-item">
           
@@ -340,7 +340,7 @@
 
 <li class="nav-item ">
   <a class="nav-link nav-internal" href="../../_team.html">
-    Team & Foundings
+    Team & Fundings
   </a>
 </li>
 
@@ -386,7 +386,7 @@
           
           
           
-          <a href="https://github.com/mathLab/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+          <a href="https://github.com/PINA-org/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
         </li>
         <li class="nav-item">
           
@@ -709,7 +709,7 @@
 <dt class="sig sig-object py" id="pina._src.adaptive_function.adaptive_tanh.AdaptiveTanh">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">AdaptiveTanh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fixed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/pina/_src/adaptive_function/adaptive_tanh.html#AdaptiveTanh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pina._src.adaptive_function.adaptive_tanh.AdaptiveTanh" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <a class="reference internal" href="base_adaptive_function.html#pina._src.adaptive_function.base_adaptive_function.BaseAdaptiveFunction" title="pina._src.adaptive_function.base_adaptive_function.BaseAdaptiveFunction"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseAdaptiveFunction</span></code></a></p>
-<p>Adaptive, trainable variant of the <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Tanh.html#torch.nn.Tanh" title="(in PyTorch v2.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Tanh</span></code></a> activation.</p>
+<p>Adaptive, trainable variant of the <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Tanh.html#torch.nn.Tanh" title="(in PyTorch v2.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Tanh</span></code></a> activation.</p>
 <p>This module extends the standard Tanh by introducing learnable scaling
 and shifting parameters applied to both the input and the output.</p>
 <p>Given the function <span class="math notranslate nohighlight">\(\text{Tanh}:\mathbb{R}^n\rightarrow\mathbb{R}^n\)</span>,
@@ -752,13 +752,13 @@ DOI: <a class="reference external" href="https://doi.org/10.1016/j.jcp.2019.1091
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – The output scaling parameter of the adaptive function.
+<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a>) – The output scaling parameter of the adaptive function.
 If <code class="docutils literal notranslate"><span class="pre">None</span></code>, it is initialized to <code class="docutils literal notranslate"><span class="pre">1</span></code>. Default is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
-<li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – The input scaling parameter of the adaptive function.
+<li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a>) – The input scaling parameter of the adaptive function.
 If <code class="docutils literal notranslate"><span class="pre">None</span></code>, it is initialized to <code class="docutils literal notranslate"><span class="pre">1</span></code>. Default is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
-<li><p><strong>gamma</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – The input shifting parameter of the adaptive function.
+<li><p><strong>gamma</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a>) – The input shifting parameter of the adaptive function.
 If <code class="docutils literal notranslate"><span class="pre">None</span></code>, it is initialized to <code class="docutils literal notranslate"><span class="pre">0</span></code>. Default is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
-<li><p><strong>fixed</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – The names of parameters to keep fixed during training.
+<li><p><strong>fixed</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#list" title="(in Python v3.15)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em>]</em>) – The names of parameters to keep fixed during training.
 These parameters will not be optimized and will have
 <code class="docutils literal notranslate"><span class="pre">requires_grad=False</span></code>. Available options are <code class="docutils literal notranslate"><span class="pre">&quot;alpha&quot;</span></code>,
 <code class="docutils literal notranslate"><span class="pre">&quot;beta&quot;</span></code>, and <code class="docutils literal notranslate"><span class="pre">&quot;gamma&quot;</span></code>. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, all parameters are
@@ -767,12 +767,12 @@ trainable. Default is <code class="docutils literal notranslate"><span class="pr
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><ul class="simple">
-<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If alpha, when provided, is not a number.</p></li>
-<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If beta, when provided, is not a number.</p></li>
-<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If gamma, when provided, is not a number.</p></li>
-<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If fixed, when provided, is neither a string nor a
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – If alpha, when provided, is not a number.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – If beta, when provided, is not a number.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – If gamma, when provided, is not a number.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – If fixed, when provided, is neither a string nor a
 list of strings.</p></li>
-<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If fixed contains invalid parameter names.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – If fixed contains invalid parameter names.</p></li>
 </ul>
 </dd>
 </dl>
@@ -837,7 +837,7 @@ list of strings.</p></li>
         <div id="credits" style="width: 50%; float: left">
             <p>
                 &#169; Copyright 2021-2026, <a
-                    href="https://github.com/mathLab/PINA/">PINA Developers</a>.<br />
+                    href="https://github.com/PINA-org/PINA/">PINA Developers</a>.<br />
                 Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> and the <a
                     href="https://pydata-sphinx-theme.readthedocs.io/en/stable/">PyData Theme</a>.<br />
             </p>

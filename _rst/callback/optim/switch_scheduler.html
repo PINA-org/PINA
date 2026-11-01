@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Switch Scheduler &#8212; pina-mathlab 0.3.2 documentation</title>
+    <title>Switch Scheduler &#8212; pina-mathlab 0.3.2.post2611 documentation</title>
   
   
   
@@ -41,7 +41,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../_static/documentation_options.js?v=71d9d8e6"></script>
+    <script src="../../../_static/documentation_options.js?v=e5965c9f"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -55,8 +55,8 @@
     <link rel="prev" title="Switch Optimizer" href="switch_optimizer.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.3.2" />
-    <meta name="docbuild:last-update" content="Jul 17, 2026"/>
+  <meta name="docsearch:version" content="0.3.2.post2611" />
+    <meta name="docbuild:last-update" content="Nov 01, 2026"/>
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -126,8 +126,8 @@
     
     
     
-    <img src="../../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.2 documentation - Home"/>
-    <img src="../../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.2 documentation - Home"/>
+    <img src="../../../_static/PINA_logo.png" class="logo__image only-light" alt="pina-mathlab 0.3.2.post2611 documentation - Home"/>
+    <img src="../../../_static/PINA_logo.png" class="logo__image only-dark pst-js-only" alt="pina-mathlab 0.3.2.post2611 documentation - Home"/>
   
   
 </a></div>
@@ -172,7 +172,7 @@
 
 <li class="nav-item ">
   <a class="nav-link nav-internal" href="../../../_team.html">
-    Team & Foundings
+    Team & Fundings
   </a>
 </li>
 
@@ -237,7 +237,7 @@
           
           
           
-          <a href="https://github.com/mathLab/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+          <a href="https://github.com/PINA-org/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
         </li>
         <li class="nav-item">
           
@@ -339,7 +339,7 @@
 
 <li class="nav-item ">
   <a class="nav-link nav-internal" href="../../../_team.html">
-    Team & Foundings
+    Team & Fundings
   </a>
 </li>
 
@@ -385,7 +385,7 @@
           
           
           
-          <a href="https://github.com/mathLab/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+          <a href="https://github.com/PINA-org/PINA" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
         </li>
         <li class="nav-item">
           
@@ -707,7 +707,7 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="pina._src.callback.optim.switch_scheduler.SwitchScheduler">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">SwitchScheduler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_schedulers</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch_switch</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/pina/_src/callback/optim/switch_scheduler.html#SwitchScheduler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pina._src.callback.optim.switch_scheduler.SwitchScheduler" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <a class="reference external" href="https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.Callback.html#lightning.pytorch.callbacks.Callback" title="(in PyTorch Lightning v2.6.1)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Callback</span></code></a></p>
+<dd><p>Bases: <a class="reference external" href="https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.Callback.html#lightning.pytorch.callbacks.Callback" title="(in PyTorch Lightning v2.7.0.dev)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Callback</span></code></a></p>
 <p>Lightning callback for dynamically replacing schedulers during training.</p>
 <p>This callback enables switching to new scheduler(s) at a specified epoch
 without interrupting the training loop. It is useful for staged training
@@ -729,16 +729,16 @@ strategies where different learning rate policies are applied sequentially.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>new_schedulers</strong> (<a class="reference internal" href="../../optim/scheduler_interface.html#pina._src.optim.scheduler_interface.SchedulerInterface" title="pina._src.optim.scheduler_interface.SchedulerInterface"><em>SchedulerInterface</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference internal" href="../../optim/scheduler_interface.html#pina._src.optim.scheduler_interface.SchedulerInterface" title="pina._src.optim.scheduler_interface.SchedulerInterface"><em>SchedulerInterface</em></a><em>]</em>) – The scheduler or list of schedulers to switch to.
+<li><p><strong>new_schedulers</strong> (<a class="reference internal" href="../../optim/scheduler_interface.html#pina._src.optim.scheduler_interface.SchedulerInterface" title="pina._src.optim.scheduler_interface.SchedulerInterface"><em>SchedulerInterface</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#list" title="(in Python v3.15)"><em>list</em></a><em>[</em><a class="reference internal" href="../../optim/scheduler_interface.html#pina._src.optim.scheduler_interface.SchedulerInterface" title="pina._src.optim.scheduler_interface.SchedulerInterface"><em>SchedulerInterface</em></a><em>]</em>) – The scheduler or list of schedulers to switch to.
 Use a single scheduler for single-model solvers, or a list of
 schedulers when working with multiple models.</p></li>
-<li><p><strong>epoch_switch</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – The epoch at which the scheduler switch occurs.</p></li>
+<li><p><strong>epoch_switch</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a>) – The epoch at which the scheduler switch occurs.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><ul class="simple">
-<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">epoch_switch</span></code> is not a positive integer.</p></li>
-<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If any of the provided schedulers are not instances
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#AssertionError" title="(in Python v3.15)"><strong>AssertionError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">epoch_switch</span></code> is not a positive integer.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – If any of the provided schedulers are not instances
 of <code class="xref py py-class docutils literal notranslate"><span class="pre">pina.optim.SchedulerInterface</span></code>.</p></li>
 </ul>
 </dd>
@@ -831,7 +831,7 @@ the training process.</p></li>
         <div id="credits" style="width: 50%; float: left">
             <p>
                 &#169; Copyright 2021-2026, <a
-                    href="https://github.com/mathLab/PINA/">PINA Developers</a>.<br />
+                    href="https://github.com/PINA-org/PINA/">PINA Developers</a>.<br />
                 Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> and the <a
                     href="https://pydata-sphinx-theme.readthedocs.io/en/stable/">PyData Theme</a>.<br />
             </p>
