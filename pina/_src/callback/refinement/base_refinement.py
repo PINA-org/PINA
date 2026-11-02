@@ -98,10 +98,23 @@ class BaseRefinement(Callback, RefinementInterface):
                     "be used for sampling."
                 )
 
-        # Initialize dataset and compute initial population size
-        self._dataset = trainer.datamodule.train_datasets
+        # Build mapping: condition name -> list of train batch ids
+        datamodule = trainer.datamodule
+        train_dataset = datamodule.train_dataset
+        train_batch_ids = {}
+        for condition_id, batch_id in train_dataset:
+            name = datamodule.idx_to_condition_name[int(condition_id)]
+            train_batch_ids.setdefault(name, []).append(int(batch_id))
+
+        self._dataset = train_batch_ids
+
+        # Compute initial population size as total training points per condition
         self._initial_population_size = {
-            cond: len(self.dataset[cond]) for cond in self._condition_to_update
+            cond: sum(
+                len(solver.problem.conditions[cond].data[i]["input"])
+                for i in train_batch_ids.get(cond, [])
+            )
+            for cond in self._condition_to_update
         }
 
     def on_train_epoch_end(self, trainer, solver):
@@ -122,10 +135,13 @@ class BaseRefinement(Callback, RefinementInterface):
 
             # Update points for each condition to update
             for name in self._condition_to_update:
-
-                current_points = solver.problem.conditions[name].data.input
-                new_points = self.sample(current_points, name, solver)
-                solver.problem.conditions[name].data.input = new_points
+                condition = solver.problem.conditions[name]
+                batch_ids = self.dataset.get(name, [])
+                for batch_id in batch_ids:
+                    current_points = condition.data[batch_id]["input"]
+                    condition.data[batch_id]["input"] = self.sample(
+                        current_points, name, solver
+                    )
 
     @property
     def dataset(self):

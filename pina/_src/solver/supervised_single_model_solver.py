@@ -1,5 +1,8 @@
 """Module for the supervised single-model solver class."""
 
+from pina._src.condition.graph_input_target_condition import (
+    GraphInputTargetCondition,
+)
 from pina._src.condition.input_target_condition import InputTargetCondition
 from pina._src.solver.single_model_solver import SingleModelSolver
 
@@ -40,7 +43,10 @@ class SupervisedSingleModelSolver(SingleModelSolver):
     """
 
     # Accepted conditions types for this solver
-    accepted_conditions_types = (InputTargetCondition,)
+    accepted_conditions_types = (
+        InputTargetCondition,
+        GraphInputTargetCondition,
+    )
 
     def __init__(
         self,

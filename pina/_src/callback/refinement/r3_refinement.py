@@ -88,10 +88,10 @@ class R3Refinement(BaseRefinement):
             dim=tuple(range(1, target.ndim))
         )
 
-        # Retrieve domain and initial population size
+        # Retrieve domain and maintain per-batch population size
         domain_name = solver.problem.conditions[condition_name].domain
         domain = solver.problem.domains[domain_name]
-        num_old_points = self.initial_population_size[condition_name]
+        num_old_points = len(current_points)
 
         # Select points with residual above the mean
         mask = (residuals >= residuals.mean()).flatten()

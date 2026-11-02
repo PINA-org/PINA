@@ -72,9 +72,10 @@ class BaseWeighting(WeightingInterface):
         :return: The aggregated loss value.
         :rtype: torch.Tensor
         """
-        # Update weights when required
+        # Update weights when required. Merge the updated weights because a
+        # batch may contain only a subset of the problem conditions.
         if self.solver.trainer.current_epoch % self.update_every_n_epochs == 0:
-            self._saved_weights = self.update_weights(losses)
+            self._saved_weights.update(self.update_weights(losses))
 
         # Apply weights to the corresponding losses
         weighted_losses = torch.stack(

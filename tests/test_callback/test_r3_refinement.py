@@ -61,7 +61,7 @@ def test_sample(sample_every, residual_loss, condition_to_update):
         max_epochs=5,
     )
 
-    # Initialize the conditions to update if None
+    # Initialize the conditions to update if None (mirrors on_train_start logic)
     if callback._condition_to_update is None:
         callback._condition_to_update = [
             name
@@ -69,23 +69,35 @@ def test_sample(sample_every, residual_loss, condition_to_update):
             if hasattr(cond, "domain")
         ]
 
-    # Check initial population size and dataset before training
+    # Capture initial point count from the discretised domain (before DataModule
+    # setup transforms DomainEquationConditions into InputEquationConditions)
     n_points_before_train = {
-        cond: len(trainer.solver.problem.conditions[cond].data.input)
+        cond: len(
+            problem.discretised_domains[
+                solver.problem.conditions[cond].domain
+            ]
+        )
         for cond in callback._condition_to_update
     }
 
     # Train the model to trigger refinement
     trainer.train()
 
-    # Check population size after training to ensure it has been updated
+    # After training each condition is an InputEquationCondition whose data is
+    # a list of batch dicts; sum lengths across all batches for total points.
     n_points_after_train = {
-        cond: len(trainer.solver.problem.conditions[cond].data.input)
+        cond: sum(
+            len(batch["input"])
+            for batch in trainer.solver.problem.conditions[cond].data
+        )
         for cond in callback._condition_to_update
     }
 
-    # Assert population size has been updated according to the refinement
-    assert n_points_before_train == trainer.callbacks[0].initial_population_size
+    # Assert initial population size matches pre-train point counts
+    assert (
+        n_points_before_train == trainer.callbacks[0].initial_population_size
+    )
+    # Assert total point count is preserved after refinement
     assert n_points_before_train == n_points_after_train
 
     # Should fail if the specified condition does not exist in the problem

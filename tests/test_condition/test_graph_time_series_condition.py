@@ -2,81 +2,37 @@ import pytest
 import torch
 from torch_geometric.data import Data
 
-from pina import Condition, LabelTensor
+from pina import LabelTensor
 from pina.condition import GraphTimeSeriesCondition, TimeSeriesCondition
 from pina.graph import RadiusGraph
 
-# Number of samples and time steps for testing
-n_samples = 5
 n_nodes = 20
 time_steps = 10
 
 
-# Helper function to check tensor types
-def _assert_tensor_type(t, use_lt):
-    if use_lt:
-        assert isinstance(t.x, LabelTensor)
+def _create_graph_data(use_lt, time_steps=time_steps):
+    if time_steps is None:
+        shape = (n_nodes, 2)
     else:
-        assert isinstance(t.x, torch.Tensor) and not isinstance(
-            t.x, LabelTensor
-        )
+        shape = (n_nodes, time_steps, 2)
 
-
-# Helper function to compute expected unroll windows
-def _expected_unroll(data, n_windows, unroll_length, randomize):
-
-    # Compute valid starting indices
-    last_idx = data.shape[1] - unroll_length
-    start_indices = torch.arange(last_idx + 1)
-
-    # Randomize indices if required
-    if randomize:
-        start_indices = start_indices[torch.randperm(len(start_indices))]
-
-    # Limit the number of windows
-    if n_windows is not None and n_windows < len(start_indices):
-        start_indices = start_indices[:n_windows]
-
-    # Build expected windows
-    windows = [data[:, s : s + unroll_length] for s in start_indices]
-
-    return torch.stack(windows, dim=1)
-
-
-# Helper function to create graph data
-def _create_graph_data(use_lt):
-
-    # If LabelTensor is used, create graph data with LabelTensors
+    x = torch.rand(shape)
+    pos = torch.rand(n_nodes, 2)
     if use_lt:
-        x = LabelTensor(torch.rand(n_nodes, time_steps, 2), ["u", "v"])
-        pos = LabelTensor(torch.rand(n_nodes, 2), ["x", "y"])
+        x = LabelTensor(x, ["u", "v"])
+        pos = LabelTensor(pos, ["x", "y"])
 
-    # Standard torch.Tensor without labels
-    else:
-        x = torch.rand(n_nodes, time_steps, 2)
-        pos = torch.rand(n_nodes, 2)
-
-    # Create a list of Graphs
-    graph = RadiusGraph(
-        pos=pos,
-        radius=0.1,
-        x=x,
-    )
-
-    return graph
+    return RadiusGraph(pos=pos, radius=0.1, x=x)
 
 
-# Define a dummy solver for testing
 class DummySolver:
-
-    def __init__(self, use_lt, input_vars):
+    def __init__(self, use_lt):
         self._params = None
         self._kwargs = {}
         self.aggregation_strategy = torch.mean
 
     def forward(self, samples):
-        # The whole graph batch goes in, the current state comes out
-        return samples.x[:, :, 0]
+        return samples.x
 
     def preprocess_step(self, current_state, **kwargs):
         return current_state
@@ -89,157 +45,107 @@ class DummySolver:
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
-@pytest.mark.parametrize("n_windows", [4, 6])
-@pytest.mark.parametrize("unroll_length", [3, 5])
-@pytest.mark.parametrize("randomize", [True, False])
-def test_constructor(use_lt, n_windows, unroll_length, randomize):
-
-    # Define the condition
+def test_constructor(use_lt):
     graph = _create_graph_data(use_lt=use_lt)
-    original_timeseries = (
-        graph.x.clone()
-    )  # Store original time series for later comparison
-    condition = Condition(
-        input=graph,
-        n_windows=n_windows,
-        unroll_length=unroll_length,
-        randomize=randomize,
-        key="x",
-    )
+    condition = GraphTimeSeriesCondition(graph, key="x")
 
-    # Assert correct types
     assert isinstance(condition, GraphTimeSeriesCondition)
-
-    # The condition must also be a time-series condition, so that solvers
-    # accepting TimeSeriesCondition (e.g. the autoregressive ones) take it
     assert isinstance(condition, TimeSeriesCondition)
-
-    # Assert numerical parity
-    if not randomize:
-        expected_tensor = _expected_unroll(
-            original_timeseries, n_windows, unroll_length, randomize
-        )
-        assert torch.allclose(condition.input.x, expected_tensor)
-
-    # Assert labels if LabelTensor is used
-    if use_lt:
-        assert condition.input["x"].labels == ["u", "v"]
-
-    # Should fail if unroll_length is not a positive integer
-    with pytest.raises(AssertionError):
-        GraphTimeSeriesCondition(
-            input=graph,
-            n_windows=n_windows,
-            unroll_length=0,
-            randomize=randomize,
-        )
-
-    # Should fail if n_windows is not a positive integer
-    with pytest.raises(AssertionError):
-        GraphTimeSeriesCondition(
-            input=graph,
-            n_windows=0,
-            unroll_length=unroll_length,
-            randomize=randomize,
-        )
-
-    # Should fail if randomize is not a boolean value
-    with pytest.raises(ValueError):
-        Condition(
-            input=graph,
-            n_windows=n_windows,
-            unroll_length=unroll_length,
-            randomize="not_a_boolean",
-        )
-
-    # Should fail if the input tensor has less than 3 dimensions
-    with pytest.raises(ValueError):
-        Condition(
-            input=torch.rand(n_samples, 2),
-            n_windows=n_windows,
-            unroll_length=unroll_length,
-            randomize=randomize,
-        )
-
-    # Should fail if unroll_length is not greater than 1
-    with pytest.raises(ValueError):
-        Condition(
-            input=graph,
-            n_windows=n_windows,
-            unroll_length=1,
-            randomize=randomize,
-        )
-
-    # Should fail if unroll_length is greater than the number of time steps
-    with pytest.raises(ValueError):
-        Condition(
-            input=graph,
-            n_windows=n_windows,
-            unroll_length=time_steps + 1,
-            randomize=randomize,
-        )
-
-    # Should fail if n_windows is greater than the number of valid windows
-    with pytest.raises(ValueError):
-        Condition(
-            input=graph,
-            n_windows=10,
-            unroll_length=unroll_length,
-            randomize=randomize,
-        )
+    assert condition.graph is graph
+    assert condition.key == "x"
+    assert not hasattr(condition, "data")
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
 @pytest.mark.parametrize("n_windows", [4, 6])
 @pytest.mark.parametrize("unroll_length", [3, 5])
 @pytest.mark.parametrize("randomize", [True, False])
-def test_get_item(use_lt, n_windows, unroll_length, randomize):
-
-    # Define the condition
+def test_store_data(use_lt, n_windows, unroll_length, randomize):
     graph = _create_graph_data(use_lt=use_lt)
-    condition = GraphTimeSeriesCondition(
-        input=graph,
+    condition = GraphTimeSeriesCondition(graph, key="x")
+    condition.store_data(
+        n_subgraphs=2,
+        num_hops=1,
         n_windows=n_windows,
         unroll_length=unroll_length,
         randomize=randomize,
     )
 
-    # Extract item using materialize
-    index = 0
-    item = condition.materialize([index])
+    assert len(condition) == 2
+    for subgraph in condition.data:
+        assert isinstance(subgraph, Data)
+        assert subgraph.x.shape[0] == n_windows
+        assert subgraph.x.shape[1] == unroll_length
+        assert subgraph.x.shape[2] == subgraph.pos.shape[0]
+        assert subgraph.x.shape[3] == 2
 
-    # Assert correct types
-    assert isinstance(item, dict)
-    _assert_tensor_type(item["input"], use_lt)
-
-    # Assert correct shapes
-    expected_shape = torch.Size([n_nodes, n_windows, unroll_length, 2])
-    assert item["input"].x.shape == expected_shape
+        if use_lt:
+            assert isinstance(subgraph.x, LabelTensor)
+            assert subgraph.x.labels == ["u", "v"]
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
-@pytest.mark.parametrize("n_windows", [4, 6])
-@pytest.mark.parametrize("unroll_length", [3, 5])
-@pytest.mark.parametrize("randomize", [True, False])
-def test_materialize(use_lt, n_windows, unroll_length, randomize):
-
-    # Define the condition
+def test_store_data_validation(use_lt):
     graph = _create_graph_data(use_lt=use_lt)
-    condition = GraphTimeSeriesCondition(
-        input=graph,
-        n_windows=n_windows,
-        unroll_length=unroll_length,
-        randomize=randomize,
+    condition = GraphTimeSeriesCondition(graph, key="x")
+
+    with pytest.raises(AssertionError):
+        condition.store_data(n_windows=4, unroll_length=0)
+    with pytest.raises(AssertionError):
+        condition.store_data(n_windows=0, unroll_length=3)
+    with pytest.raises(ValueError):
+        condition.store_data(
+            n_windows=4, unroll_length=3, randomize="not_a_boolean"
+        )
+    with pytest.raises(ValueError):
+        condition.store_data(n_windows=4, unroll_length=1)
+    with pytest.raises(ValueError):
+        condition.store_data(n_windows=4, unroll_length=time_steps + 1)
+    with pytest.raises(ValueError):
+        condition.store_data(n_windows=10, unroll_length=3)
+
+
+def test_store_data_requires_temporal_input():
+    graph = _create_graph_data(use_lt=False, time_steps=None)
+    condition = GraphTimeSeriesCondition(graph, key="x")
+
+    with pytest.raises(ValueError):
+        condition.store_data(n_windows=2, unroll_length=2)
+
+
+@pytest.mark.parametrize("use_lt", [True, False])
+def test_get_item(use_lt):
+    graph = _create_graph_data(use_lt=use_lt)
+    condition = GraphTimeSeriesCondition(graph, key="x")
+    condition.store_data(
+        n_subgraphs=2, num_hops=1, n_windows=4, unroll_length=3
     )
 
-    # Materialize the batch for the given ids
-    idx = [0]
-    batch = condition.materialize(idx)
+    item = condition[0]
 
-    # Check that the batch is a dictionary holding the input data
-    assert isinstance(batch, dict)
-    assert "input" in batch
-    assert batch["input"].num_graphs == len(idx)
+    assert isinstance(item, Data)
+    assert item.x.shape[0] == 4
+    assert item.x.shape[1] == 3
+    assert item.x.shape[2] == item.pos.shape[0]
+    assert item.x.shape[3] == 2
+
+
+@pytest.mark.parametrize("use_lt", [True, False])
+def test_materialize(use_lt):
+    graph = _create_graph_data(use_lt=use_lt)
+    condition = GraphTimeSeriesCondition(graph, key="x")
+    condition.store_data(
+        n_subgraphs=2, num_hops=1, n_windows=4, unroll_length=3
+    )
+
+    batch = condition.materialize(1)
+
+    assert isinstance(batch, Data)
+    assert batch is condition.data[1]
+    assert batch.x.shape[0] == 4
+    assert batch.x.shape[1] == 3
+    assert batch.x.shape[2] == batch.pos.shape[0]
+    assert batch.x.shape[3] == 2
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
@@ -247,54 +153,43 @@ def test_materialize(use_lt, n_windows, unroll_length, randomize):
 @pytest.mark.parametrize("unroll_length", [3, 5])
 @pytest.mark.parametrize("randomize", [True, False])
 def test_evaluate(use_lt, n_windows, unroll_length, randomize):
-
-    # Define the input tensor
     graph = _create_graph_data(use_lt=use_lt)
-    input_vars = graph.x.labels if use_lt else None
-
-    # Define the condition and the solver
-    condition = GraphTimeSeriesCondition(
-        input=graph,
+    condition = GraphTimeSeriesCondition(graph, key="x")
+    condition.store_data(
+        n_subgraphs=1,
+        num_hops=1,
         n_windows=n_windows,
         unroll_length=unroll_length,
         randomize=randomize,
     )
-    solver = DummySolver(use_lt, input_vars)
+    batch = condition.materialize(0)
+    series = batch.x.clone()
+    solver = DummySolver(use_lt)
 
-    # Extract the batch
-    batch = {"input": condition.input}
-
-    # Evaluate the condition and compute the expected residuals
     residuals = condition.evaluate(batch, solver)
 
-    # Compute expected autoregressive step residuals
     step_residuals = []
-    print(batch["input"].x.shape)
-    current_state = batch["input"].x[:, :, 0, :]
-
-    for step in range(1, batch["input"].x.shape[2]):
+    current_state = series[:, 0, :, :]
+    for step in range(1, series.shape[1]):
         predicted_state = current_state
-        target_state = batch["input"].x[:, :, step, :]
-
-        step_residual = predicted_state - target_state
-        step_residuals.append(step_residual)
-
+        target_state = series[:, step, :, :]
+        step_residuals.append(predicted_state - target_state)
         current_state = predicted_state
 
     expected = torch.stack(step_residuals).as_subclass(torch.Tensor)
-
-    # Assert that the evaluated residuals are correct
     assert torch.allclose(residuals, expected)
 
 
 def test_evaluate_forward_receives_graph():
-
     graph = _create_graph_data(use_lt=False)
-    condition = GraphTimeSeriesCondition(
-        input=graph, n_windows=4, unroll_length=3
+    condition = GraphTimeSeriesCondition(graph, key="x")
+    condition.store_data(
+        n_subgraphs=1, num_hops=1, n_windows=4, unroll_length=3
     )
+    batch = condition.materialize(0)
 
     received = []
+    shapes = []
 
     class CaptureSolver:
         _kwargs = {}
@@ -307,12 +202,12 @@ def test_evaluate_forward_receives_graph():
 
         def forward(self, samples):
             received.append(samples)
-            return samples.x[:, :, 0]
+            shapes.append(samples.x.shape)
+            return samples.x
 
-    batch = {"input": condition.input}
     residuals = condition.evaluate(batch, CaptureSolver())
 
-    inp = received[0]
-    assert isinstance(inp, Data)
-    assert inp.x.shape == (n_nodes, 4, 3, 2)
-    assert residuals.shape == (2, n_nodes, 4, 2)
+    assert len(received) == 2
+    assert all(isinstance(inp, Data) for inp in received)
+    assert shapes[0] == (4, batch.pos.shape[0], 2)
+    assert residuals.shape == (2, 4, batch.pos.shape[0], 2)

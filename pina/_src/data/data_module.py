@@ -45,9 +45,7 @@ class DataModule(LightningDataModule):
         self.test_size = test_size
 
         if problem_setting is None:
-            problem_setting = {
-                "time": {"n_windows": 10, "unroll_length": 5}
-            }
+            problem_setting = {}
         self.problem_setting = problem_setting
 
     def enumerate_condition(self):
@@ -112,6 +110,8 @@ class DataModule(LightningDataModule):
             raise ValueError(
                 f"Invalid stage. Got {stage}, expected 'fit' or 'test'."
             )
+
+        self.problem.move_discretisation_into_conditions()
 
         for name, condition in self.problem.conditions.items():
             settings = {

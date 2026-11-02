@@ -2,7 +2,7 @@ import torch
 import pytest
 from pina import Condition, LabelTensor, Trainer
 from pina.solver import SupervisedEnsembleSolver
-from pina.condition import InputTargetCondition
+from pina.condition import GraphInputTargetCondition, InputTargetCondition
 from pina.problem import BaseProblem
 from pina.graph import KNNGraph
 
@@ -43,9 +43,9 @@ class GraphProblem(BaseProblem):
     output_variables = ["u"]
 
     # Graph attributes and target
-    x = torch.rand(10, 20, 3)
-    pos = torch.rand(10, 20, 2)
-    target_ = torch.rand(10, 20, 1)
+    x = torch.rand(20, 3)
+    pos = torch.rand(20, 2)
+    target_ = torch.rand(20, 1)
 
     # Condition
     conditions = {}
@@ -59,14 +59,17 @@ class GraphProblem(BaseProblem):
             self.pos = LabelTensor(self.pos, ["x", "y"])
             self.target_ = LabelTensor(self.target_, self.output_variables)
 
-        # Initialize the input graphs
-        input_ = [
-            KNNGraph(x=self.x[i], pos=self.pos[i], neighbours=3, edge_attr=True)
-            for i in range(len(self.x))
-        ]
+        # Initialize the input-output graph
+        graph = KNNGraph(
+            x=self.x,
+            y=self.target_,
+            pos=self.pos,
+            neighbours=3,
+            edge_attr=True,
+        )
 
         # Initialize conditions
-        self.conditions["data"] = Condition(input=input_, target=self.target_)
+        self.conditions["data"] = GraphInputTargetCondition(graph=graph)
 
 
 # Helper class for Graph-consistent architecture
@@ -101,7 +104,10 @@ def test_constructor(case, use_lt):
     solver = SupervisedEnsembleSolver(problem=problem, models=models)
 
     # Assert accepted conditions types and number of ensemble members
-    assert solver.accepted_conditions_types == (InputTargetCondition,)
+    assert solver.accepted_conditions_types == (
+        InputTargetCondition,
+        GraphInputTargetCondition,
+    )
     assert solver.num_models == 10
 
 
@@ -232,15 +238,18 @@ def test_train_load_restore(clean_tmp_dir, case, use_lt):
     trainer.train()
 
     # Restore the training from a checkpoint
-    new_trainer = Trainer(solver=solver, max_epochs=5, accelerator="cpu")
-    new_trainer.train(
-        ckpt_path=f"{dir}/lightning_logs/version_0/checkpoints/"
-        + "epoch=4-step=5.ckpt"
+    ckpt_path = trainer.checkpoint_callback.best_model_path
+    new_trainer = Trainer(
+        solver=solver,
+        max_epochs=5,
+        accelerator="cpu",
+        default_root_dir=dir,
     )
+    new_trainer.train(ckpt_path=ckpt_path)
 
     # Load the solver from a checkpoint
     new_solver = SupervisedEnsembleSolver.load_from_checkpoint(
-        f"{dir}/lightning_logs/version_0/checkpoints/epoch=4-step=5.ckpt",
+        ckpt_path,
         problem=problem,
         models=models,
     )
