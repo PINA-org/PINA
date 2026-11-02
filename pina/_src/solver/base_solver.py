@@ -389,11 +389,20 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         Get the batch size.
 
         :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and a dictionary of points.
+            tuple containing a condition name and the corresponding data.
         :return: The size of the batch.
         :rtype: int
         """
-        return sum(len(data[1]["input"]) for data in batch)
+        batch_size = 0
+        for _, data in batch:
+            value = data.get("input") if isinstance(data, dict) else data
+            if value is None:
+                continue
+            if hasattr(value, "num_nodes"):
+                batch_size += value.num_nodes
+            else:
+                batch_size += len(value)
+        return batch_size
 
     @property
     def problem(self):

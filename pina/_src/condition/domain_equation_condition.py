@@ -36,6 +36,19 @@ class DomainEquationCondition(BaseCondition):
     _avail_domain_cls = (DomainInterface, str)
     _avail_equation_cls = BaseEquation
 
+    def __init__(self, domain, equation):
+        """
+        Initialization of the :class:`DomainEquationCondition` class.
+
+        :param DomainInterface | str domain: The domain over which the
+            equation is defined.
+        :param BaseEquation equation: The equation to be satisfied over the
+            specified domain.
+        """
+        super().__init__()
+        self.domain = domain
+        self.equation = equation
+
     def __len__(self):
         """
         Return the number of data points in the condition.
@@ -73,9 +86,10 @@ class DomainEquationCondition(BaseCondition):
         :param dict kwargs: The keyword arguments containing the data to be
             stored.
         """
-        # Store domain and equation as attributes of the condition instance
-        setattr(self, "domain", kwargs.get("domain"))
-        setattr(self, "equation", kwargs.get("equation"))
+        # Store only the provided fields as attributes of the condition
+        for field in self.__fields__:
+            if field in kwargs:
+                setattr(self, field, kwargs[field])
 
     def materialize(self, ids, device=None, batch_fn=None):
         """

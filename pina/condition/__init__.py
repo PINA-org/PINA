@@ -14,6 +14,7 @@ __all__ = [
     "DataCondition",
     "DomainEquationCondition",
     "GraphCondition",
+    "GraphInputTargetCondition",
     "GraphTimeSeriesCondition",
     "InputEquationCondition",
     "InputTargetCondition",
@@ -28,6 +29,9 @@ from pina._src.condition.domain_equation_condition import (
     DomainEquationCondition,
 )
 from pina._src.condition.graph_condition import GraphCondition
+from pina._src.condition.graph_input_target_condition import (
+    GraphInputTargetCondition,
+)
 from pina._src.condition.graph_time_series_condition import (
     GraphTimeSeriesCondition,
 )

@@ -142,7 +142,7 @@ class SelfAdaptivePhysicsInformedSolver(PhysicsInformedMixin, MultiModelSolver):
             cond: (
                 problem._discretised_domains[cond].shape[0]
                 if isinstance(problem.conditions[cond], DomainEquationCondition)
-                else problem.conditions[cond].data.input.shape[0]
+                else problem.conditions[cond].input.shape[0]
             )
             for cond in problem.conditions
         }

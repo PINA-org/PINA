@@ -1,7 +1,13 @@
 """Formulation of a Supervised Problem in PINA."""
 
-from pina._src.problem.base_problem import BaseProblem
+from torch_geometric.data import Data
+
+from pina._src.condition.graph_input_target_condition import (
+    GraphInputTargetCondition,
+)
 from pina._src.condition.input_target_condition import InputTargetCondition
+from pina._src.core.graph import Graph
+from pina._src.problem.base_problem import BaseProblem
 
 
 class SupervisedProblem(BaseProblem):
@@ -48,5 +54,11 @@ class SupervisedProblem(BaseProblem):
         self.output_variables = output_variables
 
         # Set the condition
-        self.conditions["data"] = InputTargetCondition(input=input_, target=output_)
+        if isinstance(input_, (Graph, Data)):
+            input_.y = output_
+            self.conditions["data"] = GraphInputTargetCondition(graph=input_)
+        else:
+            self.conditions["data"] = InputTargetCondition(
+                input=input_, target=output_
+            )
         super().__init__()

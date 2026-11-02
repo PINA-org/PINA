@@ -173,6 +173,14 @@ class Trainer(lightning.pytorch.Trainer):
         # Initialize the parent class with the provided keyword arguments
         super().__init__(**kwargs)
 
+        # Raise warning if num_workers or pin_memory are set without a batch size
+        if batch_size is None and (num_workers > 0 or pin_memory):
+            warnings.warn(
+                "`num_workers` and `pin_memory` have no effect when "
+                "`batch_size` is None.",
+                UserWarning,
+            )
+
         # Raise warning if batch size and batching mode are incompatible
         if batch_size is None and batching_mode != "common_batch_size":
             warnings.warn(

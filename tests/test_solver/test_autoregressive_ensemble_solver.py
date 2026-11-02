@@ -215,15 +215,19 @@ def test_train_load_restore(clean_tmp_dir, use_lt):
     trainer.train()
 
     # Restore from checkpoint
-    new_trainer = Trainer(solver=solver, max_epochs=5, accelerator="cpu")
+    new_trainer = Trainer(
+        solver=solver,
+        max_epochs=5,
+        accelerator="cpu",
+        default_root_dir=dir,
+    )
     new_trainer.train(
-        ckpt_path=f"{dir}/lightning_logs/version_0/checkpoints/"
-        + "epoch=4-step=5.ckpt"
+        ckpt_path=trainer.checkpoint_callback.best_model_path
     )
 
     # Load the restored solver
     new_solver = AutoregressiveEnsembleSolver.load_from_checkpoint(
-        f"{dir}/lightning_logs/version_0/checkpoints/epoch=4-step=5.ckpt",
+        trainer.checkpoint_callback.best_model_path,
         problem=problem,
         models=models,
     )

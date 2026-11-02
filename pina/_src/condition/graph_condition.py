@@ -18,7 +18,7 @@ class GraphCondition(BaseCondition):
     """Base condition for graph data stored as a list of graph batches."""
 
     def __init__(self, graph, key="x"):
-        super().__init__()
+        BaseCondition.__init__(self)
         self.graph = graph
         self.key = key
 

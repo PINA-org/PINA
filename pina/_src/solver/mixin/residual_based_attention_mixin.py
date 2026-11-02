@@ -88,7 +88,7 @@ class ResidualBasedAttentionMixin:
             if isinstance(condition, DomainEquationCondition):
                 n_pts = self.problem._discretised_domains[cond].shape[0]
             else:
-                n_pts = condition.data.input.shape[0]
+                n_pts = condition.input.shape[0]
 
             # Register the attention weights as a buffer in the module
             self.register_buffer(f"weight_{cond}", torch.zeros((n_pts, 1)))

@@ -229,15 +229,19 @@ def test_train_load_restore(clean_tmp_dir, case):
     trainer.train()
 
     # Restore the training from a checkpoint
-    new_trainer = Trainer(solver=solver, max_epochs=5, accelerator="cpu")
+    new_trainer = Trainer(
+        solver=solver,
+        max_epochs=5,
+        accelerator="cpu",
+        default_root_dir=dir,
+    )
     new_trainer.train(
-        ckpt_path=f"{dir}/lightning_logs/version_0/checkpoints/"
-        + "epoch=4-step=5.ckpt"
+        ckpt_path=trainer.checkpoint_callback.best_model_path
     )
 
     # Load the solver from a checkpoint
     new_solver = RBAPhysicsInformedSingleModelSolver.load_from_checkpoint(
-        f"{dir}/lightning_logs/version_0/checkpoints/epoch=4-step=5.ckpt",
+        trainer.checkpoint_callback.best_model_path,
         problem=problem,
         model=model,
     )

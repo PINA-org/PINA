@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from pina import Condition, LabelTensor
+from pina import LabelTensor
 from pina._src.core.utils import labelize_forward
 from pina.condition import TimeSeriesCondition
 
@@ -89,7 +89,7 @@ def test_constructor(use_lt, n_windows, unroll_length, randomize):
 
     # Define the condition
     input_tensor = _create_tensor_data(use_lt)
-    condition = Condition(
+    condition = TimeSeriesCondition(
         input=input_tensor,
         n_windows=n_windows,
         unroll_length=unroll_length,
@@ -117,7 +117,7 @@ def test_constructor(use_lt, n_windows, unroll_length, randomize):
 
     # Should fail if unroll_length is not a positive integer
     with pytest.raises(AssertionError):
-        Condition(
+        TimeSeriesCondition(
             input=input_tensor,
             n_windows=n_windows,
             unroll_length=0,
@@ -126,7 +126,7 @@ def test_constructor(use_lt, n_windows, unroll_length, randomize):
 
     # Should fail if n_windows is not a positive integer
     with pytest.raises(AssertionError):
-        Condition(
+        TimeSeriesCondition(
             input=input_tensor,
             n_windows=0,
             unroll_length=unroll_length,
@@ -135,7 +135,7 @@ def test_constructor(use_lt, n_windows, unroll_length, randomize):
 
     # Should fail if randomize is not a boolean value
     with pytest.raises(ValueError):
-        Condition(
+        TimeSeriesCondition(
             input=input_tensor,
             n_windows=n_windows,
             unroll_length=unroll_length,
@@ -144,7 +144,7 @@ def test_constructor(use_lt, n_windows, unroll_length, randomize):
 
     # Should fail if the input tensor has less than 3 dimensions
     with pytest.raises(ValueError):
-        Condition(
+        TimeSeriesCondition(
             input=torch.rand(n_samples, 2),
             n_windows=n_windows,
             unroll_length=unroll_length,
@@ -153,7 +153,7 @@ def test_constructor(use_lt, n_windows, unroll_length, randomize):
 
     # Should fail if unroll_length is not greater than 1
     with pytest.raises(ValueError):
-        Condition(
+        TimeSeriesCondition(
             input=input_tensor,
             n_windows=n_windows,
             unroll_length=1,
@@ -162,7 +162,7 @@ def test_constructor(use_lt, n_windows, unroll_length, randomize):
 
     # Should fail if unroll_length is greater than the number of time steps
     with pytest.raises(ValueError):
-        Condition(
+        TimeSeriesCondition(
             input=input_tensor,
             n_windows=n_windows,
             unroll_length=time_steps + 1,
@@ -171,7 +171,7 @@ def test_constructor(use_lt, n_windows, unroll_length, randomize):
 
     # Should fail if n_windows is greater than the number of valid windows
     with pytest.raises(ValueError):
-        Condition(
+        TimeSeriesCondition(
             input=input_tensor,
             n_windows=10,
             unroll_length=unroll_length,
@@ -187,16 +187,17 @@ def test_get_item(use_lt, n_windows, unroll_length, randomize):
 
     # Define the condition
     input_tensor = _create_tensor_data(use_lt)
-    condition = Condition(
+    condition = TimeSeriesCondition(
         input=input_tensor,
         n_windows=n_windows,
         unroll_length=unroll_length,
         randomize=randomize,
     )
 
-    # Extract item using __getitem__
+    # Store and extract item using __getitem__
     index = 0
-    item = condition.materialize([index])
+    condition.store_data(batch_size=1)
+    item = condition[index]
 
     # Assert correct types
     assert isinstance(item, dict)
@@ -223,23 +224,23 @@ def test_materialize(use_lt, n_windows, unroll_length, randomize):
 
     # Define the condition
     input_tensor = _create_tensor_data(use_lt)
-    condition = Condition(
+    condition = TimeSeriesCondition(
         input=input_tensor,
         n_windows=n_windows,
         unroll_length=unroll_length,
         randomize=randomize,
     )
 
-    # Materialize the batch for the given ids
-    idx = [0, 2]
-    batch = condition.materialize(idx)
+    # Materialize the first batch of size two
+    condition.store_data(batch_size=2)
+    batch = condition.materialize(0)
 
     # Check that the batch is a dictionary holding the input data
     assert isinstance(batch, dict)
     assert "input" in batch
 
     # Assert that the batch input is correct
-    expected_shape = torch.Size([len(idx), n_windows, unroll_length, 2])
+    expected_shape = torch.Size([2, n_windows, unroll_length, 2])
     assert batch["input"].shape == expected_shape
 
     # Create input values
@@ -247,7 +248,7 @@ def test_materialize(use_lt, n_windows, unroll_length, randomize):
         expected_tensor = _expected_unroll(
             input_tensor, n_windows, unroll_length, randomize
         )
-        assert torch.allclose(batch["input"], expected_tensor[idx])
+        assert torch.allclose(batch["input"], expected_tensor[:2])
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
@@ -261,7 +262,7 @@ def test_evaluate(use_lt, n_windows, unroll_length, randomize):
     input_vars = input_tensor.labels if use_lt else None
 
     # Define the condition and the solver
-    condition = Condition(
+    condition = TimeSeriesCondition(
         input=input_tensor,
         n_windows=n_windows,
         unroll_length=unroll_length,
@@ -270,8 +271,9 @@ def test_evaluate(use_lt, n_windows, unroll_length, randomize):
     solver = DummySolver(use_lt, input_vars)
     loss_fn = torch.nn.MSELoss(reduction="none")
 
-    # Extract the batch
-    batch = {"input": condition.input}
+    # Store and extract the batch
+    condition.store_data()
+    batch = condition.materialize(0)
 
     # Evaluate the condition and compute the expected residuals
     residuals = condition.evaluate(batch, solver)

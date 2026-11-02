@@ -6,6 +6,7 @@ from lightning.pytorch import Callback
 from pina._src.core.utils import check_consistency
 from pina._src.core.label_tensor import LabelTensor
 from pina._src.condition.input_target_condition import InputTargetCondition
+from pina._src.condition.graph_condition import GraphCondition
 
 
 class DataNormalizer(Callback):
@@ -97,6 +98,26 @@ class DataNormalizer(Callback):
         self._normalizer = {}
         self._normalized_conditions = set()
 
+    @staticmethod
+    def _batch_ids_by_condition(datamodule, dataset):
+        """
+        Build a mapping from condition name to list of batch ids for a dataset.
+
+        :param DataModule datamodule: The data module containing the condition
+            index mappings.
+        :param torch.Tensor dataset: The dataset tensor of shape ``(N, 2)``
+            with rows ``[condition_id, batch_id]``.
+        :return: Mapping from condition name to list of batch ids.
+        :rtype: dict[str, list[int]]
+        """
+        batch_ids = {}
+        if dataset is None or len(dataset) == 0:
+            return batch_ids
+        for condition_id, batch_id in dataset:
+            name = datamodule.idx_to_condition_name[int(condition_id)]
+            batch_ids.setdefault(name, []).append(int(batch_id))
+        return batch_ids
+
     def setup(self, trainer, pl_module, stage):
         """
         Compute and apply normalization during the setup phase.
@@ -112,7 +133,7 @@ class DataNormalizer(Callback):
 
         # Check if any condition contains graph-based data
         if any(
-            hasattr(condition, "graph_key") for condition in conditions.values()
+            isinstance(cond, GraphCondition) for cond in conditions.values()
         ):
             raise NotImplementedError(
                 "DataNormalizer is not compatible with graph-based datasets."
@@ -125,79 +146,99 @@ class DataNormalizer(Callback):
             if isinstance(cond, InputTargetCondition)
         ]
 
-        # Extract the dictionary of all datasets
-        dataset = trainer.datamodule.train_datasets
+        # Build train batch-id mapping and compute normalizer from training data
+        datamodule = trainer.datamodule
+        train_batch_ids = self._batch_ids_by_condition(
+            datamodule, datamodule.train_dataset
+        )
 
         # Compute scale and shift parameters if not already computed
         if not self.normalizer:
-
-            # Iterate over conditions and compute normalization parameters
             for cond in conditions_to_normalize:
-                pts = self._get_data(conditions, cond)
-                shift = self.shift_fn(pts)
-                scale = self.scale_fn(pts)
-
+                ids = train_batch_ids.get(cond, [])
+                if not ids:
+                    continue
+                pts = torch.cat(
+                    [conditions[cond].data[i][self.apply_to] for i in ids]
+                )
                 self._normalizer[cond] = {
-                    "shift": shift,
-                    "scale": scale,
+                    "shift": self.shift_fn(pts),
+                    "scale": self.scale_fn(pts),
                 }
 
-        # Apply normalization to training datasets
-        if stage == "fit" and self.stage in ["train", "all"]:
+        # Apply normalization to the appropriate splits
+        if stage == "fit" and self.stage in ("train", "all"):
             self.normalize_dataset(
-                conditions, trainer.datamodule.train_datasets
+                conditions,
+                train_batch_ids,
+                "train",
             )
 
-        if stage == "fit" and self.stage in ["validate", "all"]:
-            self.normalize_dataset(conditions, trainer.datamodule.val_datasets)
+        if stage == "fit" and self.stage in ("validate", "all"):
+            self.normalize_dataset(
+                conditions,
+                self._batch_ids_by_condition(
+                    datamodule, datamodule.val_dataset
+                ),
+                "validate",
+            )
 
-        if stage == "test" and self.stage in ["test", "all"]:
-            self.normalize_dataset(conditions, trainer.datamodule.test_datasets)
+        if stage == "test" and self.stage in ("test", "all"):
+            self.normalize_dataset(
+                conditions,
+                self._batch_ids_by_condition(
+                    datamodule, datamodule.test_dataset
+                ),
+                "test",
+            )
 
         return super().setup(trainer, pl_module, stage)
 
-    def normalize_dataset(self, conditions, dataset):
+    def normalize_dataset(self, conditions, batch_ids_by_condition, split):
         """
-        Apply normalization to all conditions in-place.
+        Apply normalization to all matching conditions in-place for a split.
 
-        Each condition is updated using precomputed normalization parameters.
-        The transformation preserves tensor types.
+        The backing tensor (``_input`` or ``_target``) of each condition is
+        updated so that normalization survives subsequent ``store_data`` calls
+        that regenerate the batch dictionaries.  Each individual batch dict is
+        then also refreshed from the updated backing tensor.
 
-        :param dict conditions: The mapping between condition names and their
-            associated conditions.
-        :param dict dataset: The mapping between condition names and their
-            associated dataset subsets.
+        :param dict conditions: Mapping from condition name to condition.
+        :param dict batch_ids_by_condition: Mapping from condition name to
+            list of batch ids belonging to this split.
+        :param str split: Name of the split (used to track normalization state).
         """
-        # Iterate over conditions and apply normalization
-        for cond, norm_params in self.normalizer.items():
-            if cond in self._normalized_conditions or cond not in dataset:
+        for cond, batch_ids in batch_ids_by_condition.items():
+            if cond not in self.normalizer:
+                continue
+            if (cond, split) in self._normalized_conditions:
                 continue
 
-            # Extract the points to normalize, the scale and the shift
-            points = getattr(conditions[cond].data, self.apply_to)
-            scale = norm_params["scale"]
-            shift = norm_params["shift"]
+            shift = self.normalizer[cond]["shift"]
+            scale = self.normalizer[cond]["scale"]
+            backing = getattr(conditions[cond], f"_{self.apply_to}")
 
-            # Apply normalization
-            scaled_pts = (points - shift) / scale
-            if isinstance(points, LabelTensor):
-                scaled_pts = LabelTensor(scaled_pts, points.labels)
+            for batch_id in batch_ids:
+                # Determine the slice of the backing tensor for this batch
+                batch_size = len(conditions[cond].data[batch_id][self.apply_to])
+                # Reconstruct start index by summing sizes of earlier batches
+                start = sum(
+                    len(conditions[cond].data[i][self.apply_to])
+                    for i in range(batch_id)
+                )
+                end = start + batch_size
 
-            # Update the condition data in-place
-            setattr(conditions[cond].data, self.apply_to, scaled_pts)
-            self._normalized_conditions.add(cond)
+                # Normalize the slice of the backing tensor in-place
+                raw_slice = backing[start:end]
+                scaled = (raw_slice - shift) / scale
+                if isinstance(raw_slice, LabelTensor):
+                    scaled = LabelTensor(scaled, raw_slice.labels)
+                backing[start:end] = scaled
 
-    def _get_data(self, conditions, cond):
-        """
-        Extract the selected data field for a given condition.
+                # Also update the already-stored batch dict
+                conditions[cond].data[batch_id][self.apply_to] = scaled
 
-        :param dict conditions: The mapping between condition names and their
-            associated conditions.
-        :param str cond: The condition name.
-        :return: The selected input or target data.
-        :rtype: torch.Tensor
-        """
-        return getattr(conditions[cond].data, self.apply_to)
+            self._normalized_conditions.add((cond, split))
 
     @property
     def normalizer(self):

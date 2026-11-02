@@ -221,23 +221,36 @@ class BaseProblem(ProblemInterface):
         corresponding conditions. This ensures that the conditions are evaluated
         on the correct set of points after discretisation.
         """
+        # Copy the conditions so class-level dictionaries are not mutated
+        self.conditions = dict(self.conditions)
+
         # Move the discretised domains into their corresponding conditions
-        for name, cond in self.conditions.items():
-            if hasattr(cond, "domain"):
+        for name, cond in list(self.conditions.items()):
+            domain = getattr(cond, "domain", None)
+            if domain is None:
+                continue
 
-                # Create a new condition with the discretised domain as input
-                new_condition = InputEquationCondition(
-                    input=self.discretised_domains[cond.domain],
-                    equation=cond.equation,
-                )
+            if domain not in self.discretised_domains:
+                if isinstance(cond, DomainEquationCondition):
+                    raise ValueError(
+                        f"Domain '{domain}' of condition '{name}' has not "
+                        "been discretised."
+                    )
+                continue
 
-                # Set the domain and problem attributes of the new condition
-                new_condition.domain = cond.domain
-                new_condition.problem = self
-                new_condition.name = name
+            # Create a new condition with the discretised domain as input
+            new_condition = InputEquationCondition(
+                input=self.discretised_domains[domain],
+                equation=cond.equation,
+            )
 
-                # Replace the old condition in the conditions dictionary
-                self.conditions[name] = new_condition
+            # Set the domain and problem attributes of the new condition
+            new_condition.domain = domain
+            new_condition.problem = self
+            new_condition.name = name
+
+            # Replace the old condition in the conditions dictionary
+            self.conditions[name] = new_condition
 
     @property
     def input_variables(self):
