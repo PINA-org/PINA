@@ -2,11 +2,9 @@
 
 import torch
 from torch_geometric.data import Data
-from torch_geometric.utils import k_hop_subgraph
 
 from pina._src.condition.base_condition import BaseCondition
 from pina._src.core.graph import Graph
-from pina._src.core.label_tensor import LabelTensor
 
 
 def _is_graph(value):
@@ -38,23 +36,7 @@ class GraphCondition(BaseCondition):
 
     def create_subgraph(self, start_node, num_hops=5):
         """Create the ``num_hops``-hop subgraph centered on ``start_node``."""
-        subset = k_hop_subgraph(
-            node_idx=int(start_node),
-            num_hops=num_hops,
-            edge_index=self.graph.edge_index,
-            relabel_nodes=True,
-            num_nodes=self.graph.num_nodes,
-        )[0]
-        subgraph = self.graph.subgraph(subset)
-
-        data = getattr(self.graph, self.key)
-        if isinstance(data, LabelTensor):
-            setattr(
-                subgraph,
-                self.key,
-                LabelTensor(getattr(subgraph, self.key), data.labels),
-            )
-        return subgraph
+        return self.graph.create_subgraph(start_node, num_hops=num_hops)
 
     def __len__(self):
         return len(self.data)
