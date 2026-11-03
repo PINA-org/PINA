@@ -22,21 +22,60 @@ class InputEquationCondition(TensorCondition):
     _avail_equation_cls = BaseEquation
 
     def __init__(self, input, equation):
-        super().__init__()
+        """
+        Initialization of the :class:`InputEquationCondition` class.
+
+        :param input: The input samples at which the equation is evaluated.
+            The first dimension indexes the samples.
+        :type input: torch.Tensor | LabelTensor
+        :param BaseEquation equation: The equation used to compute the
+            residual at the input samples.
+        :raises ValueError: If the input or equation has an unsupported type.
+        """
         check_consistency(input, self._avail_input_cls)
         check_consistency(equation, self._avail_equation_cls)
         self._input = input
         self._equation = equation
 
     def evaluate(self, batch, solver):
+        """
+        Compute the equation residual for a batch of input samples.
+
+        Gradient tracking is enabled on ``batch["input"]`` before the
+        forward pass. The equation receives the input samples, model output,
+        and the solver's unknown parameters. The residual is returned
+        without loss aggregation.
+
+        :param dict batch: The batch containing the input samples under the
+            ``"input"`` key.
+        :param BaseSolver solver: The solver providing the model forward
+            pass and the unknown parameters used by the equation.
+        :return: The equation residual evaluated at the input samples.
+        :rtype: torch.Tensor | LabelTensor
+        :raises KeyError: If the batch does not contain the ``"input"`` key.
+        :raises RuntimeError: If the input tensor does not support gradient
+            tracking, for example because it has an integer dtype.
+        """
         samples = batch["input"].requires_grad_(True)
         output = solver.forward(samples)
         return self.equation.residual(samples, output, solver._params)
 
     @property
     def input(self):
+        """
+        Return the input samples associated with the condition.
+
+        :return: The original input samples, before batching.
+        :rtype: torch.Tensor | LabelTensor
+        """
         return self._input
 
     @property
     def equation(self):
+        """
+        Return the equation associated with the condition.
+
+        :return: The equation used to compute the condition residual.
+        :rtype: BaseEquation
+        """
         return self._equation

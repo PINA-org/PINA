@@ -1,25 +1,25 @@
-"""Module containing utilities for dataset and data loader management."""
+"""Backward-compatible imports for data module utilities."""
 
-__all__ = [
-    "DataModule",
-]
-
-# Back-compatibility with version 0.2, to be removed soon
 import warnings
 
-from pina._src.data.data_module import DataModule
+from pina._src.core.data_module import DataModule as _DataModule
 
-_DEPRECATED_IMPORTS = {"PinaDataModule": "DataModule"}
+__all__ = ["DataModule"]
+
+_DEPRECATED_IMPORTS = {
+    "DataModule": _DataModule,
+    "PinaDataModule": _DataModule,
+}
 
 
 def __getattr__(name):
     if name in _DEPRECATED_IMPORTS:
-
         warnings.warn(
-            f"Importing '{name}' from 'pina.data' is deprecated; use "
-            f"pina.data.{_DEPRECATED_IMPORTS[name]} instead.",
+            f"Importing '{name}' from 'pina.data' is deprecated; "
+            "use pina.DataModule instead.",
             DeprecationWarning,
             stacklevel=2,
         )
+        return _DEPRECATED_IMPORTS[name]
 
-        return globals()[_DEPRECATED_IMPORTS[name]]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

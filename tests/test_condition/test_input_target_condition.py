@@ -45,9 +45,7 @@ class DummySolver:
 @pytest.mark.parametrize("use_lt", [True, False])
 def test_constructor(use_lt):
     input_tensor, target_tensor = _create_tensor_data(use_lt=use_lt)
-    condition = InputTargetCondition(
-        input=input_tensor, target=target_tensor
-    )
+    condition = InputTargetCondition(input=input_tensor, target=target_tensor)
 
     assert isinstance(condition, InputTargetCondition)
     _assert_tensor_type(condition.input, use_lt)
@@ -69,9 +67,7 @@ def test_constructor(use_lt):
 @pytest.mark.parametrize("use_lt", [True, False])
 def test_get_item(use_lt):
     input_tensor, target_tensor = _create_tensor_data(use_lt=use_lt)
-    condition = InputTargetCondition(
-        input=input_tensor, target=target_tensor
-    )
+    condition = InputTargetCondition(input=input_tensor, target=target_tensor)
     condition.store_data(batch_size=1)
 
     item = condition[0]
@@ -86,9 +82,7 @@ def test_get_item(use_lt):
 @pytest.mark.parametrize("use_lt", [True, False])
 def test_materialize(use_lt):
     input_tensor, target_tensor = _create_tensor_data(use_lt=use_lt)
-    condition = InputTargetCondition(
-        input=input_tensor, target=target_tensor
-    )
+    condition = InputTargetCondition(input=input_tensor, target=target_tensor)
     condition.store_data(batch_size=2)
 
     batch = condition.materialize(1)

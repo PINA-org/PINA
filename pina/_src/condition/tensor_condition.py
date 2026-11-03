@@ -52,11 +52,22 @@ class TensorCondition(BaseCondition):
         return self.data
 
     def __len__(self):
+        """
+        Return the number of data points in the condition.
+
+        :return: The number of data points.
+        :rtype: int
+        """
         return len(self.data)
 
     def materialize(self, id, device=None):
         """
         Return the batch with the given id, optionally moved to ``device``.
+
+        :param int id: The id of the batch to retrieve.
+        :param device: The target device for the batch. Default is ``None``.
+        :return: The materialized batch.
+        :rtype: dict
         """
         batch = self.data[int(id)]
         if device is None:
@@ -67,4 +78,11 @@ class TensorCondition(BaseCondition):
         }
 
     def __getitem__(self, id):
+        """
+        Materialize the data points at the specified index.
+
+        :param int idx: The index of the data point to retrieve.
+        :return: The materialized batch.
+        :rtype: dict
+        """
         return self.materialize(id)

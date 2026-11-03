@@ -80,9 +80,7 @@ def test_evaluate():
     )
     condition.store_data()
     batch = condition.materialize(0)
-    solver = DummySolver(
-        input_vars=input_tensor.labels, output_vars=["z", "t"]
-    )
+    solver = DummySolver(input_vars=input_tensor.labels, output_vars=["z", "t"])
 
     residual = condition.evaluate(batch, solver)
     expected = solver.forward(batch["input"])

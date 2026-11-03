@@ -73,7 +73,9 @@ class HelmholtzProblem(SpatialProblem):
     }
 
     conditions = {
-        "boundary": DomainEquationCondition(domain="boundary", equation=FixedValue(0.0)),
+        "boundary": DomainEquationCondition(
+            domain="boundary", equation=FixedValue(0.0)
+        ),
     }
 
     def __init__(self, k=1.0, alpha_x=1, alpha_y=4):

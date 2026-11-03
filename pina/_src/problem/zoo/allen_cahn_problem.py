@@ -83,7 +83,9 @@ class AllenCahnProblem(TimeDependentProblem, SpatialProblem):
     }
 
     conditions = {
-        "t0": DomainEquationCondition(domain="t0", equation=Equation(initial_condition)),
+        "t0": DomainEquationCondition(
+            domain="t0", equation=Equation(initial_condition)
+        ),
     }
 
     def __init__(self, alpha=1e-4, beta=5):

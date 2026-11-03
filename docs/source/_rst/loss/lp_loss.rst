@@ -6,8 +6,6 @@ Lp Loss
 ===============
 .. currentmodule:: pina.loss.lp_loss
 
-.. automodule:: pina._src.loss.lp_loss
-
 .. autoclass:: pina._src.loss.lp_loss.LpLoss
    :members:
    :show-inheritance:

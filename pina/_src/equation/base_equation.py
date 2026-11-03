@@ -12,6 +12,7 @@ class BaseEquation(metaclass=ABCMeta):
     constraints that must be satisfied by the model outputs. They can be passed
     to
     :class:`~pina.condition.domain_equation_condition.DomainEquationCondition`
+    or :class:`~pina.condition.input_equation_condition.InputEquationCondition`
     objects to define the conditions under which the model is trained.
 
     All specific equation types should inherit from this class and implement its

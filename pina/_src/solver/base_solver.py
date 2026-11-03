@@ -228,7 +228,6 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         self.log(
             name="train_loss",
             value=loss.item(),
-            # batch_size=self.get_batch_size(batch),
             **self.trainer.logging_kwargs,
         )
         return loss
@@ -247,7 +246,6 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         self.log(
             name="val_loss",
             value=loss.item(),
-            # batch_size=self.get_batch_size(batch),
             **self.trainer.logging_kwargs,
         )
         return loss
@@ -282,10 +280,6 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         :return: The scalar loss for the condition.
         :rtype: torch.Tensor
         """
-        # Clone the input tensor if it exists to avoid in-place modifications
-        # if "input" in data and hasattr(data["input"], "clone"):
-        #     data = dict(data)
-        #     data["input"] = data["input"].clone()
         logger.debug("Condition data before preparation: %s", data)
 
         # Prepare condition data, e.g. by enabling gradient for regularizations

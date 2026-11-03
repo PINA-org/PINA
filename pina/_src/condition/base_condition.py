@@ -11,11 +11,12 @@ def _unwrap_single(value):
 
     This is used to expose a list of one graph as the graph itself.
 
-    :param value: The value to unwrap.
+    :param Any value: The value to unwrap.
     :return: The single element when ``value`` is a list of length one,
         otherwise ``value``.
+    :rtype: Any
     """
-    if isinstance(value, list) and len(value) == 1:
+    if isinstance(value, (list, tuple)) and len(value) == 1:
         return value[0]
 
     return value
@@ -29,25 +30,6 @@ class BaseCondition(ConditionInterface):
     :class:`GraphCondition` to obtain the storage and batching behaviour
     matching their data type, while defining their own :meth:`evaluate`.
     """
-
-    def __init__(self, **kwargs):
-        """
-        Initialization of the :class:`BaseCondition` class.
-
-        :param dict kwargs: The keyword arguments representing the data to be
-            stored in the condition.
-        """
-        super().__init__()
-        # self.data = self.store_data(**kwargs)
-
-    # def setup(self, **kwargs):
-    #     """
-    #     Setup the condition with the given data.
-
-    #     :param dict kwargs: The keyword arguments representing the data to be
-    #         stored in the condition.
-    #     """
-    #     self.data = self.store_data(**kwargs)
 
     @property
     def problem(self):

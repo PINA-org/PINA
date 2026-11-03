@@ -51,7 +51,6 @@ class ConditionAggregatorMixin:
             self.log(
                 name=f"{name}_loss",
                 value=value.item(),
-                # batch_size=self.get_batch_size(batch),
                 **self.trainer.logging_kwargs,
             )
 

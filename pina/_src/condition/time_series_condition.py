@@ -163,7 +163,6 @@ class TimeSeriesCondition(TensorCondition):
         :raises ValueError: If ``input`` has fewer than three dimensions.
         :raises ValueError: If ``unroll_length`` is lower than 2.
         """
-        super().__init__()
         check_consistency(input, self._avail_input_cls)
         _check_time_series_params(
             data=input,

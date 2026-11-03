@@ -77,8 +77,12 @@ class BurgersProblem(TimeDependentProblem, SpatialProblem):
     }
 
     conditions = {
-        "boundary": DomainEquationCondition(domain="boundary", equation=FixedValue(0.0)),
-        "t0": DomainEquationCondition(domain="t0", equation=Equation(initial_condition)),
+        "boundary": DomainEquationCondition(
+            domain="boundary", equation=FixedValue(0.0)
+        ),
+        "t0": DomainEquationCondition(
+            domain="t0", equation=Equation(initial_condition)
+        ),
     }
 
     def __init__(self, nu=0):

@@ -4,7 +4,6 @@ from pina.domain import CartesianDomain
 from pina.equation.zoo import FixedValue
 from pina.condition import DomainEquationCondition
 
-
 domain = CartesianDomain({"x": [0, 1], "y": [0, 1]})
 equation = FixedValue(0.0)
 

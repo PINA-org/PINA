@@ -82,7 +82,9 @@ class AdvectionProblem(SpatialProblem, TimeDependentProblem):
     }
 
     conditions = {
-        "t0": DomainEquationCondition(domain="t0", equation=Equation(initial_condition)),
+        "t0": DomainEquationCondition(
+            domain="t0", equation=Equation(initial_condition)
+        ),
     }
 
     def __init__(self, c=1.0):

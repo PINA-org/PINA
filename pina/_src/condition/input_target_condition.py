@@ -21,7 +21,18 @@ class InputTargetCondition(TensorCondition):
     _avail_target_cls = (torch.Tensor, LabelTensor)
 
     def __init__(self, input, target):
-        super().__init__()
+        """
+        Initialization of the :class:`InputTargetCondition` class.
+
+        :param input: The input samples passed to the model. The first
+            dimension indexes the samples.
+        :type input: torch.Tensor | LabelTensor
+        :param target: The target values corresponding to the input samples.
+            The first dimension must match that of the input.
+        :type target: torch.Tensor | LabelTensor
+        :raises ValueError: If the input or target has an unsupported type,
+            or their numbers of samples differ.
+        """
         check_consistency(input, self._avail_input_cls)
         check_consistency(target, self._avail_target_cls)
         if input.shape[0] != target.shape[0]:
@@ -33,12 +44,41 @@ class InputTargetCondition(TensorCondition):
         self._target = target
 
     def evaluate(self, batch, solver):
+        """
+        Compute the prediction residual for a batch of paired samples.
+
+        The residual is the model prediction minus the target values.
+        No reduction or loss aggregation is applied.
+
+        :param dict batch: The batch containing input samples under the
+            ``"input"`` key and target values under the ``"target"`` key.
+        :param BaseSolver solver: The solver providing the model forward
+            pass.
+        :return: The difference between the model predictions and targets.
+        :rtype: torch.Tensor | LabelTensor
+        :raises KeyError: If the batch lacks the ``"input"`` or ``"target"``
+            key.
+        :raises RuntimeError: If the prediction and target shapes are
+            incompatible for subtraction.
+        """
         return solver.forward(batch["input"]) - batch["target"]
 
     @property
     def input(self):
+        """
+        Return the input samples associated with the condition.
+
+        :return: The original input samples, before batching.
+        :rtype: torch.Tensor | LabelTensor
+        """
         return self._input
 
     @property
     def target(self):
+        """
+        Return the target values associated with the condition.
+
+        :return: The original target values, before batching.
+        :rtype: torch.Tensor | LabelTensor
+        """
         return self._target
