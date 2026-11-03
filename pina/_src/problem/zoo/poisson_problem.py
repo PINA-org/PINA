@@ -77,7 +77,9 @@ class Poisson2DSquareProblem(SpatialProblem):
     }
 
     conditions = {
-        "boundary": DomainEquationCondition(domain="boundary", equation=FixedValue(0.0)),
+        "boundary": DomainEquationCondition(
+            domain="boundary", equation=FixedValue(0.0)
+        ),
         "D": DomainEquationCondition(
             domain="D", equation=PoissonEquation(forcing_term=forcing_term)
         ),

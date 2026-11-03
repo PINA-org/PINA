@@ -27,6 +27,7 @@ version = _DISTRIBUTION_METADATA["Version"]
 
 
 sys.path.insert(0, os.path.abspath("../sphinx_extensions"))
+sys.path.insert(0, os.path.abspath("../.."))  # repo root — use local source over installed package
 
 # -- General configuration ------------------------------------------------
 

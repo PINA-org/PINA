@@ -16,6 +16,7 @@ class SystemEquation(BaseEquation):
 
     It can be passed to a
     :class:`~pina.condition.domain_equation_condition.DomainEquationCondition`
+    or :class:`~pina.condition.input_equation_condition.InputEquationCondition`
     object to define the conditions under which the model is trained.
 
     Each equation in the system must be either an instance of

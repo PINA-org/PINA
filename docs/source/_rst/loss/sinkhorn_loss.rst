@@ -7,8 +7,6 @@ Sinkhorn Loss
 
 .. currentmodule:: pina.loss.sinkhorn_loss
 
-.. automodule:: pina._src.loss.sinkhorn_loss
-
 .. autoclass:: pina._src.loss.sinkhorn_loss.SinkhornLoss
    :members:
    :show-inheritance:

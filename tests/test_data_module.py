@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from pina.condition import GraphInputTargetCondition, InputTargetCondition
-from pina.data import DataModule
+from pina import DataModule
 from pina.graph import RadiusGraph
 from pina.problem import BaseProblem
 from pina.problem.zoo import Poisson2DSquareProblem, SupervisedProblem

@@ -11,10 +11,10 @@ import warnings
 __all__ = [
     "BaseCondition",
     "ConditionInterface",
-    "DataCondition",
     "DomainEquationCondition",
     "GraphCondition",
     "GraphInputTargetCondition",
+    "GraphInputEquationCondition",
     "GraphTimeSeriesCondition",
     "InputEquationCondition",
     "InputTargetCondition",
@@ -24,7 +24,6 @@ __all__ = [
 
 from pina._src.condition.base_condition import BaseCondition
 from pina._src.condition.condition_interface import ConditionInterface
-from pina._src.condition.data_condition import DataCondition
 from pina._src.condition.domain_equation_condition import (
     DomainEquationCondition,
 )
@@ -34,6 +33,9 @@ from pina._src.condition.graph_input_target_condition import (
 )
 from pina._src.condition.graph_time_series_condition import (
     GraphTimeSeriesCondition,
+)
+from pina._src.condition.graph_input_equation_condition import (
+    GraphInputEquationCondition,
 )
 from pina._src.condition.input_equation_condition import InputEquationCondition
 from pina._src.condition.input_target_condition import InputTargetCondition

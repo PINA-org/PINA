@@ -7,8 +7,6 @@ Gradient Physics Informed Single Model Solver
 
 .. currentmodule:: pina.solver.gradient_physics_informed_single_model_solver
 
-.. automodule:: pina._src.solver.gradient_physics_informed_single_model_solver
-
 .. autoclass:: pina._src.solver.gradient_physics_informed_single_model_solver.GradientPhysicsInformedSingleModelSolver
     :members:
     :show-inheritance:

@@ -5,7 +5,7 @@ import torch
 import lightning
 from pina._src.solver.mixin.physics_informed_mixin import PhysicsInformedMixin
 from pina._src.solver.base_solver import BaseSolver
-from pina._src.data.data_module import DataModule
+from pina._src.core.data_module import DataModule
 from pina._src.core.utils import (
     check_consistency,
     custom_warning_format,

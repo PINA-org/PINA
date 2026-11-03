@@ -20,7 +20,7 @@ if not logger.handlers:
 from pina._src.core.label_tensor import LabelTensor
 from pina._src.core.graph import Graph
 from pina._src.core.trainer import Trainer
-from pina._src.data.data_module import DataModule
+from pina._src.core.data_module import DataModule
 
 # Back-compatibility with version 0.2, to be removed soon
 import warnings

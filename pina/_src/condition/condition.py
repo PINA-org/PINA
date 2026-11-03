@@ -1,6 +1,5 @@
 """Deprecated Condition factory."""
 
-from pina._src.condition.data_condition import DataCondition
 from pina._src.condition.domain_equation_condition import (
     DomainEquationCondition,
 )
@@ -23,7 +22,6 @@ class Condition:
         (InputTargetCondition, {"input", "target"}, set()),
         (InputEquationCondition, {"input", "equation"}, set()),
         (DomainEquationCondition, {"domain", "equation"}, set()),
-        (DataCondition, {"input"}, {"conditional_variables"}),
         (
             TimeSeriesCondition,
             {"input", "n_windows", "unroll_length"},

@@ -45,7 +45,6 @@ class DomainEquationCondition(BaseCondition):
         :param BaseEquation equation: The equation to be satisfied over the
             specified domain.
         """
-        super().__init__()
         self.domain = domain
         self.equation = equation
 
