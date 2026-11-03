@@ -2,8 +2,7 @@
 
 import torch
 from torch_geometric.data import Data, Batch
-from torch_geometric.sampler import NodeSamplerInput, SamplerOutput
-from torch_geometric.utils import to_undirected
+from torch_geometric.utils import k_hop_subgraph, to_undirected
 from torch_geometric.utils.loop import remove_self_loops
 from pina._src.core.label_tensor import LabelTensor
 from pina._src.core.utils import check_consistency, is_function
@@ -209,84 +208,40 @@ class Graph(Data):
         setattr(self, attr, tensor)
         return self
 
-    # def create_subgraph(self, sampler, batch_size=1, seed_nodes=None):
-    #     """
-    #     Create subgraphs of this graph by sampling seed nodes through a
-    #     :class:`torch_geometric.sampler.BaseSampler`.
+    def create_subgraph(self, start_node, num_hops=5):
+        """
+        Create a subgraph around a starting node.
 
-    #     The seed nodes are split into chunks of ``batch_size`` nodes and each
-    #     chunk is passed to ``sampler.sample_from_nodes``. Every sampler output
-    #     is converted into a subgraph: node-level attributes are sliced with
-    #     the sampled nodes, edge-level attributes with the sampled edges, and
-    #     graph-level attributes are copied as they are.
+        The subgraph contains all nodes within ``num_hops`` hops from
+        ``start_node``. Node-level and edge-level :class:`LabelTensor`
+        attributes keep their labels.
 
-    #     :param sampler: The sampler used to sample the subgraphs. It must
-    #         expose a ``sample_from_nodes`` method returning a
-    #         :class:`torch_geometric.sampler.SamplerOutput`.
-    #     :type sampler: torch_geometric.sampler.BaseSampler
-    #     :param int batch_size: The number of seed nodes used for each
-    #         subgraph. Default is ``1``.
-    #     :param seed_nodes: The nodes to sample the subgraphs from. Default is
-    #         ``None``, meaning all the nodes of the graph.
-    #     :type seed_nodes: torch.Tensor | list[int] | None
-    #     :raises TypeError: If ``sampler`` does not expose a callable
-    #         ``sample_from_nodes`` method or if it does not return a
-    #         :class:`torch_geometric.sampler.SamplerOutput`.
-    #     :raises ValueError: If ``batch_size`` is not a positive integer or if
-    #         the graph has an edge-level attribute while the sampler output
-    #         does not provide the sampled edge ids.
-    #     :return: The sampled subgraphs.
-    #     :rtype: list[Graph]
-    #     """
-    #     if isinstance(sampler, type) or not callable(
-    #         getattr(sampler, "sample_from_nodes", None)
-    #     ):
-    #         raise TypeError(
-    #             "sampler must expose a callable 'sample_from_nodes' method."
-    #         )
-    #     if not isinstance(batch_size, int) or batch_size < 1:
-    #         raise ValueError("batch_size must be a positive integer.")
-    #     if seed_nodes is None:
-    #         seed_nodes = torch.arange(self.num_nodes)
-    #     else:
-    #         seed_nodes = torch.as_tensor(seed_nodes, dtype=torch.long)
+        :param int start_node: The node used as the center of the subgraph.
+        :param int num_hops: The number of hops around the starting node.
+            Default is ``5``.
+        :return: The subgraph centered on ``start_node``.
+        :rtype: Graph
+        """
+        subset = k_hop_subgraph(
+            node_idx=int(start_node),
+            num_hops=num_hops,
+            edge_index=self.edge_index,
+            relabel_nodes=True,
+            num_nodes=self.num_nodes,
+        )[0]
+        subgraph = self.subgraph(subset)
 
-    #     subgraphs = []
-    #     for i, chunk in enumerate(seed_nodes.split(batch_size)):
-    #         sampler_output = sampler.sample_from_nodes(
-    #             NodeSamplerInput(input_id=torch.tensor([i]), node=chunk)
-    #         )
-    #         if not isinstance(sampler_output, SamplerOutput):
-    #             raise TypeError(
-    #                 "sampler.sample_from_nodes must return a "
-    #                 "torch_geometric.sampler.SamplerOutput object."
-    #             )
+        for key, value in self.items():
+            if not isinstance(value, LabelTensor) or key not in subgraph:
+                continue
+            if self.is_node_attr(key) or self.is_edge_attr(key):
+                setattr(
+                    subgraph,
+                    key,
+                    LabelTensor(getattr(subgraph, key), value.labels),
+                )
 
-    #         subgraph = Graph()
-    #         for key, value in self.items():
-    #             if key in ("edge_index", "num_nodes"):
-    #                 continue
-    #             if self.is_node_attr(key):
-    #                 subgraph[key] = value[sampler_output.node]
-    #             elif self.is_edge_attr(key):
-    #                 if sampler_output.edge is None:
-    #                     raise ValueError(
-    #                         f"The graph attribute '{key}' is edge-level but "
-    #                         "the sampler output does not provide the sampled "
-    #                         "edge ids ('edge')."
-    #                     )
-    #                 subgraph[key] = value[sampler_output.edge]
-    #             else:
-    #                 subgraph[key] = value
-    #         subgraph.edge_index = torch.stack(
-    #             [sampler_output.row, sampler_output.col]
-    #         )
-    #         subgraph.num_nodes = sampler_output.node.numel()
-    #         subgraph.n_id = sampler_output.node
-    #         subgraph.e_id = sampler_output.edge
-    #         subgraph.seed_n_id = chunk
-    #         subgraphs.append(subgraph)
-    #     return subgraphs
+        return subgraph
 
 
 class GraphBuilder:
