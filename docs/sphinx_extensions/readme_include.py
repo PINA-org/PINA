@@ -59,11 +59,14 @@ def _html_to_rst(text: str) -> str:
 
     text = BR_PATTERN.sub("\n", text)
 
-    # links — process first so inner tags are stripped before global conversion
+    # Protect converted links so HTML cleanup cannot strip their <URL> targets.
+    links = []
+
     def _link_replace(m):
         url = m.group(1)
         label = TAG_PATTERN.sub("", m.group(2)).strip()
-        return f"`{label} <{url}>`_"
+        links.append(f"`{label} <{url}>`_")
+        return f"\x00READMELINK{len(links) - 1}\x00"
 
     text = LINK_PATTERN.sub(_link_replace, text)
 
@@ -85,6 +88,10 @@ def _html_to_rst(text: str) -> str:
 
     # remove remaining HTML
     text = TAG_PATTERN.sub("", text)
+
+    # Restore links only after all HTML tags have been removed.
+    for index, link in enumerate(links):
+        text = text.replace(f"\x00READMELINK{index}\x00", link)
 
     # normalize whitespace
     return re.sub(r"\s+", " ", text).strip()

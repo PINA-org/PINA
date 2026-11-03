@@ -99,6 +99,6 @@ After training, the model stores its solution in the solver. Evaluate at any poi
 What's next?
 ------------
 
-* Walk through the `Introductory Tutorial <tutorial17/tutorial.html>`_ for a deeper introduction.
+* Walk through the `Introductory Tutorial <https://PINA-org.github.io/PINA-Tutorials/tutorial17/tutorial.html>`_ for a deeper introduction.
 * Explore the :doc:`API reference </_rst/_code>` for all available components.
-* Read the :doc:`tutorials </_tutorial>` for domain-specific guides (Neural Operators, Supervised Learning, etc.).
+* Read the `tutorials <https://PINA-org.github.io/PINA-Tutorials/>`_ for domain-specific guides (Neural Operators, Supervised Learning, etc.).

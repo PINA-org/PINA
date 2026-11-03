@@ -148,7 +148,7 @@ Physics-Informed Neural Networks (PINNs), Neural Operators, and more.
       Complete API docs for problems, solvers, models, and more.
 
    .. grid-item-card:: 🎓 Tutorials
-      :link: _tutorial.html
+      :link: https://PINA-org.github.io/PINA-Tutorials/
       :class-card: sd-shadow-sm
 
       Step-by-step tutorials covering PINNs, Neural Operators, and more.
@@ -183,7 +183,7 @@ Physics-Informed Neural Networks (PINNs), Neural Operators, and more.
 
    Quickstart <_quickstart>
    API <_rst/_code>
-   Tutorials <_tutorial>
+   Tutorials <https://PINA-org.github.io/PINA-Tutorials/>
    Contributing <_contributing>
    Team & Fundings <_team.rst>
    Installing <_installation>
