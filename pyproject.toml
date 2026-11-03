@@ -23,7 +23,7 @@ requires-python = ">=3.10"
 
 [project.optional-dependencies]
 doc = [
-    "sphinx>5.0,<8.2",
+    "sphinx",
     "sphinx_rtd_theme",
     "sphinx_copybutton",
     "sphinx_design",

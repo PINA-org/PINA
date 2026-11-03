@@ -33,3 +33,8 @@
 .hero .btn:hover {
   color: #fff !important;
 }
+
+/* Hide external-link icons in navigation tabs only. */
+.nav-link.nav-external::after {
+  display: none;
+}

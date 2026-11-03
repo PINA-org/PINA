@@ -6,7 +6,6 @@
 pina/                    @PINA-org/pina-maintainers
 readme/                  @PINA-org/pina-maintainers
 tests/                   @PINA-org/pina-maintainers
-tutorials/               @PINA-org/pina-maintainers
 pyproject.toml           @PINA-org/pina-committee @ndem0
 
 # Owners for documentation

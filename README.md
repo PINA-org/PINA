@@ -61,6 +61,9 @@ SPDX-License-Identifier: Apache-2.0
 <div style="border: 1px solid #ddd; border-radius: 10px; padding: 14px; margin: 12px 0;">
   <ul style="margin: 0; padding-left: 18px; line-height: 1.55;">
     <li>
+      <b>[v0.3.3]</b> – <b>Tutorial migration:</b> Our tutorials now have a dedicated home in <a href="https://github.com/PINA-org/PINA-Tutorials">PINA-Tutorials</a>. Visit the <a href="https://PINA-org.github.io/PINA-Tutorials/">tutorial website</a> to explore them, and please <a href="https://github.com/PINA-org/PINA-Tutorials/issues">report any broken links or other issues</a> to help us keep the migration smooth.
+    </li>
+    <li>
       <b>[v0.3.2]</b> – <b>Agentic PINA:</b> Added AI agents that guide users through the PINA pipeline, with dedicated skills for problem setup, model and solver selection, and training configuration.
     </li>
     <li>
@@ -203,7 +206,7 @@ flowchart LR
 
 <p>
 Want to dive deeper? Check out the official
-<a href="https://github.com/pina-org/PINA/tree/master/tutorials#pina-tutorials"><b>Tutorials</b></a>.
+<a href="https://PINA-org.github.io/PINA-Tutorials/"><b>Tutorials</b></a>.
 </p>
 
 <hr/>
@@ -213,7 +216,7 @@ Want to dive deeper? Check out the official
 <summary>
   <h2>PINA by Examples</h2>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://github.com/pina-org/PINA/blob/master/tutorials/README.md">
+  <a href="https://PINA-org.github.io/PINA-Tutorials/">
   <img align="center" height="20" src="https://img.shields.io/badge/tutorial-fa9900?style=for-the-badge&logo=jupyter&logoColor=white&labelColor=555">
   </a>
 </summary>
