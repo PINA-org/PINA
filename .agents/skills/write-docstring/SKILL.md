@@ -1,0 +1,1 @@
+../../../.opencode/skills/write-docstring/SKILL.md

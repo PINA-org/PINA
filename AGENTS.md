@@ -64,6 +64,7 @@ Load the relevant skill when the user's request matches:
 | `select-solver` | Selecting the right solver for the problem |
 | `select-trainer` | Configuring training parameters and callbacks |
 | `create-skill` | User wants to create or edit a skill in this repo |
+| `write-docstring` | Writing, updating, or reviewing PINA Python docstrings |
 | `skill-sync-checker` | Auditing skill references against the codebase |
 
 ## Commands

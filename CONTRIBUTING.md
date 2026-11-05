@@ -88,6 +88,19 @@ Before submitting a PR:
 - Write clear docstrings for public classes, methods, and functions.
 - Keep functions small and focused; do one thing and do it well.
 
+### Docstrings
+
+When adding or changing Python docstrings under `pina/`, follow the
+[PINA docstring conventions](.opencode/skills/write-docstring/SKILL.md).
+These cover Sphinx/reStructuredText formatting, parameter and return types,
+exceptions, default behavior, and the 80-column limit including indentation.
+Leave accurate, complete, and compliant docstrings unchanged.
+
+If you use an AI coding agent, ask it to load and follow the `write-docstring`
+skill before documenting code. The skill is available through `.opencode/`,
+`.claude/`, and `.agents/`. Using an AI tool is optional; the same conventions
+apply when writing docstrings manually.
+
 ---
 
 ## Community Standards
