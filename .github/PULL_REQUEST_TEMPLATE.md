@@ -9,4 +9,5 @@ This PR fixes #ISSUE_NUMBER. <!-- Possible other comments. -->
 - [ ] Code follows the project’s [Code Style Guidelines](https://github.com/PINA-org/PINA/blob/master/CONTRIBUTING.md#code-style--guidelines)
 - [ ] Tests have been added or updated
 - [ ] Documentation has been updated if necessary
+- [ ] Python docstrings follow PINA's [docstring conventions](https://github.com/PINA-org/PINA/blob/master/CONTRIBUTING.md#docstrings).
 - [ ] Pull request is linked to an open issue
