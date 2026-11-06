@@ -19,11 +19,13 @@ class ScalarWeighting(BaseWeighting):
         >>> # Uniform weighting
         >>> weighting = ScalarWeighting(weights=1.0)
         >>> losses = {"residual": torch.tensor(0.1), "data": torch.tensor(0.2)}
-        >>> weighting.aggregate(losses)
+        >>> weights = weighting.update_weights(losses)
+        >>> sum(weights[key] * value for key, value in losses.items())
         tensor(0.3000)
         >>> # Per-condition weighting
         >>> weighting = ScalarWeighting(weights={"residual": 0.5, "data": 2.0})
-        >>> weighting.aggregate(losses)
+        >>> weights = weighting.update_weights(losses)
+        >>> sum(weights[key] * value for key, value in losses.items())
         tensor(0.4500)
     """
 
@@ -37,8 +39,9 @@ class ScalarWeighting(BaseWeighting):
             If a dictionary is provided, its keys represent the loss identifiers
             (e.g., conditions) and its values specify the corresponding weights.
             Loss terms not explicitly defined in the dictionary are assigned a
-            default weight of ``1``.
-        :type weights: float | int | dict
+            default weight of ``1``. A supplied dictionary is retained by
+            reference, and its keys and values are not validated.
+        :type weights: float | int | dict[str, int | float | torch.Tensor]
         :raises ValueError: If the input weights are neither numeric nor a
             dictionary.
         """
@@ -57,15 +60,13 @@ class ScalarWeighting(BaseWeighting):
 
     def update_weights(self, losses):
         """
-        Update the weights based on the current losses.
+        Look up constant weights for the supplied condition names.
 
-        This method defines how the weighting strategy adapts over time. It is
-        responsible for computing and storing updated weights that will be used
-        during aggregation.
-
-        :param dict losses: The mapping from loss names to loss tensors.
-        :return: The updated weights.
-        :rtype: dict
+        :param dict[str, torch.Tensor] losses: The condition losses. Only their
+            names are used; values do not affect the weights.
+        :return: A new mapping with configured or default weights. Does not
+            modify the saved weight mapping when called directly.
+        :rtype: dict[str, int | float | torch.Tensor]
         """
         return {
             condition: self.values.get(condition, self.default_value_weights)

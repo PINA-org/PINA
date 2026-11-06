@@ -21,6 +21,7 @@ class EllipsoidDomain(BaseDomain):
 
     :Example:
 
+        >>> from pina.domain import EllipsoidDomain
         >>> ellipsoid_domain = EllipsoidDomain({'x':[-1, 1], 'y':[-1, 1]})
         >>> ellipsoid_domain = EllipsoidDomain({'x':[-1, 1], 'y':1.0})
     """
@@ -29,15 +30,19 @@ class EllipsoidDomain(BaseDomain):
         """
         Initialization of the :class:`EllipsoidDomain` class.
 
-        :param dict ellipsoid_dict: A dictionary where the keys are the variable
+        :param ellipsoid_dict: A dictionary where the keys are the variable
             names and the values are the domain extrema. The domain extrema can
             be either a list or tuple with two elements or a single number. If
             the domain extrema is a single number, the variable is fixed to that
-            value.
+            value. ``None`` initializes a domain without variables. Floating
+            fixed values are recommended for gradient-compatible sampling.
+        :type ellipsoid_dict: dict[str, int | float | list[int | float] |
+            tuple[int | float, int | float]] | None
         :param bool sample_surface: If ``True``, only the surface of the
             ellipsoid is considered part of the domain. Default is ``False``.
         :raises ValueError: If ``sample_surface`` is not a boolean.
         :raises TypeError: If the ellipsoid dictionary is not a dictionary.
+        :raises ValueError: If the ellipsoid dictionary is empty.
         :raises ValueError: If the ellipsoid dictionary contains variables with
             invalid ranges.
         :raises ValueError: If the ellipsoid dictionary contains values that are
@@ -51,7 +56,10 @@ class EllipsoidDomain(BaseDomain):
 
     def compute_center_axes(self):
         """
-        Compute centres and axes for the ellipsoid.
+        Recompute stored centers and semiaxes from the current ranged bounds.
+
+        Both are one-dimensional float32 labeled tensors in sorted variable
+        order. With no ranged variables, both attributes are set to ``None``.
         """
         if self._range:
             rng_vars = sorted(self._range.keys())
@@ -71,13 +79,18 @@ class EllipsoidDomain(BaseDomain):
         """
         Check if a point is inside the ellipsoid.
 
-        :param LabelTensor point: The point to check.
+        :param LabelTensor point: A single point of shape ``(1, n_variables)``
+            with labels matching the domain variables. Multiple rows are not
+            checked independently: normalized squared distances are summed.
         :param bool check_border: If ``True``, the boundary is considered inside
-            the domain. Default is ``False``.
+            the volume domain. Ignored in surface-only mode, which checks the
+            ellipsoid equation using :func:`torch.allclose`. Default is
+            ``False``.
         :raises ValueError: If ``point`` is not a :class:`LabelTensor`.
         :raises ValueError: If the labels of ``point`` differ from the variables
             of the domain.
-        :return: Whether the point is inside the domain or not.
+        :return: Whether the point satisfies the ellipsoid equation and matches
+            all fixed coordinates exactly.
         :rtype: bool
         """
         # Checks on point
@@ -115,15 +128,16 @@ class EllipsoidDomain(BaseDomain):
 
     def update(self, domain):
         """
-        Update the current domain by adding the labels contained in ``domain``.
-        Each new label introduces a new dimension. Only domains of the same type
-        can be used for update.
+        Merge variable definitions into a deep copy and recompute its axes.
+
+        Matching definitions are overwritten, including fixed/ranged category
+        changes. The receiver's surface mode is preserved; inputs are unchanged.
 
         :param EllipsoidDomain domain: The domain whose labels are to be merged
             into the current one.
         :raises TypeError: If the provided domain is not of an instance of
             :class:`EllipsoidDomain`.
-        :return: A new domain instance with the merged labels.
+        :return: A copy of the receiver with merged bounds, centers, and axes.
         :rtype: EllipsoidDomain
         """
         updated = super().update(domain)
@@ -138,26 +152,33 @@ class EllipsoidDomain(BaseDomain):
         :param int n: The number of samples to generate.
         :param str mode: The sampling method. Available modes: ``random`` for
             random sampling. Default is ``random``.
-        :param variables: The list of variables to sample. If ``all``, all
-            variables are sampled. Default is ``all``.
-        :type variables: list[str] | str
+        :param variables: The nonempty coordinate selection, or ``"all"`` for
+            every variable. Duplicates are removed and columns sorted by name.
+            Selecting fewer ranged axes samples an ellipsoid in those axes,
+            rather than projecting samples from the full ellipsoid.
+            Default is ``"all"``.
+        :type variables: str | list[str] | tuple[str, ...] | set[str]
         :raises AssertionError: If ``n`` is not a positive integer.
         :raises ValueError: If the sampling mode is invalid.
         :raises ValueError: If ``variables`` is neither ``all``, a string, nor a
-            list/tuple of strings.
+            list, tuple, or set of strings.
         :raises ValueError: If any of the specified variables is unknown.
-        :return: The sampled points.
+        :raises ValueError: If the variable selection is empty.
+        :return: Points of shape ``(n, len(variables))`` after selection
+            normalization, with fixed coordinates appended as needed. Volume
+            sampling scales uniform sphere directions by a random radius;
+            surface sampling applies the axes to unit sphere directions and
+            is not generally uniform in ellipsoid surface area. Fixed-only
+            integer values can produce an integer tensor.
         :rtype: LabelTensor
 
         :Example:
 
-            >>> ellipsoid_domain = EllipsoidDomain({'x':[0, 1], 'y':[0, 1]})
-            >>> ellipsoid_domain.sample(n=5)
-                LabelTensor([[0.7174, 0.5319],
-                             [0.2713, 0.6518],
-                             [0.1020, 0.4093],
-                             [0.2102, 0.1353],
-                             [0.4830, 0.1873]])
+            >>> from pina.domain import EllipsoidDomain
+            >>> domain = EllipsoidDomain({'x': [0, 1], 'y': [0, 1]})
+            >>> points = domain.sample(n=5)
+            >>> tuple(points.shape), points.labels
+            ((5, 2), ['x', 'y'])
         """
         # Validate sampling settings
         variables = self._validate_sampling(n, mode, variables)
@@ -198,9 +219,12 @@ class EllipsoidDomain(BaseDomain):
         Sample points and rescale to fit within the specified bounds.
 
         :param int n: The number of points to sample.
-        :param list[str] variables: variables whose samples must be rescaled.
-        :return: The rescaled sample points.
-        :rtype: torch.Tensor
+        :param list[str] variables: The nonempty selected ranged axes, in output
+            order. Names must exist in the stored centers and semiaxes.
+        :raises ValueError: If a selected axis is unknown.
+        :return: Points of shape ``(n, len(variables))`` in the ellipsoid
+            defined by the selected axes, or on its surface when enabled.
+        :rtype: torch.Tensor | LabelTensor
         """
         # Extract the dimension
         dim = len(variables)

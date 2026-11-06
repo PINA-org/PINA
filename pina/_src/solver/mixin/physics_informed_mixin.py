@@ -18,10 +18,12 @@ class PhysicsInformedMixin:
         """
         Solver validation step.
 
-        :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and a dictionary of points.
+        :param batch: The condition-name/data pairs supplied by the data module.
+        :type batch: list[tuple[str, dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data]]
         :param int batch_idx: The index of the current batch.
-        :return: The loss of the training step.
+        :return: The validation loss evaluated with autograd enabled. This does
+            not override PyTorch inference mode or enable input tracking itself.
         :rtype: torch.Tensor
         """
         return super().validation_step(batch, batch_idx)
@@ -31,10 +33,12 @@ class PhysicsInformedMixin:
         """
         Solver test step.
 
-        :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and a dictionary of points.
+        :param batch: The condition-name/data pairs supplied by the data module.
+        :type batch: list[tuple[str, dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data]]
         :param int batch_idx: The index of the current batch.
-        :return: The loss of the training step.
+        :return: The test loss evaluated with autograd enabled. This does not
+            override PyTorch inference mode or enable input tracking itself.
         :rtype: torch.Tensor
         """
         return super().test_step(batch, batch_idx)

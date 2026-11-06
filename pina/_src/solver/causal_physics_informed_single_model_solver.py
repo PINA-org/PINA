@@ -23,8 +23,8 @@ class CausalPhysicsInformedSingleModelSolver(
     problem using a single model and a causality-aware training objective. It is
     intended for problems whose conditions include equation residuals and
     boundary residuals evaluated across ordered time snapshots. It can be used
-    only for forward problems, due to the causal nature of the training
-    objective.
+    with time-dependent problems; inverse-problem inheritance is not explicitly
+    rejected.
 
     Given a model :math:`\mathcal{M}`, the predicted solution is
 
@@ -33,7 +33,7 @@ class CausalPhysicsInformedSingleModelSolver(
         \hat{\mathbf{u}}(\mathbf{x}, t) = \mathcal{M}(\mathbf{x}, t).
 
     The solver minimizes a causal residual loss that weights each time snapshot
-    according to the residuals accumulated at previous times. For a time
+    according to residuals accumulated through the current time. For a time
     dependent problem with governing equation operator :math:`\mathcal{A}` in
     the domain :math:`\Omega` and boundary operator :math:`\mathcal{B}` on the
     boundary :math:`\partial\Omega`, the objective can be written as
@@ -57,12 +57,14 @@ class CausalPhysicsInformedSingleModelSolver(
 
     .. math::
 
-        \omega_i = \exp \left( -\epsilon \sum_{k=1}^{i-1} \mathcal{L}_r(t_k)
+        \omega_i = \exp \left( -\epsilon \sum_{k=1}^{i} \mathcal{L}_r(t_k)
         \right),
 
     where :math:`\epsilon` is a hyperparameter controlling the strength of the
     causal weighting, and :math:`\mathcal{L}` is the selected loss function,
-    typically the mean squared error.
+    typically the mean squared error. In the implementation, cumulative sums
+    are taken elementwise over stacked temporal loss tensors, not over a
+    separately reduced scalar at each time. Conditions are weighted separately.
 
     .. seealso::
 
@@ -75,16 +77,16 @@ class CausalPhysicsInformedSingleModelSolver(
     .. note::
 
         This solver is compatible only with problems inheriting from
-        :class:`~pina.problem.time_dependent_problem.TimeDependentProblem`.
+        :class:`~pina.problem.TimeDependentProblem`.
 
     :Example:
 
         >>> from pina.solver import CausalPhysicsInformedSingleModelSolver
-        >>> from pina.problem import PoissonProblem
+        >>> from pina.problem.zoo import AdvectionProblem
         >>> # solver = CausalPhysicsInformedSingleModelSolver(
-        >>> #     problem=problem, model=model, eps=100.0, n_steps=10
+        >>> #     problem=problem, model=model, regularized_conditions=["D"]
         >>> # )
-        >>> # solver.train()
+        >>> # Train with pina.Trainer(solver=solver, ...).train().
     """
 
     # Accepted conditions types for this solver
@@ -110,32 +112,40 @@ class CausalPhysicsInformedSingleModelSolver(
         Initialization of the :class:`CausalPhysicsInformedSingleModelSolver`
         class.
 
-        :param BaseProblem problem: The problem to be solved.
+        :param pina.problem.TimeDependentProblem problem: The problem to solve.
         :param torch.nn.Module model: The model used by the solver.
-        :param TorchOptimizer optimizer: The optimizer used by the solver.
+        :param optimizer: The optimizer wrapper used by the solver.
             If ``None``, the ``torch.optim.Adam`` optimizer with a learning rate
             of ``0.001`` is used. Default is ``None``.
-        :param TorchScheduler scheduler: The scheduler used by the solver.
+        :type optimizer: pina.optim.TorchOptimizer | None
+        :param scheduler: The scheduler wrapper used by the solver.
             If ``None``, the ``torch.optim.lr_scheduler.ConstantLR`` scheduler
             with a factor of ``1.0`` is used. Default is ``None``.
-        :param BaseWeighting weighting: The weighting strategy used to combine
+        :type scheduler: pina.optim.TorchScheduler | None
+        :param weighting: The weighting strategy used to combine
             condition losses. If ``None``, no weighting is applied. Default is
             ``None``.
+        :type weighting: pina.weighting.BaseWeighting | None
         :param loss: The loss function used to compute residual losses.
             If ``None``, :class:`torch.nn.MSELoss` is used. Default is ``None``.
+        :type loss: torch.nn.modules.loss._Loss | pina.loss.BaseDualLoss | None
         :param eps: The exponential decay parameter. Default is ``100``.
         :type eps: float | int
         :param int n_steps: The number of equispaced temporal steps used to
             compute the causal loss. Default is ``10``.
         :param regularized_conditions: The names of the conditions that should
-            receive causal regularization. Default is ``None``.
+            receive causal regularization. ``None`` raises an error; an empty
+            sequence disables it. Supervised target conditions are always
+            evaluated without causal regularization. Default is ``None``.
+        :type regularized_conditions: str | list[str] | tuple[str, ...] | None
         :raises ValueError: If the problem is not time-dependent.
         :raises ValueError: If the user does not specify any regularized
             conditions.
         :raises ValueError: If any of the specified ``regularized_conditions``
             are not present in the ``problem``'s conditions.
         :raises ValueError: If ``eps`` is not a float or int.
-        :raises ValueError: If ``n_steps`` is not a positive integer.
+        :raises AssertionError: If ``n_steps`` is not a positive integer.
+        :raises ValueError: If base solver/component/loss validation fails.
         """
         # Ensure the problem is time-dependent
         if not isinstance(problem, TimeDependentProblem):
@@ -190,11 +200,16 @@ class CausalPhysicsInformedSingleModelSolver(
         """
         Compute the scalar loss for a given condition and its data.
 
-        :param BaseCondition condition: The condition for which to compute the
+        :param pina.condition.BaseCondition condition: The condition computing
             loss.
-        :param dict data: The data corresponding to the condition.
+        :param dict[str, Any] data: The condition payload with labeled input
+            points. Non-time coordinates are reused at each generated time;
+            supplied time coordinates are replaced in a cloned input.
         :param int batch_idx: The index of the current batch.
-        :return: The scalar loss for the condition.
+        :raises ValueError: If temporal/non-time variables are unsuitable or
+            coordinate extraction fails.
+        :return: The causally weighted loss after the saved reduction, or the
+            ordinary loss for unselected/supervised conditions.
         :rtype: torch.Tensor
         """
         # If the condition is not regularized, or is a supervised (target)
@@ -289,9 +304,11 @@ class CausalPhysicsInformedSingleModelSolver(
         Compute the temporal adaptive weights for the causal loss based on the
         cumulative loss.
 
-        :param LabelTensor loss: The physics loss values.
-        :return: The computed weights for the physics loss.
-        :rtype: LabelTensor
+        :param loss: Loss values with generated time steps on the first axis.
+        :type loss: torch.Tensor | LabelTensor
+        :return: ``exp(-eps * cumsum(loss, dim=0))`` with the same shape,
+            including each current step. Detachment is handled by the caller.
+        :rtype: torch.Tensor | LabelTensor
         """
         # Compute the cumulative loss and apply exponential decay
         cumulative_loss = torch.cumsum(loss, dim=0)
@@ -302,10 +319,10 @@ class CausalPhysicsInformedSingleModelSolver(
         """
         The temporal variable of the problem.
 
-        :return: The temporal variable name.
-        :rtype: str
         :raises ValueError: If the problem does not have exactly one temporal
             variable.
+        :return: The temporal variable name.
+        :rtype: str
         """
         # Extract the temporal variable from the problem
         temporal_variables = self.problem.temporal_variables
@@ -324,9 +341,10 @@ class CausalPhysicsInformedSingleModelSolver(
         """
         The spatial variables of the problem.
 
-        :return: The spatial variable names.
-        :rtype: list[str]
         :raises ValueError: If the problem does not have any spatial variables.
+        :return: All input names except the temporal name, including parameter
+            inputs if present, in problem-input order.
+        :rtype: list[str]
         """
         # Determine the spatial variables by excluding the temporal variable
         spatial_variables = [

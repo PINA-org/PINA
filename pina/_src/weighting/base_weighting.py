@@ -14,7 +14,7 @@ class BaseWeighting(WeightingInterface):
     conditions are aggregated into a single scalar loss.
 
     All weighting schemas must inherit from this class and implement the methods
-    defined in :class:`~pina.weighting.weighting_interface.WeightingInterface`.
+    defined in :class:`~pina.weighting.WeightingInterface`.
 
     This class is not meant to be instantiated directly.
     """
@@ -27,15 +27,18 @@ class BaseWeighting(WeightingInterface):
         Initialization of the :class:`BaseWeighting` class.
 
         :param int update_every_n_epochs: The number of training epochs between
-            weight updates. If set to 1, the weights are updated at every epoch.
-            This parameter is ignored by static weighting schemes.
+            eligible epochs. Updates occur on every aggregation call in epochs
+            divisible by this value, including epoch zero, not once per epoch.
             Default is ``1``.
         :param aggregator: The aggregation method. Available options include:
             ``"sum"`` which sums the weighted losses, ``"mean"`` which averages
-            the weighted losses, or a custom callable that takes an iterable of
-            weighted losses and returns a single scalar. Default is ``"sum"``.
+            the weighted losses, or a custom callable receiving the stacked
+            tensor of flattened weighted losses, normally ``(n_conditions, 1)``.
+            Built-in methods reduce all entries. A custom callable should
+            return a scalar tensor; its output is not validated.
+            Default is ``"sum"``.
         :type aggregator: str | Callable
-        :raises ValueError: If ``update_every_n_epochs`` is not a positive
+        :raises AssertionError: If ``update_every_n_epochs`` is not a positive
             integer.
         :raises ValueError: If ``aggregator`` is invalid.
         """
@@ -63,14 +66,23 @@ class BaseWeighting(WeightingInterface):
         """
         Aggregate a collection of loss terms into a single scalar.
 
-        This method applies the current weighting scheme to the provided losses
-        and returns the aggregated result. Implementations may internally update
-        the weights (e.g., based on training state) before performing the
-        aggregation.
+        In eligible epochs, call ``update_weights`` and merge its result into
+        the saved mapping before aggregation. Each call in that epoch can
+        update weights again. Previously saved keys survive partial-condition
+        batches. The weighting must be attached to a solver with a trainer.
 
-        :param dict losses: The mapping from loss names to loss tensors.
-        :return: The aggregated loss value.
-        :rtype: torch.Tensor
+        :param dict[str, torch.Tensor] losses: The nonempty mapping from
+            condition names to losses, normally scalar or one-element tensors.
+            Flattened weighted losses must have equal lengths for stacking.
+        :raises AttributeError: If no solver is attached.
+        :raises RuntimeError: If the solver has no trainer, losses cannot be
+            stacked, or a strategy's gradient computation fails.
+        :raises ValueError: If a strategy has no usable gradients for a loss.
+        :raises KeyError: If a current loss has no saved weight and this call
+            does not initialize one, or a strategy lacks its configuration.
+        :return: The scalar tensor from a built-in aggregator, or the unchanged
+            output of a custom aggregator.
+        :rtype: Any
         """
         # Update weights when required. Merge the updated weights because a
         # batch may contain only a subset of the problem conditions.
@@ -91,8 +103,9 @@ class BaseWeighting(WeightingInterface):
         """
         Get the most recently computed weights.
 
-        :return: The mapping from loss names to their corresponding weights.
-        :rtype: dict
+        :return: The stored mapping from condition names to weights. Initially
+            empty; mutating it affects future aggregation directly.
+        :rtype: dict[str, int | float | torch.Tensor]
         """
         return self._saved_weights
 
@@ -104,7 +117,7 @@ class BaseWeighting(WeightingInterface):
         Provides access to the solver instance that uses this weighting scheme,
         enabling strategies that depend on training state or model information.
 
-        :return: The solver instance.
-        :rtype: :class:`~pina.solver.base_solver.BaseSolver`
+        :return: The associated solver, or ``None`` before solver attachment.
+        :rtype: pina.solver.BaseSolver | None
         """
         return self._solver

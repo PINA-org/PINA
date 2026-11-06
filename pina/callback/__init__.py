@@ -34,6 +34,15 @@ _DEPRECATED_IMPORTS = {"NormalizerDataCallback": "DataNormalizer"}
 
 
 def __getattr__(name):
+    """
+    Resolve a deprecated callback name and warn about its replacement.
+
+    :param str name: The requested attribute name. ``"NormalizerDataCallback"``
+        resolves to :class:`pina.callback.DataNormalizer` and emits a
+        :class:`DeprecationWarning`.
+    :return: The replacement callback class, or ``None`` for an unknown name.
+    :rtype: type[DataNormalizer] | None
+    """
     if name in _DEPRECATED_IMPORTS:
 
         warnings.warn(

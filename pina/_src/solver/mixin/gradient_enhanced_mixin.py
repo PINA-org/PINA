@@ -17,7 +17,7 @@ class GradientEnhancedMixin:
 
     Designed to be used in combination with any solver inheriting from
     :class:`~pina._src.solver.base_solver.BaseSolver` and using
-    :class:`~pina._src.core.tensor.label_tensor.LabelTensor` as input.
+    :class:`~pina.LabelTensor` as input.
     """
 
     def _init_gradient_enhanced_components(
@@ -32,14 +32,15 @@ class GradientEnhancedMixin:
         :param regularized_conditions: The names of the conditions that should
             receive gradient regularization. If ``None``, all conditions are
             regularized. Default is ``None``.
-        :type regularized_conditions: str | list[str]
+        :type regularized_conditions: str | list[str] | tuple[str, ...] | None
         :raises ValueError: If ``regularization_weight`` is not a float or int.
         :raises ValueError: If ``regularized_conditions`` is not a string or a
-            list of strings.
+            list or tuple of strings.
         :raises ValueError: If ``problem`` is not an instance of
             :class:`~pina._src.problem.spatial_problem.SpatialProblem`.
         :raises ValueError: If the solver's input data are not instances of
-            :class:`~pina._src.core.tensor.label_tensor.LabelTensor`.
+            labeled tensors, as indicated by ``use_lt=False``. Actual data
+            tensors are checked later by the differential operator.
         :raises ValueError: If any of the specified ``regularized_conditions``
             are not present in the ``problem``'s conditions.
         """
@@ -83,13 +84,14 @@ class GradientEnhancedMixin:
 
     def _prepare_condition_data(self, data):
         """
-        Prepare the condition data for loss computation. This method can be
-        overridden by mixins to implement specific data preparation steps, such
-        as enabling gradient tracking for inputs in gradient-enhanced solvers.
+        Enable gradient tracking on an input tensor in place when needed.
 
-        :param dict data: The original condition data.
-        :return: The prepared condition data.
-        :rtype: dict
+        :param dict[str, Any] data: The original condition payload, optionally
+            containing an ``"input"`` tensor. Applies to every condition, not
+            only selected regularization conditions.
+        :raises RuntimeError: If the input dtype cannot require gradients.
+        :return: The same dictionary, with its input tensor possibly changed.
+        :rtype: dict[str, Any]
         """
         # If data does not require grad, force requires_grad to True
         if "input" in data and not data["input"].requires_grad:
@@ -105,18 +107,27 @@ class GradientEnhancedMixin:
         batch_idx,
     ):
         """
-        Regularize the condition loss if needed. This method can be overridden
-        by mixins to implement specific regularization strategies, such as
-        adding a gradient penalty in gradient-enhanced solvers or applying
-        residual-based attention.
+        Add residual-gradient loss for selected conditions.
+
+        Replaces residual labels with ``"res_i"`` names before differentiation
+        in the problem's spatial coordinates, then applies the same loss module
+        against zero to the gradient tensor.
 
         :param condition_tensor_loss: The original tensor loss for the
             condition.
         :type condition_tensor_loss: torch.Tensor | LabelTensor
-        :param str condition_name: The name of the condition.
-        :param dict data: The data corresponding to the condition.
-        :param int batch_idx: The index of the current batch.
-        :return: The regularized tensor loss for the condition.
+        :param condition_name: The condition name; ``None`` is not selected.
+        :type condition_name: str | None
+        :param dict[str, Any] data: The condition payload with labeled input.
+        :param int batch_idx: The batch index, unused by this hook.
+        :raises KeyError: If selected data lacks ``"input"``.
+        :raises RuntimeError: If differentiation or addition of differently
+            shaped base/gradient losses fails.
+        :raises TypeError: If a residual/input is not labeled or an unused
+            autograd gradient cannot be indexed.
+        :return: The original loss plus ``regularization_weight`` times gradient
+            loss, or the original tensor for an unselected condition. Loss
+            shapes must be compatible for broadcasting.
         :rtype: torch.Tensor | LabelTensor
         """
         # Regularize the loss with the gradient penalty if needed

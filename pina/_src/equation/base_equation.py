@@ -11,8 +11,8 @@ class BaseEquation(metaclass=ABCMeta):
     Equations are fundamental components in PINA, representing mathematical
     constraints that must be satisfied by the model outputs. They can be passed
     to
-    :class:`~pina.condition.domain_equation_condition.DomainEquationCondition`
-    or :class:`~pina.condition.input_equation_condition.InputEquationCondition`
+    :class:`~pina.condition.DomainEquationCondition`
+    or :class:`~pina.condition.InputEquationCondition`
     objects to define the conditions under which the model is trained.
 
     All specific equation types should inherit from this class and implement its
@@ -26,24 +26,31 @@ class BaseEquation(metaclass=ABCMeta):
         """
         Evaluate the equation residual at the given inputs.
 
-        :param LabelTensor input_: The input points where the residual is
-            computed.
-        :param LabelTensor output_: The output tensor, potentially produced by a
-            :class:`torch.nn.Module` instance.
-        :param dict params_: An optional dictionary of unknown parameters, used
-            in :class:`~pina.problem.inverse_problem.InverseProblem` settings.
-            If the equation is not related to an inverse problem, this should be
-            set to ``None``. Default is ``None``.
-        :return: The residual values of the equation.
-        :rtype: LabelTensor
+        :param LabelTensor input_: Labeled input points, normally of shape
+            ``(n, n_inputs)``. Differential equations require gradient tracking.
+        :param LabelTensor output_: Labeled predictions, normally of shape
+            ``(n, n_outputs)``, connected to ``input_`` when differentiated.
+        :param params_: The named unknown parameters for an
+            :class:`~pina.problem.InverseProblem`, or ``None`` when unused.
+            This abstract method has no default argument.
+        :type params_: dict[str, torch.nn.Parameter] | None
+        :return: The residual tensor. Its shape and labels depend on the
+            concrete equation and any reduction.
+        :rtype: torch.Tensor | LabelTensor
         """
 
     def to(self, device):
         """
-        Move all tensor attributes to the specified device.
+        Move directly stored tensors to a device, modifying this equation.
 
-        :param torch.device device: The target device to move the tensors to.
-        :return: The instance moved to the specified device.
+        Tensor attributes and tensors immediately inside list/dictionary
+        attributes are moved. Those containers are replaced; nested containers,
+        tuples, constituent equation objects, and callable closures are not
+        traversed.
+
+        :param device: The target device accepted by :meth:`torch.Tensor.to`.
+        :type device: torch.device | str | int
+        :return: This same equation instance after moving supported attributes.
         :rtype: BaseEquation
         """
         # Iterate over all attributes of the Equation

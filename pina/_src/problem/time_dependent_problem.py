@@ -19,6 +19,7 @@ class TimeDependentProblem(BaseProblem):
         >>> from pina.problem import TimeDependentProblem
         >>> from pina.domain import CartesianDomain
         >>> class MyTimeProblem(TimeDependentProblem):
+        ...     output_variables = ["u"]
         ...     @property
         ...     def temporal_domain(self):
         ...         return CartesianDomain({"t": [0.0, 1.0]})
@@ -34,6 +35,9 @@ class TimeDependentProblem(BaseProblem):
     def temporal_domain(self):
         """
         The domain of temporal variables of the problem.
+
+        :return: The geometry providing the temporal coordinate names.
+        :rtype: pina.domain.DomainInterface
         """
 
     @property

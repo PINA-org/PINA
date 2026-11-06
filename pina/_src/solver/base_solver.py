@@ -20,7 +20,7 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
     Base class for all solvers, implementing common functionality.
 
     All solvers must inherit from this class and implement abstract methods
-    defined in :class:`~pina.solver.solver_interface.SolverInterface`.
+    defined in :class:`~pina.solver.SolverInterface`.
 
     This class is not meant to be instantiated directly."""
 
@@ -36,11 +36,14 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         Initialization of the :class:`BaseSolver` class.
 
         :param BaseProblem problem: The problem to be solved.
-        :param bool use_lt: If ``True``, the solver uses LabelTensors as input.
+        :param bool use_lt: Whether to wrap the forward callable with input
+            selection in problem-variable order and output label assignment.
+            Requires extract-compatible inputs and declared variable names;
+            PINA graphs can extract from a labeled ``x`` attribute in place.
             Default is ``True``.
         :raises ValueError: If ``use_lt`` is not a boolean.
         :raises ValueError: If ``problem`` is not an instance of
-            :class:`~pina.problem.base_problem.BaseProblem`.
+            :class:`~pina.problem.BaseProblem`.
         :raises ValueError: If one or more problem conditions are not supported
             by the solver.
         """
@@ -80,6 +83,10 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         """
         Reset the internal solver state, clearing the stored problem, models,
         optimizers and schedulers.
+
+        Sets only these four component attributes to ``None``. It does not
+        reinitialize Lightning, remove a forward wrapper, or clear weighting,
+        residuals, inverse parameters, or other subclass state.
         """
         self._pina_problem = None
         self._pina_models = None
@@ -91,6 +98,11 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         Clamp the unknown parameters of an inverse problem. Each unknown
         parameter is constrained to lie within the corresponding bounds defined
         by the inverse problem parameter domain.
+
+        Mutates parameter ``data`` in place without recording an autograd
+        operation. Condition aggregation invokes this after residual evaluation.
+
+        :raises KeyError: If a parameter has no matching ranged bounds.
         """
         for v in self._params:
             self._params[v].data.clamp_(
@@ -102,16 +114,23 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         """
         Initialize the weighting strategy and loss function.
 
-        :param BaseWeighting weighting: The weighting strategy used to combine
-            condition losses. If ``None``, no weighting is applied. Default is
+        :param weighting: The strategy combining condition losses. ``None``
+            installs unit weights and sum aggregation. Default is
             ``None``.
+        :type weighting: pina.weighting.BaseWeighting | None
         :param loss: The loss function used to compute residual losses.
             If ``None``, :class:`torch.nn.MSELoss` is used. Default is ``None``.
-        :type loss: torch.nn.Module | BaseDualLoss
+        :type loss: torch.nn.modules.loss._Loss | pina.loss.BaseDualLoss | None
         :raises ValueError: If ``weighting`` is not an instance of
-            :class:`~pina.weighting.base_weighting.BaseWeighting`.
+            :class:`~pina.weighting.BaseWeighting`.
         :raises ValueError: If ``loss`` is not a valid PyTorch loss or
-            :class:`~pina.loss.base_dual_loss.BaseDualLoss`.
+            :class:`~pina.loss.BaseDualLoss`.
+
+        .. note::
+
+            Attaches the strategy to this solver. Saves the loss's reduction
+            setting, then changes the supplied loss object's ``reduction`` to
+            ``"none"`` so solver reduction happens after regularization.
         """
         # If no weighting schema is provided, use a default no-weighting schema
         if weighting is None:
@@ -143,27 +162,38 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         Initialize the solver models, optimizers and schedulers.
 
         :param models: The model or list of models used by the solver.
-        :type models: torch.nn.Module | list[torch.nn.Module]
+        :type models: torch.nn.Module | list[torch.nn.Module] |
+            tuple[torch.nn.Module, ...]
         :param optimizers: The optimizer or list of optimizers used by the
             solver. If ``None``, the ``torch.optim.Adam`` optimizer with a
             learning rate of ``0.001`` is used for each model.
             Default is ``None``.
-        :type optimizers: TorchOptimizer | list[TorchOptimizer]
+        :type optimizers: pina.optim.TorchOptimizer |
+            list[pina.optim.TorchOptimizer] |
+            tuple[pina.optim.TorchOptimizer, ...] | None
         :param schedulers: The scheduler or list of schedulers used by the
             solver. If ``None``, the ``torch.optim.lr_scheduler.ConstantLR``
             scheduler with a factor of ``1.0`` is used for each model.
             Default is ``None``.
-        :type schedulers: TorchScheduler | list[TorchScheduler]
+        :type schedulers: pina.optim.TorchScheduler |
+            list[pina.optim.TorchScheduler] |
+            tuple[pina.optim.TorchScheduler, ...] | None
         :raises ValueError: If ``models`` are not instances of
             :class:`torch.nn.Module`.
         :raises ValueError: If ``optimizers`` are not instances of
-            :class:`~pina.optim.torch_optimizer.TorchOptimizer`.
+            :class:`~pina.optim.TorchOptimizer`.
         :raises ValueError: If ``schedulers`` are not instances of
-            :class:`~pina.optim.torch_scheduler.TorchScheduler`.
+            :class:`~pina.optim.TorchScheduler`.
         :raises ValueError: If the number of optimizers does not match that of
             models.
         :raises ValueError: If the number of schedulers does not match that of
             models.
+
+        .. note::
+
+            Registers models in a module list and stores optimizer/scheduler
+            wrappers without calling their hooks. A single wrapper is not
+            broadcast across multiple models; counts must match exactly.
         """
 
         # Helper function to map single items to lists if needed
@@ -218,8 +248,9 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         """
         Solver training step.
 
-        :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and a dictionary of points.
+        :param batch: The condition-name/data pairs supplied by the data module.
+        :type batch: list[tuple[str, dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data]]
         :param int batch_idx: The index of the current batch.
         :return: The loss of the training step.
         :rtype: torch.Tensor
@@ -236,10 +267,11 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         """
         Solver validation step.
 
-        :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and a dictionary of points.
+        :param batch: The condition-name/data pairs supplied by the data module.
+        :type batch: list[tuple[str, dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data]]
         :param int batch_idx: The index of the current batch.
-        :return: The loss of the training step.
+        :return: The loss of the validation step, also logged as ``"val_loss"``.
         :rtype: torch.Tensor
         """
         loss = self.batch_evaluation_step(batch=batch, batch_idx=batch_idx)
@@ -254,10 +286,11 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         """
         Solver test step.
 
-        :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and a dictionary of points.
+        :param batch: The condition-name/data pairs supplied by the data module.
+        :type batch: list[tuple[str, dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data]]
         :param int batch_idx: The index of the current batch.
-        :return: The loss of the training step.
+        :return: The loss of the test step, also logged as ``"test_loss"``.
         :rtype: torch.Tensor
         """
         loss = self.batch_evaluation_step(batch=batch, batch_idx=batch_idx)
@@ -273,11 +306,14 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         """
         Compute the scalar loss for a given condition and its data.
 
-        :param BaseCondition condition: The condition for which to compute the
+        :param pina.condition.BaseCondition condition: The condition computing
             loss.
-        :param dict data: The data corresponding to the condition.
+        :param data: The materialized payload accepted by the condition.
+        :type data: dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data
         :param int batch_idx: The index of the current batch.
-        :return: The scalar loss for the condition.
+        :return: The residual-versus-zero loss after regularization and saved
+            reduction. ``"none"`` leaves a tensor rather than forcing a scalar.
         :rtype: torch.Tensor
         """
         logger.debug("Condition data before preparation: %s", data)
@@ -313,9 +349,11 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         overridden by mixins to implement specific data preparation steps, such
         as enabling gradient tracking for inputs in gradient-enhanced solvers.
 
-        :param dict data: The original condition data.
-        :return: The prepared condition data.
-        :rtype: dict
+        :param data: The original condition payload.
+        :type data: dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data
+        :return: The same payload, unchanged in this base implementation.
+        :rtype: dict[str, Any] | pina.graph.Graph | torch_geometric.data.Data
         """
         return data
 
@@ -335,10 +373,13 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         :param condition_tensor_loss: The original tensor loss for the
             condition.
         :type condition_tensor_loss: torch.Tensor | LabelTensor
-        :param str condition_name: The name of the condition.
-        :param dict data: The data corresponding to the condition.
+        :param condition_name: The condition name, or ``None`` if unavailable.
+        :type condition_name: str | None
+        :param data: The materialized condition payload, unused here.
+        :type data: dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data
         :param int batch_idx: The index of the current batch.
-        :return: The regularized tensor loss for the condition.
+        :return: The original tensor loss, unchanged by this base hook.
         :rtype: torch.Tensor | LabelTensor
         """
         return condition_tensor_loss
@@ -347,7 +388,9 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         """
         Compute the tensor loss from the residual tensor.
 
-        :param str condition_name: The name of the condition.
+        :param condition_name: The condition name, unused by the base hook.
+            ``None`` is also ignored. Default is ``None``.
+        :type condition_name: str | None
         :return: The tensor loss computed from the residual tensor.
         :rtype: torch.Tensor | LabelTensor
         """
@@ -362,7 +405,10 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
 
         :param value: The loss tensor to reduce.
         :type value: torch.Tensor | LabelTensor
-        :return: The reduced loss.
+        :raises ValueError: If the saved reduction is not ``"none"``,
+            ``"mean"``, or ``"sum"``.
+        :return: The original tensor for ``"none"``; otherwise a scalar mean
+            or sum over all entries, without retained dimensions.
         :rtype: torch.Tensor | LabelTensor
         """
         # Get the reduction function based on the specified reduction type
@@ -382,9 +428,11 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         """
         Get the batch size.
 
-        :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and the corresponding data.
-        :return: The size of the batch.
+        :param batch: The condition-name/data pairs supplied by the data module.
+        :type batch: list[tuple[str, dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data]]
+        :return: The sum of input lengths, or node counts for graph inputs.
+            Dictionary payloads with missing or ``None`` input are skipped.
         :rtype: int
         """
         batch_size = 0
@@ -403,15 +451,15 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         """
         The problem instance.
 
-        :return: The problem instance.
-        :rtype: :class:`~pina.problem.base_problem.BaseProblem`
+        :return: The problem instance, or ``None`` after ``reset``.
+        :rtype: pina.problem.BaseProblem | None
         """
         return self._pina_problem
 
     @property
     def use_lt(self):
         """
-        Using LabelTensors as input during training.
+        Whether the solver wraps forward with labeled input/output handling.
 
         :return: The use_lt attribute.
         :rtype: bool
@@ -424,7 +472,7 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         The weighting schema used by the solver.
 
         :return: The weighting schema used by the solver.
-        :rtype: :class:`~pina.weighting.base_weighting.BaseWeighting`
+        :rtype: pina.weighting.BaseWeighting
         """
         return self._pina_weighting
 
@@ -433,7 +481,8 @@ class BaseSolver(SolverInterface, metaclass=ABCMeta):
         """
         The element-wise loss module used by the solver.
 
-        :return: The element-wise loss module used by the solver.
-        :rtype: torch.nn.Module
+        :return: The supplied loss module, whose reduction is set to ``"none"``
+            during initialization when it exposes a reduction attribute.
+        :rtype: torch.nn.modules.loss._Loss | pina.loss.BaseDualLoss
         """
         return self._loss_fn

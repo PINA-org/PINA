@@ -11,50 +11,64 @@ def enforce_types(func):
 
     This decorator checks the types of the arguments and of the return value of
     the decorated function against the type hints specified in the function
-    signature. If the types do not match, a TypeError is raised.
-    Type checking is only performed when the logging level is set to `DEBUG`.
+    signature using :func:`isinstance`. Checking is performed at call time only
+    when the root logger's effective level has the name ``"DEBUG"``. At other
+    levels, arguments and results are passed through without annotation checks.
+
+    Default argument values are checked after signature binding. Each bound
+    argument is checked as a whole; container elements and individual variadic
+    arguments are not checked recursively. Annotations must be supported by
+    ``isinstance``. Parameterized generics such as ``list[int]`` and
+    ``typing.Any`` are not supported.
 
     :param Callable func: The function to be decorated.
-    :return: The decorated function with enforced type hints.
+    :return: The wrapper, which returns the original function's result and
+        raises on type mismatches while debug checking is active. Function
+        metadata and the original signature are not copied onto the wrapper.
     :rtype: Callable
 
     :Example:
 
-    >>> @enforce_types
-        def dummy_function(a: int, b: float) -> float:
-        ... return a+b
+        >>> import logging
+        >>> from pina.type_checker import enforce_types
+        >>> @enforce_types
+        ... def add(a: int, b: float) -> float:
+        ...     return a + b
+        >>> root = logging.getLogger()
+        >>> previous_level = root.level
+        >>> root.setLevel(logging.DEBUG)
+        >>> try:
+        ...     print(add(1, 2.0))
+        ...     add(1, 2)
+        ... except TypeError:
+        ...     print("Type mismatch")
+        ... finally:
+        ...     root.setLevel(previous_level)
+        3.0
+        Type mismatch
 
-        # This always works.
-        dummy_function(1, 2.0)
+    .. warning::
 
-        # This raises a TypeError for the second argument, if logging is set to
-        # `DEBUG`.
-        dummy_function(1, "Hello, world!")
-
-
-    >>> @enforce_types
-        def dummy_function2(a: int, right: bool) -> float:
-        ... if right:
-        ...     return float(a)
-        ... else:
-        ...     return "Hello, world!"
-
-        # This always works.
-        dummy_function2(1, right=True)
-
-        # This raises a TypeError for the return value if logging is set to
-        # `DEBUG`.
-        dummy_function2(1, right=False)
+        Mismatch reporting accesses the annotation's ``__name__``. Some
+        annotations, including PEP 604 unions, lack this attribute and raise
+        :class:`AttributeError` instead of the intended :class:`TypeError`.
     """
 
     def wrapper(*args, **kwargs):
         """
         Wrapper function to enforce type hints.
 
-        :param tuple args: Positional arguments passed to the function.
-        :param dict kwargs: Keyword arguments passed to the function.
-        :raises TypeError: If the argument or return type does not match the
-            specified type hints.
+        :param tuple[Any, ...] args: Positional arguments passed to the original
+            function and bound against its signature in debug mode.
+        :param dict[str, Any] kwargs: Keyword arguments passed to the original
+            function and bound against its signature in debug mode.
+        :raises TypeError: If signature binding fails, a supported annotation
+            does not match an argument or return value in debug mode, or an
+            annotation cannot be used with :func:`isinstance`.
+        :raises NameError: If debug-mode type-hint resolution encounters an
+            unresolved forward reference.
+        :raises AttributeError: If debug-mode mismatch reporting accesses an
+            annotation without ``__name__``.
         :return: The result of the decorated function.
         :rtype: Any
         """

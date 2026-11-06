@@ -27,10 +27,12 @@ class TorchScheduler(SchedulerInterface):
         """
         Initialization of the :class:`TorchScheduler` class.
 
-        :param torch.optim.LRScheduler scheduler_class: The subclass of
-            ``torch.optim.lr_scheduler.LRScheduler`` to be instantiated.
-        :param dict kwargs: Additional keyword arguments forwarded to the
-            scheduler constructor. See more
+        :param type[torch.optim.lr_scheduler.LRScheduler] scheduler_class: The
+            scheduler class, not an initialized instance.
+        :param dict[str, Any] kwargs: Options forwarded unchanged to that
+            class's constructor during ``hook``, such as ``step_size`` and
+            ``gamma`` for :class:`torch.optim.lr_scheduler.StepLR`. Do not
+            include ``optimizer``; it is supplied by the hook. See more
             `here <https://pytorch.org/docs/stable/optim.html#algorithms>`_.
         :raises ValueError: If ``scheduler_class`` is not a subclass of
             ``torch.optim.lr_scheduler.LRScheduler``.
@@ -45,12 +47,18 @@ class TorchScheduler(SchedulerInterface):
 
     def hook(self, optimizer):
         """
-        Initialize the scheduler instance with the given parameters.
+        Construct and store a scheduler using the optimizer wrapper's instance.
 
-        :param OptimizerInterface optimizer: The optimizer instance associated
-            with the scheduler.
+        Repeated calls replace the stored scheduler. The optimizer must already
+        have been initialized through its hook.
+
+        :param OptimizerInterface optimizer: The PINA wrapper providing an
+            initialized :class:`torch.optim.Optimizer` through ``instance``.
         :raises ValueError: If ``optimizer`` is not an instance of
-            :class:`OptimizerInterface`.
+             :class:`OptimizerInterface`.
+        :raises TypeError: If the scheduler rejects an uninitialized optimizer
+            or its constructor options.
+        :raises ValueError: If the scheduler rejects an option value.
         """
         # Check consistency
         check_consistency(optimizer, OptimizerInterface)
@@ -65,7 +73,7 @@ class TorchScheduler(SchedulerInterface):
         """
         The underlying scheduler object.
 
-        :return: The scheduler instance.
-        :rtype: torch.optim.lr_scheduler.LRScheduler
+        :return: The stored scheduler, or ``None`` until ``hook`` succeeds.
+        :rtype: torch.optim.lr_scheduler.LRScheduler | None
         """
         return self._scheduler_instance

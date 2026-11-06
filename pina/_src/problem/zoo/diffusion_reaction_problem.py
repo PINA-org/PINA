@@ -19,9 +19,11 @@ def initial_condition(input_, output_):
     """
     Definition of the initial condition of the diffusion-reaction problem.
 
-    :param LabelTensor input_: The input data of the problem.
-    :param LabelTensor output_: The output data of the problem.
-    :return: The residual of the initial condition.
+    :param LabelTensor input_: Points of shape ``(n, d)`` including ``"x"``.
+    :param LabelTensor output_: Predictions of shape ``(n, 1)``.
+    :raises ValueError: If the spatial label is missing.
+    :return: Predictions minus the prescribed sum of five sine modes, normally
+        of shape ``(n, 1)``.
     :rtype: LabelTensor
     """
     x = input_.extract("x")
@@ -103,6 +105,7 @@ class DiffusionReactionProblem(TimeDependentProblem, SpatialProblem):
 
     :Example:
 
+        >>> from pina.problem.zoo import DiffusionReactionProblem
         >>> problem = DiffusionReactionProblem()
     """
 
@@ -127,10 +130,11 @@ class DiffusionReactionProblem(TimeDependentProblem, SpatialProblem):
 
     def __init__(self, alpha=1e-4):
         """
-        Initialization of the :class:`DiffusionReactionProblem`.
+        Initialization of the :class:`DiffusionReactionProblem` class.
 
         :param alpha: The diffusion coefficient. Default is ``1e-4``.
         :type alpha: float | int
+        :raises ValueError: If numeric validation rejects ``alpha``.
         """
         super().__init__()
         check_consistency(alpha, (float, int))
@@ -139,6 +143,13 @@ class DiffusionReactionProblem(TimeDependentProblem, SpatialProblem):
         def forcing_term(input_):
             """
             Implementation of the forcing term.
+
+            :param LabelTensor input_: Points of shape ``(n, 2)`` with spatial
+                label ``"x"`` and time label ``"t"``.
+            :raises ValueError: If a required coordinate label is missing.
+            :return: The forcing matching the exponentially decaying sine-mode
+                solution, with shape ``(n, 1)``.
+            :rtype: LabelTensor
             """
             # Extract spatial and temporal variables
             spatial_d = [di for di in input_.labels if di != "t"]
@@ -163,8 +174,11 @@ class DiffusionReactionProblem(TimeDependentProblem, SpatialProblem):
         Implementation of the analytical solution of the diffusion-reaction
         problem.
 
-        :param LabelTensor pts: Points where the solution is evaluated.
-        :return: The analytical solution of the diffusion-reaction problem.
+        :param LabelTensor pts: Points of shape ``(n, 2)`` labeled ``"x"`` and
+            ``"t"``, in either column order.
+        :raises ValueError: If a required coordinate label is missing.
+        :return: The exponentially decaying sine-mode solution of shape
+            ``(n, 1)``, labeled ``"u"``.
         :rtype: LabelTensor
         """
         t = pts.extract("t")

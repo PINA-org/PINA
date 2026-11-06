@@ -29,9 +29,14 @@ class MultiFeedForward(torch.nn.Module, ABC):
         """
         Initialization of the :class:`MultiFeedForward` class.
 
-        :param dict ffn_dict: A dictionary containing the Feed Forward neural
-            networks to be combined.
+        :param dict[str, dict[str, Any]] ffn_dict: Attribute names mapped to
+            keyword arguments for :class:`pina.model.FeedForward`, including
+            ``input_dimensions``, ``output_dimensions``, and optional hidden
+            widths, activation classes, and bias settings. Each network is
+            constructed and registered under its supplied name.
         :raises TypeError: If the input is not a dictionary.
+        :raises ValueError: If an inner network rejects its dimensions.
+        :raises RuntimeError: If inner layer/activation counts do not match.
         """
         super().__init__()
 
@@ -48,4 +53,7 @@ class MultiFeedForward(torch.nn.Module, ABC):
 
         The user is required to define this method to choose how to combine the
         networks.
+
+        :param tuple[Any, ...] args: Positional inputs defined by the subclass.
+        :param dict[str, Any] kwargs: Keyword inputs defined by the subclass.
         """

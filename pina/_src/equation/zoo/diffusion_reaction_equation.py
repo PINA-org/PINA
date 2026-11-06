@@ -20,8 +20,10 @@ class DiffusionReactionEquation(Equation):
 
     :Example:
 
-        >>> from pina.equation import DiffusionReactionEquation
-        >>> eq = DiffusionReactionEquation(alpha=1.0, forcing_term=lambda x: x**2)
+        >>> from pina.equation.zoo import DiffusionReactionEquation
+        >>> eq = DiffusionReactionEquation(
+        ...     alpha=1.0, forcing_term=lambda x: x.extract("x") ** 2
+        ... )
         >>> # Use within a DomainEquationCondition:
         >>> # condition = DomainEquationCondition(domain=domain, equation=eq)
     """
@@ -33,7 +35,10 @@ class DiffusionReactionEquation(Equation):
         :param alpha: The diffusion coefficient.
         :type alpha: float | int
         :param Callable forcing_term: The forcing field function, taking as
-            input the points on which evaluation is required.
+            input the full labeled points, including time. Its numeric or
+            tensor result must broadcast with the residual, normally ``(n, m)``.
+        :raises ValueError: If ``alpha`` is not numeric or ``forcing_term`` is
+            not a callable instance.
         """
         check_consistency(alpha, (float, int))
         check_consistency(forcing_term, (Callable))
@@ -44,12 +49,20 @@ class DiffusionReactionEquation(Equation):
             """
             Implementation of the Diffusion-Reaction equation.
 
-            :param LabelTensor input_: The input data of the problem.
-            :param LabelTensor output_: The output data of the problem.
-            :return: The residual of the Diffusion-Reaction equation.
-            :rtype: LabelTensor
+            :param LabelTensor input_: Points of shape ``(n, d + 1)`` with
+                gradient tracking and time label ``"t"``. Every other label
+                is treated as a spatial coordinate.
+            :param LabelTensor output_: Predictions of shape ``(n, m)``, with
+                an autograd connection supporting second derivatives.
             :raises ValueError: If the ``input_`` labels do not contain the time
-                variable 't'.
+                variable ``"t"``.
+            :raises TypeError: If arguments are not labeled tensors or an
+                unused gradient cannot be indexed.
+            :raises RuntimeError: If differentiation or forcing broadcasting
+                fails.
+            :return: Time derivative minus diffusion and forcing, normally of
+                shape ``(n, m)``.
+            :rtype: LabelTensor
             """
             # Ensure time is passed as input
             if "t" not in input_.labels:

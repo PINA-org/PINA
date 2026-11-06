@@ -15,7 +15,7 @@ def _check_time_series_params(data, n_windows, unroll_length, randomize):
     :param data: The temporal data, of shape
         ``[trajectories, time_steps, *features]``.
     :type data: torch.Tensor | LabelTensor
-    :param int n_windows: The maximum number of temporal windows to extract.
+    :param int n_windows: The strictly positive number of windows to extract.
     :param int unroll_length: The number of time steps in each window.
     :param bool randomize: If ``True``, randomly permute the valid starting
         indices before selecting the windows.
@@ -55,13 +55,18 @@ def _unroll_windows(data, n_windows, unroll_length, randomize):
 
     :param data: The temporal data tensor to be unrolled.
     :type data: torch.Tensor | LabelTensor
-    :param int n_windows: The maximum number of temporal windows to extract.
+    :param int n_windows: The number of windows to extract per trajectory.
     :param int unroll_length: The number of time steps in each window.
     :param bool randomize: If ``True``, starting indices are randomly
-        permuted before applying ``n_windows``. Default is ``False``.
+        permuted before selecting ``n_windows``. The same starting indices are
+        used for all trajectories.
     :raises ValueError: If ``unroll_length`` is greater than the number of
         time steps in the data.
-    :return: A tensor of unrolled windows.
+    :raises ValueError: If fewer than ``n_windows`` valid starting indices are
+        available.
+    :return: The unrolled windows with shape
+        ``[trajectories, n_windows, unroll_length, *features]``. LabelTensor
+        labels are preserved.
     :rtype: torch.Tensor | LabelTensor
     """
     # Store the number of time steps in the data
@@ -117,11 +122,14 @@ class TimeSeriesCondition(TensorCondition):
     to have shape ``[trajectories, time_steps, *features]``, where the second
     dimension corresponds to the temporal evolution of each trajectory.
 
-    During training, the condition automatically extracts overlapping temporal
-    windows from the trajectories. The parameter ``unroll_length`` defines the
-    number of consecutive time steps contained in each temporal window, while
+    The constructor and each :meth:`store_data` call extract overlapping
+    temporal windows from the original trajectories. The parameter
+    ``unroll_length`` defines the number of consecutive time steps in each
+    temporal window, while
     ``n_windows`` controls how many temporal windows are created from the
-    available trajectories.
+    available trajectories. Exactly ``n_windows`` are selected per trajectory;
+    requesting more than the number of valid starting indices raises an error.
+    When ``randomize`` is ``False``, the earliest valid windows are selected.
 
     Internally, the unrolled data is stored as a tensor of shape
     ``[trajectories, n_windows, unroll_length, *features]``.
@@ -131,14 +139,13 @@ class TimeSeriesCondition(TensorCondition):
 
     :Example:
 
-    >>> from pina import LabelTensor
-    >>> from pina.condition import TimeSeriesCondition
-    >>> import torch
-
-    >>> data = LabelTensor(torch.rand(5, 10, 2), labels=["u", "v"])
-    >>> condition = TimeSeriesCondition(
-    ...     input=data, unroll_length=5, n_windows=3
-    ... )
+        >>> from pina import LabelTensor
+        >>> from pina.condition import TimeSeriesCondition
+        >>> import torch
+        >>> data = LabelTensor(torch.rand(5, 10, 2), labels=["u", "v"])
+        >>> condition = TimeSeriesCondition(
+        ...     input=data, unroll_length=5, n_windows=3
+        ... )
     """
 
     # Available fields and input data types
@@ -147,12 +154,17 @@ class TimeSeriesCondition(TensorCondition):
 
     def __init__(self, input, n_windows, unroll_length, randomize=False):
         """
-        Validate the input data and time-series parameters.
+        Initialization of the :class:`TimeSeriesCondition` class.
 
-        :param input: The temporal input data.
+        :param input: The temporal input data with shape
+            ``[trajectories, time_steps, *features]``. The original data is
+            retained for subsequent window generation.
         :type input: torch.Tensor | LabelTensor
-        :param int n_windows: The maximum number of temporal windows to extract.
-        :param int unroll_length: The number of time steps in each window.
+        :param int n_windows: The strictly positive number of windows to extract
+            per trajectory. At least this many valid starting indices must
+            exist.
+        :param int unroll_length: The number of time steps in each window. Must
+            be at least ``2`` and no greater than the available time steps.
         :param bool randomize: If ``True``, randomly permute the valid starting
             indices before selecting the windows. Default is ``False``.
         :raises ValueError: If ``input`` is not of type
@@ -162,6 +174,8 @@ class TimeSeriesCondition(TensorCondition):
         :raises ValueError: If ``randomize`` is not a boolean value.
         :raises ValueError: If ``input`` has fewer than three dimensions.
         :raises ValueError: If ``unroll_length`` is lower than 2.
+        :raises ValueError: If ``unroll_length`` exceeds the available time
+            steps, or fewer than ``n_windows`` valid windows are available.
         """
         check_consistency(input, self._avail_input_cls)
         _check_time_series_params(
@@ -190,11 +204,36 @@ class TimeSeriesCondition(TensorCondition):
         Parameters passed through ``kwargs`` override the values provided to
         the constructor.
 
-        :param int batch_size: Number of trajectories per batch. If ``None``,
-            all trajectories are stored as a single batch.
-        :param dict kwargs: Optional unrolling parameters.
-        :return: The stored batches.
-        :rtype: list[dict]
+        New window settings replace the stored settings for subsequent calls.
+        With randomization enabled, windows are selected again on each call.
+        Existing batches are replaced.
+
+        :param batch_size: The number of trajectories per batch. ``None`` or
+            ``0`` stores all trajectories in one batch. A negative value
+            produces no batches. Default is ``None``.
+        :type batch_size: int | None
+        :param dict[str, int | bool] kwargs: Optional unrolling settings:
+
+            * ``n_windows`` (int): The strictly positive number of windows per
+              trajectory. Default is the currently stored value.
+            * ``unroll_length`` (int): The number of steps per window, at least
+              ``2``. Default is the currently stored value.
+            * ``randomize`` (bool): Whether to permute valid starting indices
+              before selecting windows. Default is the currently stored value.
+
+            Other keyword arguments are ignored.
+        :raises AssertionError: If ``n_windows`` or ``unroll_length`` is not a
+            positive integer.
+        :raises ValueError: If ``randomize`` is not a boolean, the original data
+            has fewer than three dimensions, ``unroll_length`` is less than two
+            or exceeds the available steps, or too few valid windows exist.
+        :raises TypeError: If a truthy ``batch_size`` is not an integer accepted
+            by :func:`range`.
+        :return: The stored batch dictionaries, also assigned to ``self.data``.
+            Each ``"input"`` has shape
+            ``[batch_trajectories, n_windows, unroll_length, *features]``; the
+            other fields contain the current temporal settings.
+        :rtype: list[dict[str, Any]]
         """
         n_windows = kwargs.get("n_windows", self._n_windows)
         unroll_length = kwargs.get("unroll_length", self._unroll_length)
@@ -222,7 +261,9 @@ class TimeSeriesCondition(TensorCondition):
         """
         Return the unrolled time-series data carried by the given batch.
 
-        :param dict batch: The batch to extract the time-series data from.
+        :param dict[str, Any] batch: The batch containing time-series data under
+            ``"input"``.
+        :raises KeyError: If the batch lacks ``"input"``.
         :return: The unrolled data, of shape
             ``[trajectories, n_windows, unroll_length, *features]``.
         :rtype: torch.Tensor | LabelTensor
@@ -242,16 +283,23 @@ class TimeSeriesCondition(TensorCondition):
         The returned tensor preserves all per-step residual values without
         reduction or loss aggregation.
 
-        :param dict batch: The batch containing the data required by the
-            condition evaluation.
-        :param BaseSolver solver: The solver used to perform the forward pass
-            and compute the residual. The solver provides access to the model
-            and its parameters, which may be necessary for evaluating the
-            condition residual.
+        A single copy of ``solver._kwargs`` is passed to the solver's
+        ``preprocess_step`` and ``postprocess_step`` hooks throughout the
+        rollout. Predictions, rather than stored targets, initialize later
+        steps, and the computation remains attached to the autograd graph.
+
+        :param dict[str, Any] batch: The batch containing ``"input"`` with shape
+            ``[trajectories, windows, unroll_length, *features]``.
+        :param pina.solver.BaseSolver solver: The autoregressive solver
+            providing ``preprocess_step``, ``forward``, ``postprocess_step``,
+            and the ``_kwargs`` settings used by the rollout.
+        :raises KeyError: If the batch lacks ``"input"``.
         :raises ValueError: If the unrolled data has less than 4 dimensions.
-        :return: The stacked per-step residual tensor of shape
-            ``[time_steps - 1, trajectories, windows, *features]``.
-        :rtype: torch.Tensor | LabelTensor
+        :raises RuntimeError: If prediction and target shapes are incompatible
+            for subtraction, or no prediction steps are available to stack.
+        :return: The stacked per-step residuals as a plain tensor with shape
+            ``[unroll_length - 1, trajectories, windows, *features]``.
+        :rtype: torch.Tensor
         """
         # Extract the unrolled time-series data from the batch
         series = self._get_series(batch)
@@ -295,7 +343,8 @@ class TimeSeriesCondition(TensorCondition):
         """
         The input data associated with the condition.
 
-        :return: The unrolled input data.
+        :return: The unrolled input data with shape
+            ``[trajectories, n_windows, unroll_length, *features]``.
         :rtype: torch.Tensor | LabelTensor
         """
         return _unwrap_single(self._input)

@@ -16,9 +16,11 @@ def initial_condition(input_, output_):
     """
     Definition of the initial condition of the Allen Cahn problem.
 
-    :param LabelTensor input_: The input data of the problem.
-    :param LabelTensor output_: The output data of the problem.
-    :return: The residual of the initial condition.
+    :param LabelTensor input_: Points of shape ``(n, d)`` including ``"x"``.
+    :param LabelTensor output_: Predictions of shape ``(n, 1)``.
+    :raises ValueError: If the spatial label is missing.
+    :return: Predictions minus ``x ** 2 * cos(pi * x)``, normally of shape
+        ``(n, 1)``.
     :rtype: LabelTensor
     """
     x = input_.extract("x")
@@ -46,11 +48,14 @@ class AllenCahnProblem(TimeDependentProblem, SpatialProblem):
     where :math:`u = u(x, t)` is the solution field, :math:`\alpha` is the
     diffusion coefficient, and :math:`\beta` is the reaction coefficient.
 
-    Periodic boundary conditions are imposed at the spatial boundaries:
+    The usual benchmark supplements the PDE with periodic boundary values:
 
     .. math::
 
         u(-1, t) = u(1, t), \qquad t \in [0, 1].
+
+    This class installs only the PDE and initial condition, not a periodic
+    boundary condition. Enforce periodicity separately if needed.
 
     The initial condition is prescribed as
 
@@ -70,6 +75,7 @@ class AllenCahnProblem(TimeDependentProblem, SpatialProblem):
 
     :Example:
 
+        >>> from pina.problem.zoo import AllenCahnProblem
         >>> problem = AllenCahnProblem()
     """
 
@@ -90,12 +96,13 @@ class AllenCahnProblem(TimeDependentProblem, SpatialProblem):
 
     def __init__(self, alpha=1e-4, beta=5):
         """
-        Initialization of the :class:`AllenCahnProblem`.
+        Initialization of the :class:`AllenCahnProblem` class.
 
         :param alpha: The diffusion coefficient. Default is ``1e-4``.
         :type alpha: float | int
-        :param beta: The reaction coefficient. Default is ``5.0``.
+        :param beta: The reaction coefficient. Default is ``5``.
         :type beta: float | int
+        :raises ValueError: If numeric validation rejects either coefficient.
         """
         super().__init__()
         check_consistency(alpha, (float, int))

@@ -13,6 +13,11 @@ class Graph(Data):
     Extends :class:`~torch_geometric.data.Data` class to include additional
     checks and functionalities.
 
+    Construct graphs with keyword arguments. Positions, connectivity, edge
+    attributes, and the undirected flag receive selected validation; node
+    features and arbitrary extra attributes are left to PyG. Tensor attributes
+    are stored without cloning.
+
     :Example:
 
         >>> import torch
@@ -30,11 +35,18 @@ class Graph(Data):
         **kwargs,
     ):
         """
-        Create a new instance of the :class:`~pina.graph.Graph` class by
-        checking the consistency of the input data and storing the attributes.
+        Allocate a graph after validating explicitly supplied attributes.
 
-        :param dict kwargs: Parameters used to initialize the
-            :class:`~pina.graph.Graph` object.
+        :param dict[str, Any] kwargs: Constructor attributes. ``pos`` is checked
+            for tensor type and rank when non-``None``; ``edge_index`` is
+            checked for tensor type and shape ``(2, E)`` whenever supplied.
+            Non-``None`` edge features are checked for shape ``(E, F)`` against
+            connectivity;
+            ``undirected`` is checked for boolean type. ``x`` and other keys are
+            not validated here. See :meth:`__init__` for defaults and meanings.
+        :raises ValueError: If a checked type or shape is invalid.
+        :raises AttributeError: If non-``None`` edge attributes are supplied
+            without connectivity to determine their expected length.
         :return: A new instance of the :class:`~pina.graph.Graph` class.
         :rtype: Graph
         """
@@ -57,25 +69,43 @@ class Graph(Data):
         **kwargs,
     ):
         """
-        Initialize the object by setting the node features, edge index,
-        edge attributes, and positions. The edge index is preprocessed to make
-        the graph undirected if required. For more details, see the
-        :meth:`torch_geometric.data.Data`
+        Initialization of the :class:`Graph` class.
 
-        :param x: Optional tensor of node features ``(N, F)`` where ``F`` is the
-            number of features per node.
-        :type x: torch.Tensor, LabelTensor
-        :param torch.Tensor edge_index: A tensor of shape ``(2, E)``
-            representing the indices of the graph's edges.
-        :param pos: A tensor of shape ``(N, D)`` representing the positions of
-            ``N`` points in ``D``-dimensional space.
-        :type pos: torch.Tensor | LabelTensor
-        :param edge_attr: Optional tensor of edge_featured ``(E, F')`` where
-            ``F'`` is the number of edge features
-        :type edge_attr: torch.Tensor | LabelTensor
-        :param bool undirected: Whether to make the graph undirected
-        :param dict kwargs: Additional keyword arguments passed to the
-            :class:`~torch_geometric.data.Data` class constructor.
+        :param Any x: The node features, typically a tensor or
+            :class:`pina.LabelTensor` with leading node dimension ``N``. Neither
+            their type, rank, nor agreement with ``pos`` is checked. ``None``
+            stores no node features. Default is ``None``.
+        :param edge_index: The connectivity tensor of shape ``(2, E)``, normally
+            containing integer node indices. Dtype and index bounds are not
+            checked. Omitting this keyword leaves connectivity unset; explicitly
+            supplying ``None`` fails allocation-time validation. Default is
+            ``None``.
+        :type edge_index: torch.Tensor | LabelTensor
+        :param pos: The positions of ``N`` nodes in ``D`` dimensions, with shape
+            ``(N, D)``. ``None`` leaves positions unset. Default is ``None``.
+        :type pos: torch.Tensor | LabelTensor | None
+        :param edge_attr: The edge features of shape ``(E, F)``. Non-``None``
+            values require connectivity with ``E`` columns. ``None`` leaves edge
+            features unset. Default is ``None``.
+        :type edge_attr: torch.Tensor | LabelTensor | None
+        :param bool undirected: Whether to request undirected preprocessing.
+            Its result is currently discarded, so stored connectivity is not
+            changed by this flag. Default is ``False``.
+        :param dict[str, Any] kwargs: Additional PyG attributes, such as ``y``
+            for targets or ``num_nodes`` for an explicit node count. Arbitrary
+            keys and values are forwarded to :class:`torch_geometric.data.Data`
+            without PINA validation; omitted keys are not added by PINA.
+        :raises ValueError: If allocation-time validation rejects a supplied
+            position, connectivity, edge-feature, or undirected value.
+        :raises AttributeError: If edge features are supplied without
+            connectivity.
+        :raises TypeError: If the graph is constructed with positional
+            arguments.
+
+        .. warning::
+
+            ``undirected=True`` computes a new edge index but does not store it.
+            Supply symmetric connectivity explicitly when it is required.
         """
         # preprocessing
         self._preprocess_edge_index(edge_index, undirected)
@@ -89,7 +119,14 @@ class Graph(Data):
         """
         Check the consistency of the types of the input data.
 
-        :param dict kwargs: Attributes to be checked for consistency.
+        Validate only explicitly supplied position, connectivity, edge-feature,
+        and undirected values. Node-feature validation is not invoked.
+
+        :param dict[str, Any] kwargs: The constructor attributes. Missing keys
+            are skipped; ``pos=None`` and ``edge_attr=None`` disable their
+            corresponding checks, but ``edge_index=None`` is rejected.
+        :raises ValueError: If a checked type or shape is invalid.
+        :raises AttributeError: If edge attributes require missing connectivity.
         """
         # default types, specified in cls.__new__, by default they are Nont
         # if specified in **kwargs they get override
@@ -114,8 +151,12 @@ class Graph(Data):
     def _check_pos_consistency(pos):
         """
         Check if the position tensor is consistent.
-        :param torch.Tensor pos: The position tensor.
-        :raises ValueError: If the position tensor is not consistent.
+
+        :param pos: The position tensor, expected to have shape ``(N, D)``.
+            ``None`` skips validation.
+        :type pos: torch.Tensor | LabelTensor | None
+        :raises ValueError: If ``pos`` has an unsupported type or is not
+            two-dimensional.
         """
         if pos is not None:
             check_consistency(pos, (torch.Tensor, LabelTensor))
@@ -127,8 +168,12 @@ class Graph(Data):
         """
         Check if the edge index is consistent.
 
-        :param torch.Tensor edge_index: The edge index tensor.
-        :raises ValueError: If the edge index tensor is not consistent.
+        Dtype and node-index bounds are not validated.
+
+        :param edge_index: The connectivity tensor with shape ``(2, E)``.
+        :type edge_index: torch.Tensor | LabelTensor
+        :raises ValueError: If the type is unsupported, the rank is not two,
+            or the leading dimension does not have size two.
         """
         check_consistency(edge_index, (torch.Tensor, LabelTensor))
         if edge_index.ndim != 2:
@@ -142,10 +187,16 @@ class Graph(Data):
         Check if the edge attribute tensor is consistent in type and shape
         with the edge index.
 
-        :param edge_attr: The edge attribute tensor.
-        :type edge_attr: torch.Tensor | LabelTensor
-        :param torch.Tensor edge_index: The edge index tensor.
-        :raises ValueError: If the edge attribute tensor is not consistent.
+        :param edge_attr: The edge features with shape ``(E, F)``. ``None``
+            skips validation.
+        :type edge_attr: torch.Tensor | LabelTensor | None
+        :param edge_index: The connectivity tensor of shape ``(2, E)``. ``None``
+            is usable only when edge features are also ``None``.
+        :type edge_index: torch.Tensor | LabelTensor | None
+        :raises ValueError: If edge features have an unsupported type, are not
+            two-dimensional, or their leading size differs from the edge count.
+        :raises AttributeError: If edge features are present but connectivity is
+            ``None``.
         """
         if edge_attr is not None:
             check_consistency(edge_attr, (torch.Tensor, LabelTensor))
@@ -162,14 +213,17 @@ class Graph(Data):
     @staticmethod
     def _check_x_consistency(x, pos=None):
         """
-        Check if the input tensor x is consistent with the position tensor
-        `pos`.
+        Validate two-dimensional node features and their node count.
 
-        :param x: The input tensor.
-        :type x: torch.Tensor | LabelTensor
-        :param pos: The position tensor.
-        :type pos: torch.Tensor | LabelTensor
-        :raises ValueError: If the input tensor is not consistent.
+        This helper is not called during normal graph construction.
+
+        :param x: The node-feature tensor. ``None`` skips all checks.
+        :type x: torch.Tensor | LabelTensor | None
+        :param pos: The positions used for comparing node counts. ``None``
+            disables that comparison. Default is ``None``.
+        :type pos: torch.Tensor | LabelTensor | None
+        :raises ValueError: If features have an unsupported type, are not
+            two-dimensional, or their node count differs from the positions.
         """
         if x is not None:
             check_consistency(x, (torch.Tensor, LabelTensor))
@@ -184,10 +238,14 @@ class Graph(Data):
         """
         Preprocess the edge index to make the graph undirected (if required).
 
-        :param torch.Tensor edge_index: The edge index.
-        :param bool undirected: Whether the graph is undirected.
-        :return: The preprocessed edge index.
-        :rtype: torch.Tensor
+        :param edge_index: The connectivity to process. ``None`` is returned
+            unchanged when ``undirected`` is ``False``.
+        :type edge_index: torch.Tensor | LabelTensor | None
+        :param bool undirected: Whether to call
+            :func:`torch_geometric.utils.to_undirected`.
+        :return: The symmetrized edge index when requested, otherwise the
+            original value. This helper does not update the graph itself.
+        :rtype: torch.Tensor | LabelTensor | None
         """
         if undirected:
             edge_index = to_undirected(edge_index)
@@ -195,12 +253,25 @@ class Graph(Data):
 
     def extract(self, labels, attr="x"):
         """
-        Perform extraction of labels from the attribute specified by `attr`.
+        Extract labels from one graph attribute and replace it in place.
 
-        :param labels: Labels to extract
-        :type labels: list[str] | tuple[str] | str | dict
-        :return: Batch object with extraction performed on x
-        :rtype: PinaBatch
+        Delegate to :meth:`pina.LabelTensor.extract`. Other graph attributes and
+        connectivity are left unchanged, without a consistency check.
+
+        :param labels: The requested component labels, or a mapping from stored
+            dimension names to scalar labels, label lists, or ranges.
+        :type labels: str | int | list[Hashable] | tuple[Hashable, ...] |
+            dict[Hashable, str | int | list[Hashable] | builtins.range]
+        :param str attr: The attribute containing a
+            :class:`pina.LabelTensor` to extract from. Default is ``"x"``.
+        :raises AttributeError: If the attribute is missing or does not provide
+            an ``extract`` method, or its stored labels cannot be searched.
+        :raises ValueError: If the dimension or component labels are unknown,
+            repeated, or incompatible with the extracted shape.
+        :raises KeyError: If last-dimension extraction needs missing metadata.
+        :raises IndexError: If a component selection is empty.
+        :return: This graph, with the selected attribute replaced.
+        :rtype: Graph
         """
         # Extract labels from LabelTensor object
         tensor = getattr(self, attr).extract(labels)
@@ -212,13 +283,21 @@ class Graph(Data):
         """
         Create a subgraph around a starting node.
 
-        The subgraph contains all nodes within ``num_hops`` hops from
-        ``start_node``. Node-level and edge-level :class:`LabelTensor`
-        attributes keep their labels.
+        Follow incoming edges using PyG's ``"source_to_target"`` flow to find
+        nodes within ``num_hops`` of the seed. Return the induced subgraph on
+        those nodes with consecutive local node indices. Node- and edge-level
+        :class:`LabelTensor` attributes are rewrapped using their original
+        last-dimension labels; metadata for other dimensions is not rebuilt.
+        Other attributes follow PyG's shallow-copy subgraph behavior.
 
-        :param int start_node: The node used as the center of the subgraph.
+        :param start_node: The seed node index. A tensor must hold one value
+            convertible to an integer.
+        :type start_node: int | torch.Tensor
         :param int num_hops: The number of hops around the starting node.
-            Default is ``5``.
+            Zero or negative values select only the seed node. Default is ``5``.
+        :raises TypeError: If connectivity is missing and cannot be unpacked
+            by PyG, or ``num_hops`` cannot be used as a range bound.
+        :raises IndexError: If node indices are outside the usable index range.
         :return: The subgraph centered on ``start_node``.
         :rtype: Graph
         """
@@ -246,12 +325,16 @@ class Graph(Data):
 
 class GraphBuilder:
     """
-    A class that allows an easy definition of :class:`Graph` instances.
+    Factory for :class:`Graph` instances with optional edge features.
+
+    Construction returns a :class:`Graph`, not a builder instance. Existing
+    self-loops can be removed, but are not added. The default edge features are
+    absolute coordinate differences between edge endpoints, not scalar lengths.
 
     :Example:
 
         >>> import torch
-        >>> from pina.graph import GraphBuilder
+        >>> from pina._src.core.graph import Graph, GraphBuilder
         >>> pos = torch.randn(5, 2)
         >>> edge_index = torch.tensor([[0, 1, 2, 3, 4],
         ...                            [1, 2, 3, 4, 0]])
@@ -274,22 +357,35 @@ class GraphBuilder:
         Compute the edge attributes and create a new instance of the
         :class:`~pina.graph.Graph` class.
 
-        :param pos: A tensor of shape ``(N, D)`` representing the positions of
-            ``N`` points in ``D``-dimensional space.
-        :type pos: torch.Tensor or LabelTensor
-        :param edge_index: A tensor of shape ``(2, E)`` representing the indices
-            of the graph's edges.
-        :type edge_index: torch.Tensor
-        :param x: Optional tensor of node features of shape ``(N, F)``, where
-            ``F`` is the number of features per node.
-        :type x: torch.Tensor | LabelTensor, optional
-        :param bool edge_attr: Whether to compute the edge attributes.
-        :param custom_edge_func: A custom function to compute edge attributes.
-            If provided, overrides ``edge_attr``.
-        :type custom_edge_func: Callable, optional
-        :param bool loop: Whether to include self-loops.
-        :param kwargs: Additional keyword arguments passed to the
-            :class:`~pina.graph.Graph` class constructor.
+        :param pos: The node positions of shape ``(N, D)``. ``None`` leaves
+            positions unset; default edge-feature computation requires a tensor.
+        :type pos: torch.Tensor | LabelTensor | None
+        :param torch.Tensor edge_index: The connectivity tensor of shape
+            ``(2, E)``, containing integer node indices.
+        :param Any x: The optional node features forwarded unchanged to
+            :class:`Graph`. ``None`` leaves features unset. Default is ``None``.
+        :param bool edge_attr: Whether to compute edge features. When ``False``,
+            ``custom_edge_func`` is ignored and no edge features are stored.
+            Default is ``False``.
+        :param custom_edge_func: The callable receiving ``(pos, edge_index)``
+            after loop removal and returning edge features of shape ``(E, F)``
+            or ``None``. It is used only when ``edge_attr`` is ``True``.
+            ``None`` or another falsey value selects :meth:`_build_edge_attr`,
+            which computes absolute coordinate differences. Default is ``None``.
+        :type custom_edge_func: Callable | None
+        :param bool loop: Whether to retain existing self-loops. ``False``
+            removes them before feature computation; ``True`` does not add
+            missing loops. Default is ``True``.
+        :param dict[str, Any] kwargs: Additional :class:`Graph` options.
+            ``undirected`` (bool) requests preprocessing. Default is ``False``.
+            Other options become arbitrary PyG attributes, such as ``y`` or
+            ``num_nodes``. Defaults and validation follow
+            :meth:`Graph.__init__`.
+        :raises ValueError: If ``edge_attr`` is not a boolean, an enabled custom
+            edge function is not callable, or graph attribute validation fails.
+        :raises IndexError: If feature computation indexes outside ``pos``.
+        :raises AttributeError: If computed edge features require missing
+            connectivity during graph validation.
         :return: A :class:`~pina.graph.Graph` instance constructed using the
             provided information.
         :rtype: Graph
@@ -312,14 +408,19 @@ class GraphBuilder:
         """
         Create the edge attributes based on the input parameters.
 
-        :param pos: Positions of the points.
-        :type pos: torch.Tensor | LabelTensor
-        :param torch.Tensor edge_index: Edge indices.
+        :param pos: The node positions with shape ``(N, D)``, or ``None`` when
+            computation is disabled or the custom function accepts no positions.
+        :type pos: torch.Tensor | LabelTensor | None
+        :param torch.Tensor edge_index: The edge indices with shape ``(2, E)``.
         :param bool edge_attr: Whether to compute the edge attributes.
-        :param Callable func: Function to compute the edge attributes.
-        :raises ValueError: If ``func`` is not a function.
-        :return: The edge attributes.
-        :rtype: torch.Tensor | LabelTensor | None
+        :param Any func: The object to call as ``func(pos, edge_index)`` when
+            computation is enabled; ignored otherwise.
+        :raises ValueError: If ``edge_attr`` is not a boolean or computation is
+            enabled and ``func`` is not callable.
+        :return: The callable's unchecked result when enabled, otherwise
+            ``None``. The factory subsequently validates tensor feature results
+            through the graph constructor.
+        :rtype: Any
         """
         check_consistency(edge_attr, bool)
         if edge_attr:
@@ -331,12 +432,15 @@ class GraphBuilder:
     @staticmethod
     def _build_edge_attr(pos, edge_index):
         """
-        Default function to compute the edge attributes.
+        Compute absolute coordinate differences for each directed edge.
 
-        :param pos: Positions of the points.
+        :param pos: The node positions with shape ``(N, D)``.
         :type pos: torch.Tensor | LabelTensor
-        :param torch.Tensor edge_index: Edge indices.
-        :return: The edge attributes.
+        :param torch.Tensor edge_index: The edge indices with shape ``(2, E)``.
+        :raises IndexError: If endpoint indices are out of range or invalid for
+            indexing.
+        :return: A plain tensor of shape ``(E, D)``, containing elementwise
+            absolute source-minus-target coordinates, without label metadata.
         :rtype: torch.Tensor
         """
         return (
@@ -348,14 +452,16 @@ class GraphBuilder:
 
 class RadiusGraph(GraphBuilder):
     """
-    Extends the :class:`~pina.graph.GraphBuilder` class to compute
-    ``edge_index`` based on a radius. Each point is connected to all the points
-    within the radius.
+    Extends :class:`pina._src.core.graph.GraphBuilder` to compute
+    ``edge_index`` by thresholding all pairwise Euclidean distances. Both
+    directions are included for each pair whose distance is at most the radius.
+    Nonnegative radii also select self-loops, retained unless ``loop=False``.
+    Construction returns a :class:`Graph`, not a radius-builder instance.
 
     :Example:
 
         >>> import torch
-        >>> from pina.graph import RadiusGraph
+        >>> from pina.graph import Graph, RadiusGraph
         >>> pos = torch.randn(5, 2)
         >>> graph = RadiusGraph(pos=pos, radius=0.5)
         >>> isinstance(graph, Graph)
@@ -370,9 +476,29 @@ class RadiusGraph(GraphBuilder):
         :param pos: A tensor of shape ``(N, D)`` representing the positions of
             ``N`` points in ``D``-dimensional space.
         :type pos: torch.Tensor | LabelTensor
-        :param float radius: The radius within which points are connected.
-        :param dict kwargs: The additional keyword arguments to be passed to
-            :class:`GraphBuilder` and :class:`Graph` classes.
+        :param radius: The inclusive Euclidean distance threshold. Negative
+            values produce no edges.
+        :type radius: float | int
+        :param dict[str, Any] kwargs: Options forwarded to
+            :meth:`GraphBuilder.__new__` and :class:`Graph`:
+
+            * ``x`` (Any): The node features; ``None`` leaves them unset.
+              Default is ``None``.
+            * ``edge_attr`` (bool): Whether to compute edge features. Default
+              is ``False``.
+            * ``custom_edge_func`` (Callable | None): The enabled edge-feature
+              callable taking ``(pos, edge_index)``. ``None`` selects absolute
+              coordinate differences. Used only when ``edge_attr=True``.
+              Default is ``None``.
+            * ``loop`` (bool): Whether to keep selected self-loops. Default is
+              ``True``.
+            * ``undirected`` (bool): The graph preprocessing request, whose
+              result is currently discarded. Default is ``False``.
+
+            Other keys become PyG attributes, such as ``y`` and ``num_nodes``.
+        :raises RuntimeError: If :func:`torch.cdist` rejects the position shape
+            or dtype.
+        :raises ValueError: If edge-feature options or graph validation fail.
         :return: A :class:`~pina.graph.Graph` instance with the computed
             ``edge_index``.
         :rtype: Graph
@@ -383,15 +509,20 @@ class RadiusGraph(GraphBuilder):
     @staticmethod
     def compute_radius_graph(points, radius):
         """
-        Computes the ``edge_index`` based on the radius. Each point is connected
-        to all the points within the radius.
+        Select all ordered point pairs within an inclusive distance threshold.
+
+        Pairwise Euclidean distances are computed with :func:`torch.cdist`.
+        Nonnegative radii include self-loops; this helper does not remove them.
 
         :param points: A tensor of shape ``(N, D)`` representing the positions
             of ``N`` points in ``D``-dimensional space.
         :type points: torch.Tensor | LabelTensor
-        :param float radius: The radius within which points are connected.
+        :param radius: The inclusive radius. Negative values produce no edges.
+        :type radius: float | int
+        :raises RuntimeError: If :func:`torch.cdist` rejects the shape or dtype.
         :return: A tensor of shape ``(2, E)``, with ``E`` number of edges,
-            representing the edge indices of the graph.
+            representing source and target node indices. The result is a plain
+            integer tensor on the positions' device, including both directions.
         :rtype: torch.Tensor
         """
         dist = torch.cdist(points, points, p=2)
@@ -404,13 +535,18 @@ class RadiusGraph(GraphBuilder):
 
 class KNNGraph(GraphBuilder):
     """
-    Extends the :class:`~pina.graph.GraphBuilder` class to compute
+    Extends :class:`pina._src.core.graph.GraphBuilder` to compute
     ``edge_index`` based on a K-nearest neighbors algorithm.
+
+    Each source node selects its closest targets, including itself among the
+    candidates. Edges need not be symmetric. Removing loops does not replace
+    them with additional neighbors. Construction returns a :class:`Graph`, not
+    a nearest-neighbor-builder instance.
 
     :Example:
 
         >>> import torch
-        >>> from pina.graph import KNNGraph
+        >>> from pina.graph import Graph, KNNGraph
         >>> pos = torch.randn(10, 2)
         >>> graph = KNNGraph(pos=pos, neighbours=3)
         >>> isinstance(graph, Graph)
@@ -425,11 +561,30 @@ class KNNGraph(GraphBuilder):
         :param pos: A tensor of shape ``(N, D)`` representing the positions of
             ``N`` points in ``D``-dimensional space.
         :type pos: torch.Tensor | LabelTensor
-        :param int neighbours: The number of nearest neighbors to consider when
-            building the graph.
-        :param dict kwargs: The additional keyword arguments to be passed to
-            :class:`GraphBuilder` and :class:`Graph` classes.
+        :param int neighbours: The number of targets per source before optional
+            loop removal, including self-distance among the candidates. Valid
+            values are from ``0`` to ``N``; zero creates no edges.
+        :param dict[str, Any] kwargs: Options forwarded to
+            :meth:`GraphBuilder.__new__` and :class:`Graph`:
 
+            * ``x`` (Any): The node features; ``None`` leaves them unset.
+              Default is ``None``.
+            * ``edge_attr`` (bool): Whether to compute edge features. Default
+              is ``False``.
+            * ``custom_edge_func`` (Callable | None): The enabled edge-feature
+              callable taking ``(pos, edge_index)``. ``None`` selects absolute
+              coordinate differences. Used only when ``edge_attr=True``.
+              Default is ``None``.
+            * ``loop`` (bool): Whether to keep selected self-loops. Removed
+              loops are not replaced by other neighbors. Default is ``True``.
+            * ``undirected`` (bool): The graph preprocessing request, whose
+              result is currently discarded. Default is ``False``.
+
+            Other keys become PyG attributes, such as ``y`` and ``num_nodes``.
+        :raises RuntimeError: If pairwise distances or neighbor selection fail,
+            the neighbor count is outside ``[0, N]``, or non-CPU positions cause
+            a device mismatch when constructing edges.
+        :raises ValueError: If edge-feature options or graph validation fail.
         :return: A :class:`~pina.graph.Graph` instance with the computed
             ``edge_index``.
         :rtype: Graph
@@ -441,16 +596,32 @@ class KNNGraph(GraphBuilder):
     @staticmethod
     def compute_knn_graph(points, neighbours):
         """
-        Computes the ``edge_index`` based on the K-nearest neighbors algorithm.
+        Select the closest targets independently for every source node.
+
+        Compute all Euclidean distances and take the smallest ``neighbours``
+        entries per row. Self-distance participates in selection; ties follow
+        :func:`torch.topk` ordering and need not select the node itself. No
+        symmetrization or loop removal is performed here.
 
         :param points: A tensor of shape ``(N, D)`` representing the positions
             of ``N`` points in ``D``-dimensional space.
         :type points: torch.Tensor | LabelTensor
-        :param int neighbours: The number of nearest neighbors to consider when
-            building the graph.
+        :param int neighbours: The number of selected targets per source, in
+            ``[0, N]``. Zero produces an empty edge index.
+        :raises RuntimeError: If distance computation fails, the neighbor count
+            is out of range, or source and target indices have different
+            devices.
+        :raises TypeError: If the neighbor count is not accepted as an integer
+            by :func:`torch.topk`.
         :return: A tensor of shape ``(2, E)``, with ``E`` number of edges,
-            representing the edge indices of the graph.
+            representing source and target indices grouped by source node.
+            The result is a plain integer tensor.
         :rtype: torch.Tensor
+
+        .. warning::
+
+            Source indices are created on the CPU without matching the position
+            device. Use CPU positions with this implementation.
         """
         dist = torch.cdist(points, points, p=2)
         knn_indices = torch.topk(dist, k=neighbours, largest=False).indices
@@ -467,7 +638,7 @@ class LabelBatch(Batch):
     :Example:
 
         >>> import torch
-        >>> from pina.graph import Graph, LabelBatch
+        >>> from pina._src.core.graph import Graph, LabelBatch
         >>> graphs = [Graph(pos=torch.randn(3, 2),
         ...     edge_index=torch.tensor([[0, 1], [1, 0]])) for _ in range(2)]
         >>> batch = LabelBatch.from_data_list(graphs)
@@ -481,12 +652,23 @@ class LabelBatch(Batch):
         Create a Batch object from a list of :class:`~torch_geometric.data.Data`
         or :class:`~pina.graph.Graph` objects.
 
-        :param data_list: List of :class:`~torch_geometric.data.Data` or
-            :class:`~pina.graph.Graph` objects.
-        :type data_list: list[Data] | list[Graph]
-        :return: A :class:`~torch_geometric.data.Batch` object containing
-            the input data.
-        :rtype: :class:`~torch_geometric.data.Batch`
+        Read last-dimension labels only from labeled attributes of the first
+        graph. After PyG batching, assign those labels to the corresponding
+        batch attributes. Labels on other dimensions are not reconstructed and
+        label agreement across graphs is not checked.
+
+        :param list[torch_geometric.data.Data] data_list: The nonempty graph
+            list. :class:`Graph` instances are also accepted. Attribute shapes
+            must satisfy PyG's batching rules.
+        :raises IndexError: If the list is empty.
+        :raises RuntimeError: If PyG cannot concatenate the graph attributes.
+        :raises ValueError: If the first graph's last-dimension labels cannot
+            be assigned to the resulting batch attribute, including ``None``
+            for an unlabeled last dimension.
+        :return: The batched graph with PyG node assignments and offset edge
+            indices. Its dynamic class derives from :class:`LabelBatch` and
+            the input graph class.
+        :rtype: LabelBatch
         """
         # Store the labels of Data/Graph objects (all data have the same labels)
         # If the data do not contain labels, labels is an empty dictionary,

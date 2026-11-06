@@ -11,7 +11,7 @@ class BaseDomain(DomainInterface, metaclass=ABCMeta):
     Base class for all geometric domains, implementing common functionality.
 
     All specific domain types should inherit from this class and implement the
-    abstract methods of :class:`~pina.domain.domain_interface.DomainInterface`.
+    abstract methods of :class:`~pina.domain.DomainInterface`.
 
     This class is not meant to be instantiated directly.
     """
@@ -24,8 +24,11 @@ class BaseDomain(DomainInterface, metaclass=ABCMeta):
             names and the values are the domain extrema. The domain extrema can
             be either a list or tuple with two elements or a single number. If
             the domain extrema is a single number, the variable is fixed to that
-            value.
-        :type variables_dict: dict | None
+            value. ``None`` initializes empty fixed and ranged mappings.
+            Default is ``None``. Variable names are expected to be strings but
+            are not explicitly validated.
+        :type variables_dict: dict[str, int | float | list[int | float] |
+            tuple[int | float, int | float]] | None
         :raises TypeError: If the domain dictionary is not a dictionary.
         :raises ValueError: If the domain dictionary is empty.
         :raises ValueError: If the domain dictionary contains variables with
@@ -85,15 +88,16 @@ class BaseDomain(DomainInterface, metaclass=ABCMeta):
 
     def update(self, domain):
         """
-        Update the current domain by adding the labels contained in ``domain``.
-        Each new label introduces a new dimension. Only domains of the same type
-        can be used for update.
+        Merge variable definitions into a deep copy of this domain.
 
-        :param BaseDomain domain: The domain whose labels are to be merged
-            into the current one.
+        Matching definitions are overwritten by ``domain``, including changes
+        between fixed and ranged variables. Neither input is modified.
+
+        :param BaseDomain domain: The definitions to merge. Must be an instance
+            of the receiver's class, including its subclasses.
         :raises TypeError: If the provided domain is not of the same type as
             the current one.
-        :return: A new domain instance with the merged labels.
+        :return: A copy of the receiver with merged variable definitions.
         :rtype: BaseDomain
         """
         # Raise an error if the domain types do not match
@@ -123,16 +127,18 @@ class BaseDomain(DomainInterface, metaclass=ABCMeta):
         """
         Validate the sampling settings.
 
-        :param int n: The number of samples to generate.
-        :param str mode: The sampling method.
-        :param variables: The list of variables to sample. If ``all``, all
-            variables are sampled.
+        :param int n: The positive sample count or per-axis resolution.
+        :param str mode: A method listed in ``sample_modes``.
+        :param variables: The selected names, or ``"all"`` for every variable.
+            Duplicate names are removed. Empty collections pass validation but
+            may fail in the sampling implementation.
+        :type variables: str | list[str] | tuple[str, ...] | set[str]
         :raises AssertionError: If ``n`` is not a positive integer.
         :raises ValueError: If the sampling mode is invalid.
         :raises ValueError: If ``variables`` is neither ``all``, a string, nor a
-            list/tuple of strings.
+            list, tuple, or set of strings.
         :raises ValueError: If any of the specified variables is unknown.
-        :return: The validated list of variables to sample.
+        :return: The unique selected variable names in sorted order.
         :rtype: list[str]
         """
         # Validate n
@@ -177,7 +183,7 @@ class BaseDomain(DomainInterface, metaclass=ABCMeta):
         """
         The list of variables of the domain.
 
-        :return: The list of variables of the domain.
+        :return: A new sorted list of fixed and ranged variable names.
         :rtype: list[str]
         """
         return sorted(list(self._fixed.keys()) + list(self._range.keys()))
@@ -187,8 +193,8 @@ class BaseDomain(DomainInterface, metaclass=ABCMeta):
         """
         The dictionary representing the domain.
 
-        :return: The dictionary representing the domain.
-        :rtype: dict
+        :return: A new mapping from names to fixed values or endpoint tuples.
+        :rtype: dict[str, int | float | tuple[int | float, int | float]]
         """
         return {**self._fixed, **self._range}
 
@@ -197,8 +203,9 @@ class BaseDomain(DomainInterface, metaclass=ABCMeta):
         """
         The range variables of the domain.
 
-        :return: The range variables of the domain.
-        :rtype: dict
+        :return: The stored mapping from names to lower/upper endpoint tuples.
+            Mutations affect the domain directly.
+        :rtype: dict[str, tuple[int | float, int | float]]
         """
         return self._range
 
@@ -207,7 +214,8 @@ class BaseDomain(DomainInterface, metaclass=ABCMeta):
         """
         The fixed variables of the domain.
 
-        :return: The fixed variables of the domain.
-        :rtype: dict
+        :return: The stored mapping from names to fixed numeric values.
+            Mutations affect the domain directly.
+        :rtype: dict[str, int | float]
         """
         return self._fixed

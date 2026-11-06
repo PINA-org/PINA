@@ -27,10 +27,12 @@ class TorchOptimizer(OptimizerInterface):
         """
         Initialization of the :class:`TorchOptimizer` class.
 
-        :param torch.optim.Optimizer optimizer_class: The subclass of
-            ``torch.optim.Optimizer`` to be instantiated.
-        :param dict kwargs: Additional keyword arguments forwarded to the
-            optimizer constructor. See more
+        :param type[torch.optim.Optimizer] optimizer_class: The optimizer class,
+            not an already initialized instance.
+        :param dict[str, Any] kwargs: Options forwarded unchanged to that
+            class's constructor during ``hook``, such as ``lr``,
+            ``weight_decay``, or optimizer-specific options. Do not include
+            ``params``; parameters are supplied by the hook. See more
             `here <https://pytorch.org/docs/stable/optim.html#algorithms>`_.
         :raises ValueError: If ``optimizer_class`` is not a subclass of
             ``torch.optim.Optimizer``.
@@ -45,12 +47,19 @@ class TorchOptimizer(OptimizerInterface):
 
     def hook(self, parameters):
         """
-        Execute custom logic associated with the optimizer instance.
+        Construct and store the optimizer for the supplied parameters.
 
-        This method is intended to encapsulate any additional behavior that
-        should be triggered during the optimization process.
+        Repeated calls replace the stored optimizer rather than preserving its
+        optimization state. Parameters are passed directly to the constructor.
 
-        :param dict parameters: The parameters of the model to be optimized.
+        :param parameters: The parameters to optimize, such as the iterator
+            returned by :meth:`torch.nn.Module.parameters`, or PyTorch parameter
+            groups containing a ``"params"`` entry and per-group options.
+        :type parameters: Iterable[torch.Tensor] | Iterable[dict[str, Any]]
+        :raises ValueError: If the optimizer rejects empty parameters or invalid
+            option values.
+        :raises TypeError: If parameter types or constructor options are
+            invalid.
         """
         self._optimizer_instance = self.optimizer_class(
             parameters, **self.kwargs
@@ -61,7 +70,7 @@ class TorchOptimizer(OptimizerInterface):
         """
         The underlying optimizer object.
 
-        :return: The optimizer instance.
-        :rtype: torch.optim.Optimizer
+        :return: The stored optimizer, or ``None`` until ``hook`` succeeds.
+        :rtype: torch.optim.Optimizer | None
         """
         return self._optimizer_instance

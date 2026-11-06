@@ -28,8 +28,9 @@ class BaseDualLoss(DualLossInterface):
 
         :param str reduction: The reduction method to aggregate pointwise loss
             values. Available options include: ``"none"`` for unreduced loss,
-            ``"mean"`` for the average of the loss values, and ``"sum"`` for
-            their total sum. Default is ``"mean"``.
+            ``"mean"`` for the average along the last axis, and ``"sum"`` for
+            the sum along that axis. Mean and sum retain the reduced dimension.
+            No other axes are reduced. Default is ``"mean"``.
         :raises ValueError: If the specified reduction method is not among the
             available options.
         """
@@ -47,8 +48,11 @@ class BaseDualLoss(DualLossInterface):
         """
         Apply the configured reduction operation to pointwise loss values.
 
-        :param torch.Tensor loss: The tensor of pointwise losses.
-        :return: The reduced loss tensor.
+        :param torch.Tensor loss: The tensor of pointwise losses, with the
+            aggregation axis last.
+        :return: The same tensor for ``"none"``, otherwise its last-axis mean
+            or sum with that dimension retained at size one. For a vector of
+            shape ``(n,)``, mean and sum return shape ``(1,)``.
         :rtype: torch.Tensor
         """
         return self._REDUCTION_METHOD[self.reduction](loss)

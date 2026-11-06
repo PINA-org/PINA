@@ -1,4 +1,4 @@
-"""Module for the Processing Callbacks."""
+"""Progress reporting with condition-specific and global loss filtering."""
 
 from lightning.pytorch.callbacks import TQDMProgressBar
 from lightning.pytorch.callbacks.progress.progress_bar import (
@@ -21,6 +21,7 @@ class PINAProgressBar(TQDMProgressBar):
 
     :Example:
 
+        >>> from pina.callback import PINAProgressBar
         >>> progress_bar = PINAProgressBar(metrics="val")
         >>> progress_bar._sorted_metrics
         ['val']
@@ -35,17 +36,27 @@ class PINAProgressBar(TQDMProgressBar):
 
     def __init__(self, metrics="val", **kwargs):
         """
-        Initialization of the :class:`PINAProgressBar`.
+        Initialization of the :class:`PINAProgressBar` class.
 
         :param metrics: The names of the metrics to be shown in the progress
             bar. Each entry can be either a key of a condition defined in the
             problem or one of the global loss keys: ``"train"``, ``"val"``, or
             ``"test"``. These global keys are internally expanded to the
             corresponding logged loss names. Default is ``"val"``.
-        :type metrics: str | list(str) | tuple(str)
-        :param dict kwargs: Additional keyword arguments passed to
-            :class:`lightning.pytorch.callbacks.TQDMProgressBar`.
-        :raises TypeError: If ``metrics`` contains non-string elements.
+        :type metrics: str | list[str] | tuple[str, ...] | set[str]
+        :param dict[str, int | bool] kwargs: Options forwarded to
+            :class:`lightning.pytorch.callbacks.TQDMProgressBar`. Supported
+            options are:
+
+            * ``refresh_rate`` (int): The update interval in batches, with
+              ``0`` disabling updates. Default is ``1``.
+            * ``process_position`` (int): The display position. Default is
+              ``0``.
+            * ``leave`` (bool): Whether to keep finished bars visible. Default
+              is ``False``.
+        :raises ValueError: If ``metrics`` is not a string or a list, tuple, or
+            set of strings.
+        :raises TypeError: If ``kwargs`` contains an unsupported keyword.
         """
         super().__init__(**kwargs)
 
@@ -63,16 +74,17 @@ class PINAProgressBar(TQDMProgressBar):
         """
         Retrieve and filter metrics to be displayed in the progress bar.
 
-        This method combines standard Lightning metrics with user-selected
-        progress bar metrics, retaining only the metrics specified at
-        initialization.
+        Keep all standard Lightning metrics, including the logger version when
+        available, and add only the selected progress bar metrics.
 
-        :param Trainer trainer: The trainer managing the training loop.
-        :param __: Placeholder argument, not used.
+        :param pina.Trainer trainer: The trainer managing the training loop.
+        :param pina.solver.BaseSolver __: The solver supplied by
+            Lightning; unused.
         :return: Dictionary containing the metrics to display.
-        :rtype: dict
+        :rtype: dict[str, float | int | str]
 
         .. note::
+
             This method overrides the default Lightning behaviour. It can be
             further customized by subclassing.
         """
@@ -98,8 +110,13 @@ class PINAProgressBar(TQDMProgressBar):
         conditions or global loss keys. The accepted global loss keys are
         ``"train"``, ``"val"``, and ``"test"``.
 
-        :param Trainer trainer: The trainer instance managing the execution.
-        :param BaseSolver pl_module: The solver module being executed.
+        Replace each selected name with its logged loss name using
+        ``"_loss_epoch"`` when batching is enabled, or ``"_loss"`` otherwise.
+        Repeated setup calls validate the already suffixed names again.
+
+        :param pina.Trainer trainer: The trainer managing the execution.
+        :param pina.solver.BaseSolver pl_module: The solver module
+            being executed; unused by this callback.
         :param str stage: Current execution stage.
         :raises KeyError: If a metric key is neither a condition key nor one of
             ``"train"``, ``"val"``, or ``"test"``.

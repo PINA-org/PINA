@@ -10,8 +10,8 @@ class Equation(BaseEquation):
     equation to be satisfied by the model outputs.
 
     It can be passed to a
-    :class:`~pina.condition.domain_equation_condition.DomainEquationCondition`
-    or :class:`~pina.condition.input_equation_condition.InputEquationCondition`
+    :class:`~pina.condition.DomainEquationCondition`
+    or :class:`~pina.condition.InputEquationCondition`
     object to define the conditions under which the model is trained.
 
     :Example:
@@ -27,9 +27,13 @@ class Equation(BaseEquation):
         """
         Initialization of the :class:`Equation` class.
 
-        :param Callable equation: A callable function used to compute the
-            residual of a mathematical equation.
+        :param Callable equation: The residual callable, accepting positional
+            ``(input_, output_)`` or ``(input_, output_, params_)``. Dispatch
+            uses the number of inspected signature parameters, not their names
+            or kinds. The result is returned without conversion or validation.
         :raises ValueError: If the equation is not a callable function.
+        :raises ValueError: If :func:`inspect.signature` cannot inspect it.
+        :raises TypeError: If signature inspection is unsupported for it.
         """
         # Check consistency
         if not callable(equation):
@@ -44,18 +48,25 @@ class Equation(BaseEquation):
         """
         Evaluate the equation residual at the given inputs.
 
-        :param LabelTensor input_: The input points where the residual is
-            computed.
-        :param LabelTensor output_: The output tensor, potentially produced by a
-            :class:`torch.nn.Module` instance.
-        :param dict params_: An optional dictionary of unknown parameters, used
-            in :class:`~pina.problem.inverse_problem.InverseProblem` settings.
-            If the equation is not related to an inverse problem, this should be
-            set to ``None``. Default is ``None``.
+        Stored tensor attributes are moved to the input device before dispatch;
+        callable closures and parameter dictionaries are not moved here.
+
+        :param LabelTensor input_: Labeled input points, normally of shape
+            ``(n, n_inputs)``. Differential equations require gradient tracking.
+        :param LabelTensor output_: Labeled predictions, normally of shape
+            ``(n, n_outputs)``, connected to ``input_`` when differentiated.
+        :param params_: The named unknown parameters for an
+            :class:`~pina.problem.InverseProblem`. Passed unchanged to
+            three-parameter callables, including when ``None``; ignored by
+            two-parameter callables. Default is ``None``.
+        :type params_: dict[str, torch.nn.Parameter] | None
         :raises RuntimeError: If the underlying equation signature is neither of
             length 2 for direct problems nor of length 3 for inverse problems.
-        :return: The residual values of the equation.
-        :rtype: LabelTensor
+        :raises TypeError: If the callable cannot accept positional dispatch.
+        :return: The callable's unchanged result, normally a residual tensor of
+            shape ``(n, n_residuals)``. Result type and labels are not enforced;
+            exceptions raised by the callable propagate unchanged.
+        :rtype: Any
         """
         # Move the equation to the input_ device
         self.to(input_.device)

@@ -20,8 +20,9 @@ class SolverInterface(lightning.pytorch.LightningModule, metaclass=ABCMeta):
         """
         Solver training step.
 
-        :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and a dictionary of points.
+        :param batch: The condition-name/data pairs supplied by the data module.
+        :type batch: list[tuple[str, dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data]]
         :param int batch_idx: The index of the current batch.
         :return: The loss of the training step.
         :rtype: torch.Tensor
@@ -32,10 +33,11 @@ class SolverInterface(lightning.pytorch.LightningModule, metaclass=ABCMeta):
         """
         Solver validation step.
 
-        :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and a dictionary of points.
+        :param batch: The condition-name/data pairs supplied by the data module.
+        :type batch: list[tuple[str, dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data]]
         :param int batch_idx: The index of the current batch.
-        :return: The loss of the training step.
+        :return: The loss of the validation step.
         :rtype: torch.Tensor
         """
 
@@ -44,10 +46,11 @@ class SolverInterface(lightning.pytorch.LightningModule, metaclass=ABCMeta):
         """
         Solver test step.
 
-        :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and a dictionary of points.
+        :param batch: The condition-name/data pairs supplied by the data module.
+        :type batch: list[tuple[str, dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data]]
         :param int batch_idx: The index of the current batch.
-        :return: The loss of the training step.
+        :return: The loss of the test step.
         :rtype: torch.Tensor
         """
 
@@ -58,14 +61,14 @@ class SolverInterface(lightning.pytorch.LightningModule, metaclass=ABCMeta):
         The problem instance.
 
         :return: The problem instance.
-        :rtype: :class:`~pina.problem.base_problem.BaseProblem`
+        :rtype: pina.problem.BaseProblem | None
         """
 
     @property
     @abstractmethod
     def use_lt(self):
         """
-        Using LabelTensors as input during training.
+        Whether the solver wraps forward with labeled input/output handling.
 
         :return: The use_lt attribute.
         :rtype: bool
@@ -78,7 +81,7 @@ class SolverInterface(lightning.pytorch.LightningModule, metaclass=ABCMeta):
         The weighting schema used by the solver.
 
         :return: The weighting schema used by the solver.
-        :rtype: :class:`~pina.weighting.base_weighting.BaseWeighting`
+        :rtype: pina.weighting.BaseWeighting
         """
 
     @property
@@ -88,5 +91,5 @@ class SolverInterface(lightning.pytorch.LightningModule, metaclass=ABCMeta):
         The element-wise loss module used by the solver.
 
         :return: The element-wise loss module used by the solver.
-        :rtype: torch.nn.Module
+        :rtype: torch.nn.modules.loss._Loss | pina.loss.BaseDualLoss
         """

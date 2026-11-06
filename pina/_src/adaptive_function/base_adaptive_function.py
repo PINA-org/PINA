@@ -27,10 +27,12 @@ class BaseAdaptiveFunction(torch.nn.Module, AdaptiveFunctionInterface):
     parameters controlling output scaling, input scaling, and input shifting,
     respectively.
 
-    All specific adaptive functions should inherit from this class and implement
-    the abstract methods declared in the interface.
+    Specific adaptive functions inherit the interface implementation from this
+    class and select their underlying activation through ``_func``.
 
-    This class is not meant to be instantiated directly.
+    Subclasses must set ``_func`` to a callable before evaluation. Instantiating
+    this base class directly is allowed, but evaluation raises an error until
+    ``_func`` is set.
 
     .. seealso::
 
@@ -55,25 +57,23 @@ class BaseAdaptiveFunction(torch.nn.Module, AdaptiveFunctionInterface):
 
         :param alpha: The output scaling parameter of the adaptive function.
             If ``None``, it is initialized to ``1``. Default is ``None``.
-        :type alpha: int | float
+        :type alpha: int | float | None
         :param beta: The input scaling parameter of the adaptive function.
             If ``None``, it is initialized to ``1``. Default is ``None``.
-        :type beta: int | float
+        :type beta: int | float | None
         :param gamma: The input shifting parameter of the adaptive function.
             If ``None``, it is initialized to ``0``. Default is ``None``.
-        :type gamma: int | float
+        :type gamma: int | float | None
         :param fixed: The names of parameters to keep fixed during training.
             These parameters will not be optimized and will have
             ``requires_grad=False``. Available options are ``"alpha"``,
             ``"beta"``, and ``"gamma"``. If ``None``, all parameters are
             trainable. Default is ``None``.
-        :type fixed: str | list[str]
-        :raises ValueError: If alpha, when provided, is not a number.
-        :raises ValueError: If beta, when provided, is not a number.
-        :raises ValueError: If gamma, when provided, is not a number.
-        :raises ValueError: If fixed, when provided, is neither a string nor a
-            list of strings.
-        :raises ValueError: If fixed contains invalid parameter names.
+        :type fixed: str | list[str] | tuple[str, ...] | set[str] | None
+        :raises ValueError: If ``alpha``, ``beta``, or ``gamma`` fails numeric
+            type validation.
+        :raises ValueError: If ``fixed`` is not a string or a list, tuple, or
+            set of strings, or contains invalid parameter names.
         """
         super().__init__()
 
@@ -105,9 +105,15 @@ class BaseAdaptiveFunction(torch.nn.Module, AdaptiveFunctionInterface):
         # Register either a trainable parameter or a fixed buffer
         def _register_adaptive_param(name, value):
             """
-            Helper function to register an adaptive parameter as either a
-            trainable parameter or a fixed buffer, depending on whether it is
-            specified in the ``fixed`` argument.
+            Register an adaptive parameter or a fixed buffer.
+
+            Store the value as a float32 tensor under ``"_" + name``. Names
+            selected by ``fixed`` become buffers; other names become trainable
+            parameters.
+
+            :param str name: The parameter name without its leading underscore.
+            :param value: The initial parameter value.
+            :type value: int | float
             """
             # Convert value to tensor
             tensor = torch.tensor(value, dtype=torch.float32)
@@ -130,11 +136,13 @@ class BaseAdaptiveFunction(torch.nn.Module, AdaptiveFunctionInterface):
         """
         Compute the transformation of the adaptive function on the input.
 
-        :param x: The input tensor to evaluate the adaptive function.
+        :param x: The input tensor to evaluate the adaptive function. Its shape
+            must be compatible with the underlying activation.
         :type x: torch.Tensor | LabelTensor
         :raises RuntimeError: If the adaptive function has not been set.
         :raises RuntimeError: If the adaptive function is not callable.
-        :return: The output of the adaptive function.
+        :return: The scaled activation of the scaled and shifted input. For
+            the built-in adaptive activations, the output has the input shape.
         :rtype: torch.Tensor | LabelTensor
         """
         # Raise an error if the adaptive function has not been set

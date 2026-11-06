@@ -1,4 +1,4 @@
-"""Module for Base Continuous Convolution class."""
+"""Proper orthogonal decomposition, reduction, and reconstruction."""
 
 import warnings
 import torch
@@ -31,7 +31,8 @@ class PODBlock(torch.nn.Module):
         """
         Initialization of the :class:`PODBlock` class.
 
-        :param int rank: The rank of the POD layer.
+        :param int rank: Requested retained mode count. Unlike the property
+            setter, construction does not validate positivity or type.
         :param bool scale_coefficients: If ``True``, the coefficients are scaled
             after the projection to have zero mean and unit variance.
             Default is ``True``.
@@ -70,11 +71,12 @@ class PODBlock(torch.nn.Module):
     @property
     def basis(self):
         """
-        The POD basis. It is a matrix whose columns are the first ``rank`` POD
+        The POD basis. It is a matrix whose rows are the first ``rank`` POD
         modes.
 
-        :return: The POD basis.
-        :rtype: torch.Tensor
+        :return: Retained modes with shape ``(available_rank, n_features)``, or
+            ``None`` before fitting. Requested rank is clipped by slicing.
+        :rtype: torch.Tensor | None
         """
         if self._basis is None:
             return None
@@ -86,8 +88,8 @@ class PODBlock(torch.nn.Module):
         """
         The singular values of the POD basis.
 
-        :return: The singular values.
-        :rtype: torch.Tensor
+        :return: Retained singular values, or ``None`` before fitting.
+        :rtype: torch.Tensor | None
         """
         if self._singular_values is None:
             return None
@@ -101,8 +103,9 @@ class PODBlock(torch.nn.Module):
         corresponding to the mean and the standard deviation of the
         coefficients, respectively.
 
-        :return: The scaler dictionary.
-        :rtype: dict
+        :return: Retained coefficient means and sample standard deviations, or
+            ``None`` if no scaler has been fitted.
+        :rtype: dict[str, torch.Tensor] | None
         """
         if self._std is None:
             return None
@@ -125,14 +128,21 @@ class PODBlock(torch.nn.Module):
     def fit(self, X, randomized=True):
         """
         Set the POD basis by performing the singular value decomposition of the
-        given tensor. If ``self.scale_coefficients`` is True, the coefficients
+        given tensor. If ``self.scale_coefficients`` is ``True``, coefficients
         are scaled after the projection to have zero mean and unit variance.
 
-        :param torch.Tensor X: The input tensor to be reduced.
+        :param torch.Tensor X: Snapshots of shape ``(n_samples, n_features)``.
         :param bool randomized: If ``True``, a randomized algorithm is used to
             compute the POD basis. In general, this leads to faster
             computations, but the results may be less accurate. Default is
             ``True``.
+
+        .. note::
+
+            The randomized algorithm requests ``q=n_samples``, not ``rank``.
+            On MPS the full SVD is used regardless of this flag. No centering
+            precedes SVD; scaling is fitted in coefficient space. Zero sample
+            standard deviations are not guarded against during reduction.
         """
         self._fit_pod(X, randomized)
 
@@ -142,9 +152,9 @@ class PODBlock(torch.nn.Module):
     def _fit_scaler(self, coeffs):
         """
         Compute the mean and the standard deviation of the given coefficients,
-        which are then stored in ``self._scaler``.
+        stored in the ``_mean`` and ``_std`` buffers.
 
-        :param torch.Tensor coeffs: The coefficients to be scaled.
+        :param torch.Tensor coeffs: Values shaped ``(n_modes, n_samples)``.
         """
         self._std = torch.std(coeffs, dim=1)  # pylint: disable=W0201
         self._mean = torch.mean(coeffs, dim=1)  # pylint: disable=W0201
@@ -155,6 +165,7 @@ class PODBlock(torch.nn.Module):
         ``self._basis``.
 
         :param torch.Tensor X: The tensor to be reduced.
+        :param bool randomized: Whether to use randomized SVD off MPS.
         """
         if X.device.type == "mps":  #  svd_lowrank not arailable for mps
             warnings.warn(
@@ -180,8 +191,11 @@ class PODBlock(torch.nn.Module):
         """
         The forward pass of the POD layer.
 
-        :param torch.Tensor X: The input tensor to be reduced.
-        :return: The reduced tensor.
+        :param torch.Tensor X: Snapshots of shape ``(n_samples, n_features)`` or
+            one feature vector of shape ``(n_features,)``.
+        :raises RuntimeError: If the POD layer is not fitted.
+        :return: Coefficients of shape ``(n_samples, available_rank)``; a single
+            vector produces a leading singleton sample dimension.
         :rtype: torch.Tensor
         """
         return self.reduce(X)
@@ -191,9 +205,11 @@ class PODBlock(torch.nn.Module):
         Reduce the input tensor to its POD representation. The POD layer must
         be fitted before being used.
 
-        :param torch.Tensor X: The input tensor to be reduced.
+        :param torch.Tensor X: Snapshots shaped ``(n_samples, n_features)`` or
+            a single ``(n_features,)`` vector.
         :raises RuntimeError: If the POD layer is not fitted.
-        :return: The reduced tensor.
+        :return: Coefficients of shape ``(n_samples, available_rank)``; single
+            vectors retain a singleton sample dimension.
         :rtype: torch.Tensor
         """
         if self._basis is None:
@@ -216,9 +232,11 @@ class PODBlock(torch.nn.Module):
         Expand the given coefficients to the original space. The POD layer needs
         to be fitted before being used.
 
-        :param torch.Tensor coeff: The coefficients to be expanded.
+        :param torch.Tensor coeff: Coefficients shaped ``(n_samples, rank)`` or
+            one ``(rank,)`` vector, with the retained basis width.
         :raises RuntimeError: If the POD layer is not fitted.
-        :return: The expanded tensor.
+        :return: Reconstructed snapshots shaped ``(n_samples, n_features)``;
+            single vectors retain a singleton sample dimension.
         :rtype: torch.Tensor
         """
         if self._basis is None:

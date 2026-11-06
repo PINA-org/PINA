@@ -9,7 +9,7 @@ class Stride:
 
     :Example:
 
-        >>> from pina.model.block import Stride
+        >>> from pina._src.model.block.stride import Stride
         >>> stride_dict = {
         ...     "domain": [4, 4],
         ...     "start": [-4, 2],
@@ -23,9 +23,17 @@ class Stride:
         """
         Initialization of the :class:`Stride` class.
 
-        :param dict dict_: Dictionary having as keys the domain size ``domain``,
+        :param dict[str, list[int | float]] dict_: Ordered mapping of domain
+            extents, starting coordinates, jumps, and directions. Values are
+            unpacked in insertion order, regardless of key spelling.
+            Conventionally the keys are the domain size ``domain``,
             the starting position of the filter ``start``, the jump size for the
             filter ``jump``, and the direction of the filter ``direction``.
+            Zero jumps and corresponding zero directions are replaced in place
+            by the domain extent and one, respectively.
+        :raises IndexError: If lengths or zero jump/direction positions differ.
+        :raises ValueError: If a domain extent is negative, a direction is not
+            ``-1``, ``0``, or ``1``, or there are not exactly four values.
         """
 
         self._dict_stride = dict_
@@ -36,12 +44,13 @@ class Stride:
         """
         Create a tensor of positions where to apply the filter.
 
-        :param dict my_dict_: Dictionary having as keys the domain size
+        :param dict[str, list[int | float]] my_dict: Dictionary having as keys
+            the domain size
             ``domain``, the starting position of the filter ``start``, the jump
             size for the filter ``jump``, and the direction of the filter
             ``direction``.
         :raises IndexError: Values in the dict must have all same length.
-        :raises ValueError: Domain values must be greater than 0.
+        :raises ValueError: If a domain extent is negative.
         :raises ValueError: Direction must be either equal to ``1``, ``-1`` or
             ``0``.
         :raises IndexError: Direction and jumps must be zero in the same index.
@@ -50,13 +59,14 @@ class Stride:
 
         :Example:
 
+            >>> from pina._src.model.block.stride import Stride
             >>> stride_dict = {
             ...     "domain": [4, 4],
             ...     "start": [-4, 2],
             ...     "jump": [2, 2],
             ...     "direction": [1, 1],
             ... }
-            >>> Stride(stride_dict)
+            >>> stride = Stride(stride_dict)
         """
         # we must check boundaries of the input as well
         domain, start, jumps, direction = my_dict.values()

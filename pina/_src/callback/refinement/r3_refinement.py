@@ -11,9 +11,10 @@ class R3Refinement(BaseRefinement):
     """
     Refinement strategy based on the R3 (Retain-Resample-Release) algorithm.
 
-    This method adaptively updates collocation points by retaining points with
-    high residuals, resampling new points in the domain, releasing points with
-    low residuals.
+    This method adaptively updates each training batch by retaining points
+    whose residual loss is at least the batch mean and replacing the remaining
+    points with random domain samples. The number of points per batch is
+    preserved when sampling succeeds.
 
     The objective is to concentrate sampling in regions where the PDE residual
     is large, improving training efficiency and solution accuracy.
@@ -28,6 +29,7 @@ class R3Refinement(BaseRefinement):
 
     :Example:
 
+        >>> from pina.callback import R3Refinement
         >>> r3 = R3Refinement(sample_every=5)
     """
 
@@ -42,18 +44,24 @@ class R3Refinement(BaseRefinement):
 
         :param int sample_every: The number of epochs between successive
             refinement steps.
-        :param residual_loss: The loss used to evaluate residual magnitude. Must
-            be a subclass of :class:`torch.nn.Module` or
-            :class:`pina.loss.DualLossInterface`.
-            Default is :class:`torch.nn.L1Loss`.
-        :type residual_loss: DualLossInterface | torch.nn.modules.loss._Loss
+        :param residual_loss: The loss class used to evaluate residual magnitude
+            against zero. It must derive from
+            :class:`pina.loss.DualLossInterface` or
+            ``torch.nn.modules.loss._Loss``, accept ``reduction="none"``, and
+            return pointwise losses. These losses are averaged over all
+            non-sample dimensions. Default is ``torch.nn.L1Loss``.
+        :type residual_loss: type[pina.loss.DualLossInterface] |
+            type[torch.nn.modules.loss._Loss]
         :param condition_to_update: The condition(s) to be updated during
             refinement. If ``None``, all conditions associated with a domain are
             updated. Default is ``None``.
-        :type condition_to_update: str | list[str] | tuple[str]
-        :raises ValueError: If the condition_to_update is neither a string nor
-            an iterable of strings.
-        :raises ValueError: If the residual_loss is not a valid loss class.
+        :type condition_to_update: str | list[str] | tuple[str, ...] | None
+        :raises AssertionError: If ``sample_every`` is not a positive integer.
+        :raises ValueError: If ``condition_to_update``, when provided, is not a
+            string, list of strings, or tuple of strings.
+        :raises ValueError: If ``residual_loss`` is not a valid loss class.
+        :raises TypeError: If the loss cannot be instantiated with
+            ``reduction="none"`` alone.
         """
         super().__init__(sample_every, condition_to_update)
 
@@ -71,11 +79,29 @@ class R3Refinement(BaseRefinement):
         """
         Generate new sample points for a given condition.
 
-        :param LabelTensor current_points: The existing points in the domain.
+        Evaluate residuals on the solver's root device with gradients enabled.
+        Retain points whose residual loss is at least the mean, detach them,
+        and append random domain samples to restore the batch's point count.
+        If the input is already on the root device, enabling gradients also
+        modifies its ``requires_grad`` flag.
+
+        :param pina.LabelTensor current_points: The existing points, with shape
+            ``(n_points, n_variables)`` and named variable columns.
         :param str condition_name: The identifier of the condition to refine.
-        :param BaseSolver solver: The solver used for sampling decisions.
-        :return: Newly sampled points.
-        :rtype: LabelTensor
+        :param pina.solver.PhysicsInformedSingleModelSolver solver: The solver
+            attached to a trainer, used to evaluate the condition's residuals.
+        :raises KeyError: If the condition or its named domain is missing.
+        :raises AssertionError: If all points are retained and the domain
+            rejects a request to sample zero new points.
+        :return: The replacement points with shape
+            ``(n_points, n_variables)`` on the solver's root device. Retained
+            points precede newly sampled points.
+        :rtype: pina.LabelTensor
+
+        .. warning::
+
+            The domain is asked to sample even when no new points are needed.
+            Domains requiring a positive sample count then raise an error.
         """
         # Retrieve condition and current points
         device = solver.trainer.strategy.root_device

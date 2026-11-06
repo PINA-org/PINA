@@ -29,15 +29,16 @@ class LowRankNeuralOperator(KernelNeuralOperator):
     :Example:
 
         >>> import torch
+        >>> from pina import LabelTensor
         >>> from pina.model import LowRankNeuralOperator, FeedForward
         >>> lifting_net = FeedForward(input_dimensions=4, output_dimensions=20)
-        >>> projecting_net = FeedForward(input_dimensions=22, output_dimensions=1)
+        >>> projecting_net = FeedForward(23, 1)
         >>> model = LowRankNeuralOperator(
         ...     lifting_net, projecting_net,
         ...     field_indices=["f"], coordinates_indices=["x", "y", "z"],
         ...     n_kernel_layers=2, rank=10
         ... )
-        >>> x = torch.randn(10, 5, 4)
+        >>> x = LabelTensor(torch.randn(10, 5, 4), ["f", "x", "y", "z"])
         >>> out = model(x)
     """
 
@@ -74,17 +75,22 @@ class LowRankNeuralOperator(KernelNeuralOperator):
             the basis function neural network. Default is ``20``.
         :param int n_layers: The number of hidden layers in the basis function
             neural network. Default is ``2``.
-        :param func: The activation function. If a list is passed, it must have
-            the same length as ``n_layers``. If a single function is passed, it
-            is used for all layers, except for the last one.
+        :param type[torch.nn.Module] func: Activation class for basis hidden
+            layers and each block's output. Lists accepted by FeedForward
+            cannot be used by the block's output activation.
             Default is :class:`torch.nn.Tanh`.
-        :type func: torch.nn.Module | list[torch.nn.Module]
         :param bool bias: If ``True`` bias is considered for the basis function
             neural network. Default is ``True``.
         :raises ValueError: If the input dimension does not match with the
             labels of the fields and coordinates.
         :raises ValueError: If the input dimension of the projecting network
             does not match with the hidden dimension of the lifting network.
+
+        .. note::
+
+            Width inference requires network parameters and probes the lifting
+            network with random CPU input in training mode. The kernel contracts
+            features at each point; it does not integrate over mesh nodes.
         """
 
         # check consistency
@@ -141,7 +147,7 @@ class LowRankNeuralOperator(KernelNeuralOperator):
 
         The ``lifting_net`` maps the input to the hidden dimension.
         Then, several layers of
-        :class:`~pina.model.block.low_rank_block.LowRankBlock` are
+        :class:`~pina.model.block.LowRankBlock` are
         applied. Finally, the ``projecting_net`` maps the hidden representation
         to the output function.
 
@@ -150,8 +156,10 @@ class LowRankNeuralOperator(KernelNeuralOperator):
             the batch_size, :math:`N` the number of points in the mesh,
             :math:`D` the dimension of the problem, i.e. the sum
             of ``len(coordinates_indices)`` and ``len(field_indices)``.
-        :return: The output tensor.
-        :rtype: torch.Tensor
+        :return: Predictions with shape ``(B, N, output_width)``. Input column
+            order is retained for lifting; coordinates are appended before
+            projection.
+        :rtype: torch.Tensor | LabelTensor
         """
         # extract points
         coords = x.extract(self.coordinates_indices)

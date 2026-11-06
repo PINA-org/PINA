@@ -12,7 +12,7 @@ class FixedLaplacian(Equation):
 
     :Example:
 
-        >>> from pina.equation import FixedLaplacian
+        >>> from pina.equation.zoo import FixedLaplacian
         >>> eq = FixedLaplacian(value=0.0)
         >>> # Use within a DomainEquationCondition:
         >>> # condition = DomainEquationCondition(domain=domain, equation=eq)
@@ -26,18 +26,17 @@ class FixedLaplacian(Equation):
         :type value: float | int
         :param components: The name of the output variables for which the fixed
             laplace condition is applied. It should be a subset of the output
-            labels. If ``None``, all output variables are considered. Default is
-            ``None``.
-        :type components: str | list[str]
+            labels. ``None`` or an empty list selects all output variables.
+            Default is ``None``.
+        :type components: str | list[str] | None
         :param d: The name of the input variables on which the laplacian is
             computed. It should be a subset of the input labels. If ``None``,
-            all the input variables are considered. Default is ``None``.
-        :type d: str | list[str]
+            all the input variables are considered; an empty list does the same.
+            Default is ``None``.
+        :type d: str | list[str] | None
         :raises ValueError: If ``value`` is neither a float nor an integer.
-        :raises ValueError: If, when provided, ``components`` is neither a
-            string nor a list of strings.
-        :raises ValueError: If, when provided, ``d`` is neither a string nor a
-            list of strings.
+        :raises ValueError: If component or coordinate validation rejects
+            non-string entries.
         """
         # Check consistency
         check_consistency(value, (float, int))
@@ -50,11 +49,18 @@ class FixedLaplacian(Equation):
             """
             Definition of the equation to enforce a fixed laplacian.
 
-            :param LabelTensor input_: The input points where the residual is
-                computed.
+            :param LabelTensor input_: The labeled input points of shape
+                ``(n, n_inputs)``, with gradient tracking enabled.
             :param LabelTensor output_: The output tensor, potentially produced
                 by a :class:`torch.nn.Module` instance.
-            :return: The residual values of the equation.
+            :raises TypeError: If either argument is not a labeled tensor or
+                differentiation returns an unused gradient.
+            :raises RuntimeError: If labels are missing or the graph cannot
+                support the required first and second derivatives.
+            :raises ValueError: If result labels cannot be assigned.
+            :return: Componentwise Laplacians minus the fixed value, with shape
+                ``(n, n_components)`` and labels assigned by
+                :func:`pina.operator.laplacian`.
             :rtype: LabelTensor
             """
             return (
@@ -74,6 +80,22 @@ class Laplace(FixedLaplacian):
     """
 
     def __init__(self, components=None, d=None):
+        """
+        Initialization of the :class:`Laplace` class.
+
+        :param components: The output names to constrain. ``None`` or an empty
+            list selects all outputs. Default is ``None``.
+        :type components: str | list[str] | None
+        :param d: The coordinate names to differentiate. ``None`` or an empty
+            list selects all input coordinates. Default is ``None``.
+        :type d: str | list[str] | None
+        :raises ValueError: If selector validation rejects non-string entries.
+
+        .. deprecated:: 0.3
+
+            Emits ``DeprecationWarning``. Use :class:`FixedLaplacian` with
+            ``value=0.0`` instead.
+        """
         warnings.warn(
             "Laplace is deprecated, use FixedLaplacian with value=0.0 instead.",
             DeprecationWarning,

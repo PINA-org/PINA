@@ -46,15 +46,18 @@ class FeedForward(torch.nn.Module):
         :param int inner_size: The number of neurons for each hidden layer.
             Default is ``20``.
         :param int n_layers: The number of hidden layers. Default is ``2``.
-        :param func: The activation function. If a list is passed, it must have
-            the same length as ``n_layers``. If a single function is passed, it
-            is used for all layers, except for the last one.
+        :param func: No-argument activation classes or factories. A list must
+            match the actual hidden width count, including when ``layers``
+            overrides ``n_layers``. A single factory is reused for hidden
+            layers only; ``None`` omits activation.
             Default is :class:`torch.nn.Tanh`.
-        :type func: torch.nn.Module | list[torch.nn.Module]
-        :param list[int] layers: The list of the dimension of inner layers.
+        :type func: type[torch.nn.Module] | list[type[torch.nn.Module] | None] |
+            None
+        :param layers: The list of the dimension of inner layers.
             If ``None``, ``n_layers`` of dimension ``inner_size`` are used.
             Otherwise, it overrides the values passed to ``n_layers`` and
             ``inner_size``. Default is ``None``.
+        :type layers: list[int] | None
         :param bool bias: If ``True`` bias is considered for the basis function
             neural network. Default is ``True``.
         :raises ValueError: If the input dimension is not an integer.
@@ -105,9 +108,11 @@ class FeedForward(torch.nn.Module):
         """
         Forward pass for the :class:`FeedForward` model.
 
-        :param x: The input tensor.
+        :param x: The input tensor with shape ``(..., input_dimensions)``.
         :type x: torch.Tensor | LabelTensor
-        :return: The output tensor.
+        :raises RuntimeError: If input dimensions or dtype do not match layers.
+        :return: Predictions of shape ``(..., output_dimensions)``. Leading
+            dimensions are preserved; output labels are not assigned here.
         :rtype: torch.Tensor | LabelTensor
         """
         return self.model(x)
@@ -164,20 +169,24 @@ class ResidualFeedForward(torch.nn.Module):
         :param int inner_size: The number of neurons for each hidden layer.
             Default is ``20``.
         :param int n_layers: The number of hidden layers. Default is ``2``.
-        :param func: The activation function. If a list is passed, it must have
-            the same length as ``n_layers``. If a single function is passed, it
-            is used for all layers, except for the last one.
+        :param type[torch.nn.Module] func: No-argument activation class used in
+            each hidden layer.
+            Lists pass element validation but fail construction when called.
             Default is :class:`torch.nn.Tanh`.
-        :type func: torch.nn.Module | list[torch.nn.Module]
         :param bool bias: If ``True`` bias is considered for the basis function
             neural network. Default is ``True``.
         :param transformer_nets: The two :class:`torch.nn.Module` acting as
             transformer network. The input dimension of both networks must be
             equal to ``input_dimensions``, and the output dimension must be
             equal to ``inner_size``. If ``None``, two
-            :class:`~pina.model.block.residual.EnhancedLinear` layers are used.
+            :class:`~pina.model.block.EnhancedLinear` layers with Tanh are used,
+            independently of ``func``.
             Default is ``None``.
-        :type transformer_nets: list[torch.nn.Module] | tuple[torch.nn.Module]
+        :type transformer_nets: list[torch.nn.Module] |
+            tuple[torch.nn.Module, torch.nn.Module] | None
+        :raises ValueError: If argument types or transformer dimensions fail
+            validation. Custom transformers are probed with random CPU inputs
+            during construction, potentially updating their training state.
         :raises RuntimeError: If the number of layers and functions are
             inconsistent.
         """
@@ -228,9 +237,10 @@ class ResidualFeedForward(torch.nn.Module):
         """
         Forward pass for the :class:`ResidualFeedForward` model.
 
-        :param x: The input tensor.
+        :param x: The input tensor of shape ``(..., input_dimensions)``.
         :type x: torch.Tensor | LabelTensor
-        :return: The output tensor.
+        :raises RuntimeError: If input or gating shapes cannot be combined.
+        :return: Predictions of shape ``(..., output_dimensions)``.
         :rtype: torch.Tensor | LabelTensor
         """
         # enhance the input with transformer
@@ -252,8 +262,11 @@ class ResidualFeedForward(torch.nn.Module):
         Check the transformer networks consistency.
 
         :param transformer_nets: The two :class:`torch.nn.Module` acting as
-            transformer network.
-        :type transformer_nets: list[torch.nn.Module] | tuple[torch.nn.Module]
+            transformer network. ``None`` creates two default Linear/Tanh
+            networks. Custom networks are probed on ``(10, input_dimensions)``
+            random inputs without disabling gradients or training mode.
+        :type transformer_nets: list[torch.nn.Module] |
+            tuple[torch.nn.Module, torch.nn.Module] | None
         :param int input_dimensions: The number of input components.
         :param int inner_size: The number of neurons for each hidden layer.
         :raises ValueError: If the passed ``transformer_nets`` is not a list of
@@ -264,9 +277,10 @@ class ResidualFeedForward(torch.nn.Module):
             is incompatible with the input dimension of the model.
         :raises ValueError: If the output dimension of the transformer network
             is incompatible with the inner size of the model.
-        :raises RuntimeError: If unexpected error occurs.
+        :raises RuntimeError: If the container is neither a list, tuple, nor
+            ``None``.
         :return: The two :class:`torch.nn.Module` acting as transformer network.
-        :rtype: list[torch.nn.Module] | tuple[torch.nn.Module]
+        :rtype: list[torch.nn.Module] | tuple[torch.nn.Module, torch.nn.Module]
         """
         # check transformer nets
         if transformer_nets is None:

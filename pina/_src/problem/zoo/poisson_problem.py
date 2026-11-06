@@ -15,8 +15,10 @@ def forcing_term(input_):
     """
     Implementation of the forcing term of the Poisson problem.
 
-    :param LabelTensor input_: The points where the forcing term is evaluated.
-    :return: The forcing term of the Poisson problem.
+    :param LabelTensor input_: Points of shape ``(n, 2)`` including ``"x"`` and
+        ``"y"`` labels.
+    :raises ValueError: If a required coordinate label is missing.
+    :return: ``2 * pi ** 2 * sin(pi * x) * sin(pi * y)``, of shape ``(n, 1)``.
     :rtype: LabelTensor
     """
     return (
@@ -65,6 +67,7 @@ class Poisson2DSquareProblem(SpatialProblem):
 
     :Example:
 
+        >>> from pina.problem.zoo import Poisson2DSquareProblem
         >>> problem = Poisson2DSquareProblem()
     """
 
@@ -89,8 +92,11 @@ class Poisson2DSquareProblem(SpatialProblem):
         """
         Implementation of the analytical solution of the Poisson problem.
 
-        :param LabelTensor pts: The points where the solution is evaluated.
-        :return: The analytical solution of the Poisson problem.
+        :param LabelTensor pts: Points of shape ``(n, 2)`` labeled ``"x"`` and
+            ``"y"``, in either column order.
+        :raises ValueError: If a required coordinate label is missing.
+        :return: The negative sine-product solution of shape ``(n, 1)``, labeled
+            ``"u"``.
         :rtype: LabelTensor
         """
         sol = -(

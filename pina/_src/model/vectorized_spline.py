@@ -63,9 +63,9 @@ class VectorizedSpline(torch.nn.Module):
         When using the :meth:`derivative` method of this class, derivatives are
         computed directly in vectorized form and returned with the correct
         shape. In contrast, when relying on ``autograd``, derivatives must be
-        computed separately for each output dimension of each univariate spline
-        and then combined, since autograd does not natively handle this
-        vectorized structure.
+        computed with suitable Jacobian/vector-Jacobian products. Autograd does
+        support this structure; this method returns coordinatewise derivatives
+        directly without constructing a full Jacobian.
 
     :Example:
 
@@ -104,7 +104,7 @@ class VectorizedSpline(torch.nn.Module):
 
         :param int order: The order of each univariate spline. The corresponding
             basis functions are polynomials of degree ``order - 1``.
-            Default is 4.
+            Default is ``4``.
         :param knots: The knots of the spline. If a tensor is provided, it must
             have shape ``[s, n]``, where ``s`` is the number of univariate
             splines and ``n`` is the number of knots per univariate spline. If a
@@ -117,23 +117,29 @@ class VectorizedSpline(torch.nn.Module):
             evenly spaced over :math:`[min, max]`, and ``"auto"``, where knots
             are constructed to ensure that each univariate spline interpolates
             the first and last control points. In this case, the number of knots
-            is adjusted if :math:`n < 2 * order`. If None is given, knots are
+            is adjusted if :math:`n < 2 * order`. With ``None``, knots are
             initialized automatically over :math:`[0, 1]` ensuring interpolation
-            of the first and last control points. Default is None.
-        :type knots: torch.Tensor | dict
-        :param torch.Tensor control_points: The control points tensor. The
+            of the first and last control points using the supplied control
+            count. Knots and controls cannot both be ``None``.
+            Default is ``None``.
+        :type knots: torch.Tensor | dict[str, int | float | str] | None
+        :param control_points: The floating control points tensor. The
             tensor must be either of shape ``[s, o, c]`` or ``[s, c]``, where
             each univariate spline has ``c`` control points and output dimension
             ``o``. In the latter case, the control points are expanded to shape
-            ``[s, 1, c]``. If None, control points are initialized to learnable
-            parameters with zero initial value. Default is None.
-        :param str aggregate_output: If None, the output of each univariate
+            ``[s, 1, c]``. ``None`` creates zero-initialized trainable controls
+            from the knots. Supplied controls are also made trainable.
+            Default is ``None``.
+        :type control_points: torch.Tensor | None
+        :param aggregate_output: If ``None``, the output of each univariate
             spline is returned separately, resulting in an output of shape
             ``[batch, s, o]``, where ``s`` is the number of univariate splines
             and ``o`` is the output dimension of each univariate spline. If set
             to ``"mean"`` or ``"sum"``, the output is aggregated accordingly
             across the last dimension, resulting in an output of shape
-            ``[batch, s]``. Default is None.
+            ``[batch, s]``. Even with ``None``, ``s=o=1`` squeezes the output
+            axis. Default is ``None``.
+        :type aggregate_output: str | None
         :raises AssertionError: If ``order`` is not a positive integer.
         :raises ValueError: If ``knots`` is neither a torch.Tensor nor a
             dictionary, when provided.
@@ -149,11 +155,13 @@ class VectorizedSpline(torch.nn.Module):
         :raises ValueError: If, for each univariate spline, the number of
             ``knots`` is not equal to the sum of ``order`` and the number of
             ``control_points.``
-        :raises UserWarning: If, for each univariate spline, the number of
-            ``control_points`` is lower than the ``order``, resulting in a
-            degenerate spline.
         :raises ValueError: If the number of univariate splines in ``knots`` and
-            ``control_points`` do not match.
+             ``control_points`` do not match.
+
+        .. warning::
+
+            Too few controls emits ``UserWarning``. Knot rows are sorted, but
+            control coefficients are not reordered with them.
         """
 
         super().__init__()
@@ -290,15 +298,17 @@ class VectorizedSpline(torch.nn.Module):
         This method applies the Cox-de Boor recursion in vectorized form across
         all univariate splines of the vector spline.
 
-        :param torch.Tensor x: The points to be evaluated.
-        :param bool collection: If True, returns a list of basis functions for
-            all orders up to the spline order. Default is False.
+        :param torch.Tensor x: Coordinates of shape ``(batch, s)``, cast to
+            plain tensors with the knot dtype, but not automatically moved.
+        :param bool collection: Whether to return all order-specific bases,
+            with a dummy ``None`` at index zero. Default is ``False``.
         :raises ValueError: If ``collection`` is not a boolean.
         :raises ValueError: If ``x`` is not two-dimensional.
         :raises ValueError: If the number of input features does not match
             the number of univariate splines.
-        :return: The basis functions evaluated at x.
-        :rtype: torch.Tensor
+        :return: Bases of shape ``(batch, s, n_controls)``, or an order-indexed
+            list when collection is requested.
+        :rtype: torch.Tensor | list[torch.Tensor | None]
         """
         # Check consistency
         check_consistency(collection, bool)
@@ -429,6 +439,8 @@ class VectorizedSpline(torch.nn.Module):
         :param x: The input tensor.
         :type x: torch.Tensor | LabelTensor
         :param int degree: The derivative degree to compute.
+        :raises AssertionError: If ``degree`` is not a nonnegative integer.
+        :raises ValueError: If input shape is not ``(batch, n_splines)``.
         :return: The derivative tensor.
         :rtype: torch.Tensor
         """
@@ -503,8 +515,8 @@ class VectorizedSpline(torch.nn.Module):
         """
         The control points of the spline.
 
-        :return: The control points.
-        :rtype: torch.Tensor
+        :return: The stored trainable tensor of shape ``(s, o, c)``.
+        :rtype: torch.nn.Parameter
         """
         return self._control_points
 
@@ -513,11 +525,13 @@ class VectorizedSpline(torch.nn.Module):
         """
         Set the control points of the spline.
 
-        :param torch.Tensor control_points: The control points tensor. The
+        :param control_points: The control points tensor. The
             tensor must be either of shape ``[s, o, c]`` or ``[s, c]``, where
             each univariate spline has ``c`` control points and output dimension
             ``o``. In the latter case, the control points are expanded to shape
-            ``[s, 1, c]``.
+            ``[s, 1, c]``. ``None`` initializes zero controls using current
+            knot counts. This setter does not validate the final shape.
+        :type control_points: torch.Tensor | None
         :raises ValueError: If there are not enough knots to define the control
             points, due to the relation: #knots = order + #control_points.
         """
@@ -560,6 +574,7 @@ class VectorizedSpline(torch.nn.Module):
     def knots(self, value):
         """
         Set the knots of the spline.
+
         :param value: The knots of the spline. If a tensor is provided, it must
             have shape ``[s, n]``, where ``s`` is the number of univariate
             splines and ``n`` is the number of knots per univariate spline. If a
@@ -572,10 +587,10 @@ class VectorizedSpline(torch.nn.Module):
             evenly spaced over :math:`[min, max]`, and ``"auto"``, where knots
             are constructed to ensure that each univariate spline interpolates
             the first and last control points. In this case, the number of knots
-            is adjusted if :math:`n < 2 * order`. If None is given, knots are
-            initialized automatically over :math:`[0, 1]` ensuring interpolation
-            of the first and last control points.
-        :type value: torch.Tensor | dict
+            is adjusted if :math:`n < 2 * order`. ``None`` is not supported by
+            this setter. Rows are sorted, derivative buffers refreshed, and
+            existing control coefficients left unchanged.
+        :type value: torch.Tensor | dict[str, int | float | str]
         :raises ValueError: If a dictionary is provided but does not contain
             the required keys.
         :raises ValueError: If the mode specified in the dictionary is invalid.

@@ -21,6 +21,7 @@ class ParametricProblem(BaseProblem):
         >>> from pina.problem import ParametricProblem
         >>> from pina.domain import CartesianDomain
         >>> class MyParametricProblem(ParametricProblem):
+        ...     output_variables = ["u"]
         ...     @property
         ...     def parameter_domain(self):
         ...         return CartesianDomain({"mu": [0.1, 10.0]})
@@ -36,6 +37,10 @@ class ParametricProblem(BaseProblem):
     def parameter_domain(self):
         """
         The domain of the parameters of the problem.
+
+        :return: The geometry providing the names of parameter inputs, distinct
+            from trainable unknowns in an inverse problem.
+        :rtype: pina.domain.DomainInterface
         """
 
     @property

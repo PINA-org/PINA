@@ -19,7 +19,7 @@ class AdvectionEquation(Equation):
 
     :Example:
 
-        >>> from pina.equation import AdvectionEquation
+        >>> from pina.equation.zoo import AdvectionEquation
         >>> eq = AdvectionEquation(c=1.0)
         >>> # Use within a DomainEquationCondition:
         >>> # condition = DomainEquationCondition(domain=domain, equation=eq)
@@ -31,9 +31,12 @@ class AdvectionEquation(Equation):
 
         :param c: The advection velocity. If a scalar is provided, the same
             velocity is applied to all spatial dimensions. If a list is
-            provided, it must contain one value per spatial dimension.
-        :type c: float | int | List[float] | List[int]
+            provided, it must contain one value per spatial dimension, or one
+            value broadcast to every spatial dimension. Spatial order is the
+            input-label order excluding ``"t"``.
+        :type c: float | int | list[float | int]
         :raises ValueError: If ``c`` is an empty list.
+        :raises ValueError: If numeric type validation fails for ``c``.
         """
         # Check consistency
         check_consistency(c, (float, int))
@@ -50,14 +53,22 @@ class AdvectionEquation(Equation):
             """
             Implementation of the advection equation.
 
-            :param LabelTensor input_: The input data of the problem.
-            :param LabelTensor output_: The output data of the problem.
-            :return: The residual of the advection equation.
-            :rtype: LabelTensor
+            :param LabelTensor input_: Points of shape ``(n, d + 1)`` with
+                gradient tracking, time label ``"t"``, and spatial labels.
+                Every non-time input is treated as a spatial coordinate.
+            :param LabelTensor output_: Predictions of shape ``(n, m)``, with
+                an autograd connection to ``input_``.
             :raises ValueError: If the ``input_`` labels do not contain the time
-                variable 't'.
-            :raises ValueError: If ``c`` is a list and its length is not
-                consistent with the number of spatial dimensions.
+                variable ``"t"``.
+            :raises ValueError: If a multi-entry velocity does not match the
+                number of spatial dimensions.
+            :raises TypeError: If arguments are not labeled tensors or an
+                unused gradient cannot be indexed.
+            :raises RuntimeError: If differentiation or velocity broadcasting
+                fails.
+            :return: Time derivative plus velocity-weighted spatial derivatives,
+                with shape ``(n, m)``.
+            :rtype: LabelTensor
             """
             # Store labels
             input_lbl = input_.labels

@@ -72,37 +72,43 @@ class EquivariantGraphNeuralOperator(torch.nn.Module):
         :param int pos_dim: The dimension of the position features in each
             EGNO layer.
         :param int modes: The number of Fourier modes to use in the temporal
-            convolution.
+            convolution, clipped to ``time_steps // 2 + 1`` during evaluation.
         :param int time_steps: The number of time steps to consider in the
-            temporal convolution. Default is 2.
+            temporal convolution. Default is ``2``.
         :param int hidden_dim: The dimension of the hidden features in each EGNO
-            layer. Default is 64.
+            layer. Default is ``64``.
         :param int time_emb_dim: The dimension of the sinusoidal time
-            embeddings. Default is 16.
+            embeddings. Widths two or three produce nonfinite frequency values
+            due to division by zero; use at least four. Default is ``16``.
         :param int max_time_idx: The maximum time index for the sinusoidal
-            embeddings. Default is 10000.
+            embeddings. Default is ``10000``.
         :param int n_message_layers: The number of layers in the message
-            network of each EGNO layer. Default is 2.
+            network of each EGNO layer. Default is ``2``.
         :param int n_update_layers: The number of layers in the update network
-            of each EGNO layer. Default is 2.
-        :param torch.nn.Module activation: The activation function.
+            of each EGNO layer. Default is ``2``.
+        :param type[torch.nn.Module] activation: No-argument activation class.
             Default is :class:`torch.nn.SiLU`.
         :param str aggr: The aggregation scheme to use for message passing.
-            Available options are "add", "mean", "min", "max", "mul".
+            Available options include ``"add"``, ``"mean"``, ``"min"``,
+            ``"max"``, and ``"mul"``.
             See :class:`torch_geometric.nn.MessagePassing` for more details.
-            Default is "add".
-        :param int node_dim: The axis along which to propagate. Default is -2.
+            Default is ``"add"``.
+        :param int node_dim: The propagation axis. Default is ``-2``.
         :param str flow: The direction of message passing. Available options
-            are "source_to_target" and "target_to_source".
-            The "source_to_target" flow means that messages are sent from
-            the source node to the target node, while the "target_to_source"
+            are ``"source_to_target"`` and ``"target_to_source"``.
+            The ``"source_to_target"`` flow means that messages are sent from
+            the source node to the target node, while ``"target_to_source"``
             flow means that messages are sent from the target node to the
             source node. See :class:`torch_geometric.nn.MessagePassing` for more
-            details. Default is "source_to_target".
+            details. Default is ``"source_to_target"``.
         :raises AssertionError: If ``n_egno_layers`` is not a positive integer.
         :raises AssertionError: If ``time_emb_dim`` is not a positive integer.
         :raises AssertionError: If ``max_time_idx`` is not a positive integer.
         :raises AssertionError: If ``time_steps`` is not a positive integer.
+        :raises AssertionError: If block dimensions, modes, or layer counts fail
+            positive integer validation; edge width may be zero.
+        :raises ValueError: If activation or PyG propagation options are
+            invalid.
         """
         super().__init__()
 
@@ -146,21 +152,23 @@ class EquivariantGraphNeuralOperator(torch.nn.Module):
         Forward pass of the :class:`EquivariantGraphNeuralOperator` class.
 
         :param graph: The input graph object with the following attributes:
-            - 'x': Node features, shape ``[num_nodes, node_feature_dim]``.
-            - 'pos': Node positions, shape ``[num_nodes, pos_dim]``.
-            - 'vel': Node velocities, shape ``[num_nodes, pos_dim]``.
-            - 'edge_index': Graph connectivity, shape ``[2, num_edges]``.
-            - 'edge_attr': Edge attrs, shape ``[num_edges, edge_feature_dim]``.
-        :type graph: Data | Graph
+
+            * ``x``: Features shaped ``(num_nodes, node_feature_dim)``.
+            * ``pos``: Positions shaped ``(num_nodes, pos_dim)``.
+            * ``vel``: Velocities shaped ``(num_nodes, pos_dim)``.
+            * ``edge_index``: Connectivity shaped ``(2, num_edges)``.
+            * ``edge_attr``: Features shaped ``(num_edges, edge_feature_dim)``,
+              or ``None`` with zero configured edge width.
+
+        :type graph: torch_geometric.data.Data | pina.Graph
+        :raises ValueError: If the graph does not contain ``vel``.
         :return: The output graph object with updated node features,
-            positions, and velocities. The output graph adds to 'x', 'pos',
-            'vel', and 'edge_attr' the time dimension, resulting in shapes:
-            - 'x': ``[time_steps, num_nodes, node_feature_dim]``
-            - 'pos': ``[time_steps, num_nodes, pos_dim]``
-            - 'vel': ``[time_steps, num_nodes, pos_dim]``
-            - 'edge_attr': ``[time_steps, num_edges, edge_feature_dim]``
-        :rtype: Data | Graph
-        :raises ValueError: If the input graph does not have a 'vel' attribute.
+            positions, and velocities. It is a clone: the input is unchanged.
+            ``x``, ``pos``, and ``vel`` gain a leading ``time_steps`` axis, as
+            does ``edge_attr`` when present. The original ``edge_index`` and
+            other graph metadata are retained, not replaced by the internally
+            offset temporal connectivity.
+        :rtype: torch_geometric.data.Data | pina.Graph
         """
         # Check that the graph has the required attributes
         if "vel" not in graph:
@@ -212,8 +220,10 @@ class EquivariantGraphNeuralOperator(torch.nn.Module):
         """
         Generate sinusoidal temporal embeddings.
 
-        :param torch.Tensor time: The time instances.
-        :return: The sinusoidal embedding tensor.
+        :param torch.Tensor time: One-dimensional CPU time coordinates.
+        :return: Embeddings shaped ``(len(time), time_emb_dim)``. Odd widths
+            have a final zero column; widths two and three divide by zero in
+            frequency construction and can produce nonfinite values.
         :rtype: torch.Tensor
         """
         # Compute the sinusoidal embeddings

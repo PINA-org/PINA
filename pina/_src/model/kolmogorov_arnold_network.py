@@ -1,3 +1,5 @@
+"""Kolmogorov-Arnold networks built from independent spline blocks."""
+
 import torch
 from pina._src.model.block.kan_block import KANBlock
 from pina._src.core.utils import check_consistency
@@ -48,28 +50,32 @@ class KolmogorovArnoldNetwork(torch.nn.Module):
 
         :param layers: A list of integers specifying the sizes of each layer,
             including input and output dimensions.
-        :type layers: list | tuple.
+        :type layers: list[int] | tuple[int, ...]
         :param int spline_order: The order of each spline basis function.
-            Default is 3 (cubic splines).
+            Basis degree is ``spline_order - 1``. Default is ``3`` (quadratic).
         :param int n_knots: The number of knots for each spline basis function.
-            Default is 3.
+            Default is ``10``; at least twice the order knots are constructed.
         :param grid_range: The range for the spline knots. It must be either a
-            list or a tuple of the form [min, max]. Default is [0, 1].
-        :type grid_range: list | tuple.
-        :param torch.nn.Module base_function: The base activation function to be
+            list or tuple of two numeric endpoints. Default is ``[-1, 1]``.
+        :type grid_range: list[int | float] | tuple[int | float, int | float]
+        :param type[torch.nn.Module] base_function: The activation class to be
             applied to the input before the linear transformation. Default is
             :class:`torch.nn.SiLU`.
         :param bool use_base_linear: Whether to include a linear transformation
-            of the base function output. Default is True.
+            of the base function output. Default is ``True``.
         :param bool use_bias: Whether to include a bias term in the output.
-            Default is True.
+            Default is ``True``.
         :param init_scale_spline: The scale for initializing each spline
-            control points. Default is 1e-2.
-        :type init_scale_spline: float | int.
+            control points. Default is ``1e-2``.
+        :type init_scale_spline: float | int
         :param init_scale_base: The scale for initializing the base linear
-            weights. Default is 1.0.
-        :type init_scale_base: float | int.
+            weights. Default is ``1.0``.
+        :type init_scale_base: float | int
         :raises ValueError: If ``grid_range`` is not of length 2.
+        :raises ValueError: If fewer than two layer widths are supplied or type
+            validation fails in this model or its blocks.
+        :raises AssertionError: If layer widths, order, or knot count are not
+            positive integers.
         """
         super().__init__()
 
@@ -104,9 +110,10 @@ class KolmogorovArnoldNetwork(torch.nn.Module):
         Forward pass of the KolmogorovArnoldNetwork model. It passes the input
         through each KAN block in the network and returns the final output.
 
-        :param x: The input tensor for the model.
+        :param x: Input of shape ``(batch, layers[0])``. Spline blocks require
+            exactly two dimensions.
         :type x: torch.Tensor | LabelTensor
-        :return: The output tensor of the model.
+        :return: Predictions of shape ``(batch, layers[-1])``.
         :rtype: torch.Tensor | LabelTensor
         """
         for layer in self.kan_layers:

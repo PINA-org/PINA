@@ -44,14 +44,16 @@ class GradientPhysicsInformedSingleModelSolver(
         \left( \mathcal{A}[\hat{\mathbf{u}}](\mathbf{x}_i) \right)
         + \frac{1}{N_{\partial\Omega}} \sum_{i=1}^{N_{\partial\Omega}}
         \mathcal{L} \left( \mathcal{B}[\hat{\mathbf{u}}](\mathbf{x}_i) \right)
-        + \frac{1}{N_{\Omega}} \sum_{i=1}^{N_{\Omega}} \mathcal{L}
+        + \frac{\lambda}{N_{\Omega}} \sum_{i=1}^{N_{\Omega}} \mathcal{L}
         \left( \nabla_{\mathbf{x}} \mathcal{A}[\hat{\mathbf{u}}](\mathbf{x}_i)
-        \right) + \frac{1}{N_{\partial\Omega}} \sum_{i=1}^{N_{\partial\Omega}}
+        \right) + \frac{\lambda}{N_{\partial\Omega}}
+        \sum_{i=1}^{N_{\partial\Omega}}
         \mathcal{L} \left( \nabla_{\mathbf{x}} \mathcal{B}[\hat{\mathbf{u}}]
         (\mathbf{x}_i) \right),
 
     where :math:`\mathcal{L}` is the selected loss function, typically the mean
-    squared error.
+    squared error, and :math:`\lambda` is ``regularization_weight``. Gradient
+    terms apply only to selected conditions and use spatial coordinates.
 
     .. seealso::
 
@@ -65,11 +67,11 @@ class GradientPhysicsInformedSingleModelSolver(
     :Example:
 
         >>> from pina.solver import GradientPhysicsInformedSingleModelSolver
-        >>> from pina.problem import PoissonProblem
+        >>> from pina.problem.zoo import Poisson2DSquareProblem
         >>> # solver = GradientPhysicsInformedSingleModelSolver(
         >>> #     problem=problem, model=model, regularization_weight=0.1
         >>> # )
-        >>> # solver.train()
+        >>> # Train with pina.Trainer(solver=solver, ...).train().
     """
 
     # Accepted conditions types for this solver
@@ -94,25 +96,32 @@ class GradientPhysicsInformedSingleModelSolver(
         Initialization of the :class:`GradientPhysicsInformedSingleModelSolver`
         class.
 
-        :param BaseProblem problem: The problem to be solved.
+        :param pina.problem.SpatialProblem problem: The spatial problem.
         :param torch.nn.Module model: The model used by the solver.
-        :param TorchOptimizer optimizer: The optimizer used by the solver.
+        :param optimizer: The optimizer wrapper used by the solver.
             If ``None``, the ``torch.optim.Adam`` optimizer with a learning rate
             of ``0.001`` is used. Default is ``None``.
-        :param TorchScheduler scheduler: The scheduler used by the solver.
+        :type optimizer: pina.optim.TorchOptimizer | None
+        :param scheduler: The scheduler wrapper used by the solver.
             If ``None``, the ``torch.optim.lr_scheduler.ConstantLR`` scheduler
             with a factor of ``1.0`` is used. Default is ``None``.
-        :param BaseWeighting weighting: The weighting strategy used to combine
+        :type scheduler: pina.optim.TorchScheduler | None
+        :param weighting: The weighting strategy used to combine
             condition losses. If ``None``, no weighting is applied. Default is
             ``None``.
+        :type weighting: pina.weighting.BaseWeighting | None
         :param loss: The loss function used to compute residual losses.
             If ``None``, :class:`torch.nn.MSELoss` is used. Default is ``None``.
+        :type loss: torch.nn.modules.loss._Loss | pina.loss.BaseDualLoss | None
         :param regularization_weight: The weight of the gradient regularization
             term. Default is ``1.0``.
         :type regularization_weight: float | int
         :param regularized_conditions: The names of the conditions that should
             receive gradient regularization. If ``None``, all conditions are
             regularized. Default is ``None``.
+        :type regularized_conditions: str | list[str] | tuple[str, ...] | None
+        :raises ValueError: If the problem is not spatial, conditions are
+            unknown, the weight is not numeric, or base solver validation fails.
         """
         # Initialize the parent class
         SingleModelSolver.__init__(

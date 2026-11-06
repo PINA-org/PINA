@@ -19,9 +19,10 @@ class SingleModelMixin:
         evaluates the model on the input.
 
         :param x: The input data.
-        :type x: torch.Tensor | LabelTensor | Data | Graph
+        :type x: torch.Tensor | LabelTensor | torch_geometric.data.Data |
+            pina.graph.Graph
         :return: The output of the single model.
-        :rtype: torch.Tensor | LabelTensor | Data | Graph
+        :rtype: Any
         """
         return self.model(x)
 
@@ -29,8 +30,15 @@ class SingleModelMixin:
         """
         Configure the optimizer and scheduler for the single model.
 
-        :return: The optimizer and the scheduler
-        :rtype: tuple[list[TorchOptimizer], list[TorchScheduler]]
+        Reconstructs wrapper instances through their hooks. For inverse
+        problems, adds the shared unknown parameters as an extra optimizer
+        group before initializing the scheduler.
+
+        :raises ValueError: If optimizer parameter-group validation fails.
+        :raises TypeError: If a wrapped constructor rejects its options.
+        :return: One-element lists of backend PyTorch instances, not wrappers.
+        :rtype: tuple[list[torch.optim.Optimizer],
+            list[torch.optim.lr_scheduler.LRScheduler]]
         """
         # Hook the optimizer to the model parameters
         self.optimizer.hook(self.model.parameters())

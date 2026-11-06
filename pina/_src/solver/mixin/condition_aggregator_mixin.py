@@ -23,10 +23,16 @@ class ConditionAggregatorMixin:
         condition losses into a single scalar loss through the configured
         weighting scheme.
 
-        :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and a dictionary of points.
+        :param batch: The condition-name/data pairs supplied by the data module.
+        :type batch: list[tuple[str, dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data]]
         :param int batch_idx: The index of the current batch.
-        :return: The aggregated scalar loss for the batch.
+        :raises KeyError: If a condition name or saved weight is absent.
+        :raises RuntimeError: If an empty batch cannot be stacked or a loss is
+            not scalar enough for logging with ``item()``.
+        :return: The weighted aggregate cast to a plain PyTorch tensor. Inverse
+            parameters are clamped after loss computation and before weighting;
+            repeated condition names overwrite earlier losses in this batch.
         :rtype: torch.Tensor
         """
         # Initialize a dictionary to hold the scalar losses for each condition

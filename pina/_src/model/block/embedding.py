@@ -20,11 +20,9 @@ class PeriodicBoundaryEmbedding(torch.nn.Module):
     The :class:`PeriodicBoundaryEmbedding` augments the input as follows:
 
     .. math::
-        \mathbf{x} \rightarrow \tilde{\mathbf{x}} = \left[1,
-        \cos\left(\frac{2\pi}{L_1} x_1 \right),
-        \sin\left(\frac{2\pi}{L_1}x_1\right), \cdots,
-        \cos\left(\frac{2\pi}{L_{\rm{in}}}x_{\rm{in}}\right),
-        \sin\left(\frac{2\pi}{L_{\rm{in}}}x_{\rm{in}}\right)\right],
+        \tilde{\mathbf{x}} = [\mathbf{1},
+        \cos(2\pi\mathbf{x}/\mathbf{L}),
+        \sin(2\pi\mathbf{x}/\mathbf{L})],
 
     where :math:`\text{dim}(\tilde{\mathbf{x}}) = 3\text{dim}(\mathbf{x})`.
 
@@ -42,15 +40,12 @@ class PeriodicBoundaryEmbedding(torch.nn.Module):
                 DOI: `arXiv preprint arXiv:2308.0846.
                 <https://arxiv.org/abs/2308.08468>`_
 
-    .. warning::
-        The embedding is a truncated fourier expansion, and enforces periodic
-        boundary conditions only for the function, and not for its derivatives.
-        Enforcement of the approximate periodicity in the derivatives can be
-        performed. Extensive tests have shown (see referenced papers) that this
-        implementation can correctly enforce the periodic boundary conditions on
-        the derivatives up to the order :math:`\sim 2,3`. This is not guaranteed
-        for orders :math:`>3`. The PINA module is tested only for periodic
-        boundary conditions on the function itself.
+    .. note::
+
+        Sine and cosine features are periodic in the selected coordinates.
+        Smooth downstream compositions have periodic derivatives wherever those
+        derivatives exist, up to floating-point error. Unselected coordinates
+        are dropped, not passed through unchanged.
 
     :Example:
 
@@ -59,29 +54,38 @@ class PeriodicBoundaryEmbedding(torch.nn.Module):
         >>> emb = PeriodicBoundaryEmbedding(
         ...     input_dimension=2, periods={"x": 1.0, "y": 2.0}
         ... )
-        >>> x = torch.randn(10, 2)
+        >>> from pina import LabelTensor
+        >>> x = LabelTensor(torch.randn(10, 2), ["x", "y"])
         >>> out = emb(x)
     """
 
     def __init__(self, input_dimension, periods, output_dimension=None):
         """
-        Initialization of the :class:`PeriodicBoundaryEmbedding` block.
+        Initialization of the :class:`PeriodicBoundaryEmbedding` class.
 
         :param int input_dimension: The dimension of the input tensor.
         :param periods: The periodicity with respect to each dimension for the
             input data. If ``float`` or ``int`` is passed, the period is assumed
             to be constant over all the dimensions of the data. If a ``dict`` is
-            passed the `dict.values` represent periods, while the ``dict.keys``
+            passed the dictionary values represent periods, while its keys
             represent the dimension where the periodicity is enforced.
-            The `dict.keys` can either be `int` if working with
+            Keys can be ``int`` if working with
             :class:`torch.Tensor`, or ``str`` if working with
             :class:`pina.label_tensor.LabelTensor`.
-        :type periods: float | int | dict
-        :param int output_dimension: The dimension of the output after the
+        :type periods: float | int | dict[int | str, int | float]
+        :param output_dimension: The dimension of the output after the
             fourier embedding. If not ``None``, a :class:`torch.nn.Linear` layer
             is applied to the fourier embedding output to match the desired
             dimensionality. Default is ``None``.
+        :type output_dimension: int | None
         :raises TypeError: If the periods dict is not consistent.
+        :raises ValueError: If dimension or period types fail validation.
+
+        .. note::
+
+            Period values are not checked for zero or sign. Dictionary order
+            determines feature order. A projection expects three times
+            ``input_dimension`` features, even with fewer selected coordinates.
         """
         super().__init__()
 
@@ -112,10 +116,15 @@ class PeriodicBoundaryEmbedding(torch.nn.Module):
         """
         Forward pass.
 
-        :param x: The input tensor.
+        :param x: Input of shape ``(..., input_dimension)``. String selections
+            require a :class:`pina.LabelTensor`.
         :type x: torch.Tensor | LabelTensor
-        :return: Periodic embedding of the input.
-        :rtype: torch.Tensor
+        :raises IndexError: If the period dictionary is empty.
+        :raises RuntimeError: If string extraction is unavailable or the
+            projection width is incompatible with the selected coordinates.
+        :return: Ones, cosine, and sine groups in that order, with final width
+            ``3 * n_selected`` or ``output_dimension`` if projected.
+        :rtype: torch.Tensor | LabelTensor
         """
         omega = torch.stack(
             [
@@ -172,8 +181,9 @@ class PeriodicBoundaryEmbedding(torch.nn.Module):
         """
         The period of the function.
 
-        :return: The period of the function.
-        :rtype: dict | float | int
+        :return: The stored coordinate-to-period mapping, retained by reference
+            for dictionary input and constructed for scalar input.
+        :rtype: dict[int | str, int | float]
         """
         return self._period
 
@@ -184,34 +194,36 @@ class FourierFeatureEmbedding(torch.nn.Module):
     Fourier features.
 
     This class applies a Fourier transformation to the input features, which can
-    help in learning high-frequency variations in data. The class supports
-    multiscale feature embedding, creating embeddings for each scale specified
-    by the ``sigma`` parameter.
+    help in learning high-frequency variations in data. Each instance uses one
+    scalar ``sigma`` scale; sequence scales are not implemented.
 
     The Fourier Feature Embedding augments the input features as follows
     (3.10 of original paper):
 
     .. math::
         \mathbf{x} \rightarrow \tilde{\mathbf{x}} = \left[
-        \cos\left( \mathbf{B} \mathbf{x} \right),
-        \sin\left( \mathbf{B} \mathbf{x} \right)\right],
+        \cos\left( 2\pi\mathbf{x}\mathbf{B} \right),
+        \sin\left( 2\pi\mathbf{x}\mathbf{B} \right)\right],
 
-    where :math:`\mathbf{B}_{ij} \sim \mathcal{N}(0, \sigma^2)`.
+    where :math:`\mathbf{B}_{ij} = \sigma U_{ij}` and
+    :math:`U_{ij} \sim \mathcal{U}[0,1)`.
 
-    If multiple ``sigma`` are passed, the resulting embeddings are concateneted:
+    Separate embedding modules can be used for multiple scales. For example,
+    their concatenation would have the form:
 
     .. math::
         \mathbf{x} \rightarrow \tilde{\mathbf{x}} = \left[
-        \cos\left( \mathbf{B}^1 \mathbf{x} \right),
-        \sin\left( \mathbf{B}^1 \mathbf{x} \right),
-        \cos\left( \mathbf{B}^2 \mathbf{x} \right),
-        \sin\left( \mathbf{B}^3 \mathbf{x} \right),
+        \cos\left( 2\pi\mathbf{x}\mathbf{B}^1 \right),
+        \sin\left( 2\pi\mathbf{x}\mathbf{B}^1 \right),
+        \cos\left( 2\pi\mathbf{x}\mathbf{B}^2 \right),
+        \sin\left( 2\pi\mathbf{x}\mathbf{B}^2 \right),
         \dots,
-        \cos\left( \mathbf{B}^M \mathbf{x} \right),
-        \sin\left( \mathbf{B}^M \mathbf{x} \right)\right],
+        \cos\left( 2\pi\mathbf{x}\mathbf{B}^M \right),
+        \sin\left( 2\pi\mathbf{x}\mathbf{B}^M \right)\right],
 
-    where :math:`\mathbf{B}^k_{ij} \sim \mathcal{N}(0, \sigma_k^2) \quad k \in
-    (1, \dots, M)`.
+    with the same ``2 * pi`` frequency factor as the single-scale embedding.
+    The random matrix is a plain tensor attribute, not a parameter or buffer:
+    it is omitted from ``state_dict`` and cast to input device/dtype per call.
 
     .. seealso::
         **Original reference**:
@@ -236,16 +248,16 @@ class FourierFeatureEmbedding(torch.nn.Module):
 
     def __init__(self, input_dimension, output_dimension, sigma):
         """
-        Initialization of the :class:`FourierFeatureEmbedding` block.
+        Initialization of the :class:`FourierFeatureEmbedding` class.
 
         :param int input_dimension: The dimension of the input tensor.
         :param int output_dimension: The dimension of the output tensor. The
             output is obtained as a concatenation of cosine and sine embeddings.
-        :param sigma: The standard deviation used for the Fourier Embedding.
-            This value must reflect the granularity of the scale in the
-            differential equation solution.
+        :param sigma: The scalar multiplier for uniform random frequencies;
+            not their Gaussian standard deviation. No sign check is applied.
         :type sigma: float | int
         :raises RuntimeError: If the output dimension is not an even number.
+        :raises ValueError: If dimension or scale types fail validation.
         """
         super().__init__()
 
@@ -275,10 +287,11 @@ class FourierFeatureEmbedding(torch.nn.Module):
         """
         Forward pass.
 
-        :param x: The input tensor.
+        :param x: A two-dimensional tensor of shape ``(n, input_dimension)``.
         :type x: torch.Tensor | LabelTensor
-        :return: Fourier embedding of the input.
-        :rtype: torch.Tensor
+        :raises RuntimeError: If matrix multiplication rejects the shape/dtype.
+        :return: Cosine then sine features of shape ``(n, output_dimension)``.
+        :rtype: torch.Tensor | LabelTensor
         """
         # compute random matrix multiplication
         out = torch.mm(x, self._matrix.to(device=x.device, dtype=x.dtype))
@@ -291,9 +304,9 @@ class FourierFeatureEmbedding(torch.nn.Module):
     @property
     def sigma(self):
         """
-        The standard deviation used for the Fourier Embedding.
+        The scale multiplier applied to uniform frequency samples.
 
-        :return: The standard deviation used for the Fourier Embedding.
+        :return: The configured scale multiplier.
         :rtype: float | int
         """
         return self._sigma

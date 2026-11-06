@@ -45,7 +45,8 @@ class ResidualBlock(nn.Module):
         :param bool spectral_norm: If ``True``, the spectral normalization is
             applied to the feedforward layers. Default is ``False``.
         :param torch.nn.Module activation: The activation function.
-            Default is :class:`torch.nn.ReLU`.
+            Default is a :class:`torch.nn.ReLU` instance.
+        :raises ValueError: If argument types fail validation.
 
         """
         super().__init__()
@@ -72,8 +73,9 @@ class ResidualBlock(nn.Module):
         """
         Forward pass.
 
-        :param torch.Tensor x: The input tensor.
-        :return: The output tensor.
+        :param torch.Tensor x: Input with shape ``(..., input_dim)``.
+        :return: Nonlinear branch plus learned linear skip, with shape
+            ``(..., output_dim)``.
         :rtype: torch.Tensor
         """
         y = self._activation(self._l1(x))
@@ -86,7 +88,8 @@ class ResidualBlock(nn.Module):
         Perform spectral normalization on the network layers.
 
         :param torch.nn.Module x: A :class:`torch.nn.Linear` layer.
-        :return: The spectral norm of the layer
+        :return: The layer, reparameterized in place with spectral normalization
+            if enabled, or unchanged otherwise.
         :rtype: torch.nn.Module
         """
         return nn.utils.spectral_norm(x) if self._spectral_norm else x
@@ -115,12 +118,19 @@ class EnhancedLinear(torch.nn.Module):
         Initialization of the :class:`EnhancedLinear` class.
 
         :param torch.nn.Module layer: The linear layer to be enhanced.
-        :param torch.nn.Module activation: The activation function. Default is
-            ``None``.
-        :param float dropout: The dropout probability. Default is ``None``.
+        :param activation: Activation module; ``None`` omits activation.
+            Default is ``None``.
+        :type activation: torch.nn.Module | None
+        :param dropout: Dropout probability; ``None`` omits dropout.
+            Default is ``None``.
+        :type dropout: float | None
+        :raises ValueError: If types fail validation or dropout is outside
+            ``[0, 1]``.
 
         :Example:
 
+            >>> import torch
+            >>> from pina.model.block import EnhancedLinear
             >>> linear_layer = torch.nn.Linear(10, 20)
             >>> activation = torch.nn.ReLU()
             >>> dropout_prob = 0.5
@@ -169,6 +179,7 @@ class EnhancedLinear(torch.nn.Module):
         Apply dropout with probability p.
 
         :param float p: Dropout probability.
+        :raises ValueError: If ``p`` is outside ``[0, 1]``.
         :return: Dropout layer with the specified probability.
         :rtype: torch.nn.Dropout
         """

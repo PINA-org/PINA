@@ -22,9 +22,14 @@ class EnsembleMixin(MultiModelMixin):
         outputs are stacked together.
 
         :param x: The input data.
-        :type x: torch.Tensor | LabelTensor | Data | Graph
-        :return: The output of all models stacked together.
-        :rtype: torch.Tensor | LabelTensor | Data | Graph
+        :type x: torch.Tensor | LabelTensor | torch_geometric.data.Data |
+            pina.graph.Graph
+        :raises RuntimeError: If stacked model outputs have incompatible shapes
+            or the ensemble is empty.
+        :return: The active model's output when ``_active_model_idx`` is set;
+            otherwise outputs stacked on a new leading model axis, without
+            averaging. Inference typically returns ``(n_models, n, n_outputs)``.
+        :rtype: torch.Tensor | LabelTensor
         """
         # Retrieve the index of the active model if set
         active_idx = getattr(self, "_active_model_idx", None)
@@ -42,11 +47,15 @@ class EnsembleMixin(MultiModelMixin):
         """
         Compute the scalar loss for a given condition and its data.
 
-        :param BaseCondition condition: The condition for which to compute the
+        :param pina.condition.BaseCondition condition: The condition computing
             loss.
-        :param dict data: The data corresponding to the condition.
+        :param data: The materialized payload accepted by the condition.
+        :type data: dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data
         :param int batch_idx: The index of the current batch.
-        :return: The scalar loss for the condition.
+        :return: The mean of each model's separately evaluated condition loss.
+            The previous active-model index is restored even after an error;
+            stored residuals remain those of the last evaluated member.
         :rtype: torch.Tensor
         """
         # Initialize model losses for the current condition

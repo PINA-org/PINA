@@ -13,24 +13,26 @@ class EquationInterface(metaclass=ABCMeta):
         """
         Evaluate the equation residual at the given inputs.
 
-        :param LabelTensor input_: The input points where the residual is
-            computed.
-        :param LabelTensor output_: The output tensor, potentially produced by a
-            :class:`torch.nn.Module` instance.
-        :param dict params_: An optional dictionary of unknown parameters, used
-            in :class:`~pina.problem.inverse_problem.InverseProblem` settings.
-            If the equation is not related to an inverse problem, this should be
-            set to ``None``. Default is ``None``.
-        :return: The residual values of the equation.
-        :rtype: LabelTensor
+        :param LabelTensor input_: Labeled input points, normally of shape
+            ``(n, n_inputs)``. Differential equations require gradient tracking.
+        :param LabelTensor output_: Labeled predictions, normally of shape
+            ``(n, n_outputs)``, connected to ``input_`` when differentiated.
+        :param params_: The named unknown parameters for an
+            :class:`~pina.problem.InverseProblem`, or ``None`` when unused.
+            Default is ``None``.
+        :type params_: dict[str, torch.nn.Parameter] | None
+        :return: The residual tensor. Its shape and labels depend on the
+            concrete equation and any reduction.
+        :rtype: torch.Tensor | LabelTensor
         """
 
     @abstractmethod
     def to(self, device):
         """
-        Move all tensor attributes to the specified device.
+        Move supported tensor attributes to the specified device.
 
-        :param torch.device device: The target device to move the tensors to.
+        :param device: The target device accepted by :meth:`torch.Tensor.to`.
+        :type device: torch.device | str | int
         :return: The instance moved to the specified device.
         :rtype: EquationInterface
         """

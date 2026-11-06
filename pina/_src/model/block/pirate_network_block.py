@@ -36,7 +36,9 @@ class PirateNetBlock(torch.nn.Module):
         Initialization of the :class:`PirateNetBlock` class.
 
         :param int inner_size: The number of hidden units in the dense layers.
-        :param torch.nn.Module activation: The activation function.
+        :param type[torch.nn.Module] activation: No-argument activation class.
+        :raises AssertionError: If ``inner_size`` is not a positive integer.
+        :raises ValueError: If ``activation`` is not a module subclass.
         """
         super().__init__()
 
@@ -66,13 +68,15 @@ class PirateNetBlock(torch.nn.Module):
         by applying the dense layers with scaling, and combines the results with
         the input using the adaptive residual connection.
 
-        :param x: The input tensor.
+        :param x: The input tensor with final dimension ``inner_size``.
         :type x: torch.Tensor | LabelTensor
         :param torch.Tensor U: The first shared gating tensor. It must have the
             same shape as ``x``.
         :param torch.Tensor V: The second shared gating tensor. It must have the
             same shape as ``x``.
-        :return: The output tensor of the block.
+        :return: The gated/residual result with the same shape as ``x``. The
+            trainable residual coefficient starts at zero, so the initial
+            block acts as the identity.
         :rtype: torch.Tensor | LabelTensor
         """
         # Compute the output of the first dense layer with scaling

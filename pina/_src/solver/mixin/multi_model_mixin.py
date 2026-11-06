@@ -20,9 +20,13 @@ class MultiModelMixin:
         stacked tensor of their outputs.
 
         :param x: The input data.
-        :type x: torch.Tensor | LabelTensor | Data | Graph
-        :return: The output of all models stacked together.
-        :rtype: torch.Tensor | LabelTensor | Data | Graph
+        :type x: torch.Tensor | LabelTensor | torch_geometric.data.Data |
+            pina.graph.Graph
+        :raises RuntimeError: If model output shapes differ or no models exist.
+        :raises TypeError: If a model returns a non-tensor object.
+        :return: Tensor outputs stacked along a new leading model axis, with
+            shape ``(n_models, *model_output.shape)``. No averaging is applied.
+        :rtype: torch.Tensor | LabelTensor
         """
         return torch.stack(
             [self.models[idx](x) for idx in range(self.num_models)]
@@ -32,8 +36,15 @@ class MultiModelMixin:
         """
         Configure the optimizers and schedulers for all models.
 
-        :return: The optimizer and the scheduler
-        :rtype: tuple[list[TorchOptimizer], list[TorchScheduler]]
+        Reconstructs all wrapper instances through their hooks. For inverse
+        problems, adds the same unknown parameter objects as an extra group
+        to every optimizer.
+
+        :raises ValueError: If optimizer parameter-group validation fails.
+        :raises TypeError: If a wrapped constructor rejects its options.
+        :return: Lists of backend instances in model order, not wrappers.
+        :rtype: tuple[list[torch.optim.Optimizer],
+            list[torch.optim.lr_scheduler.LRScheduler]]
         """
         # Iterate over models, optimizers, and schedulers to hook them together
         for optimizer, scheduler, model in zip(
@@ -68,7 +79,7 @@ class MultiModelMixin:
         The models used by the solver.
 
         :return: The models used by the solver.
-        :rtype: list[torch.nn.Module]
+        :rtype: torch.nn.ModuleList
         """
         return self._pina_models
 
@@ -78,7 +89,8 @@ class MultiModelMixin:
         The optimizers used by the solver.
 
         :return: The optimizers used by the solver.
-        :rtype: list[TorchOptimizer]
+        :rtype: list[pina.optim.TorchOptimizer] |
+            tuple[pina.optim.TorchOptimizer, ...]
         """
         return self._pina_optimizers
 
@@ -88,7 +100,8 @@ class MultiModelMixin:
         The schedulers used by the solver.
 
         :return: The schedulers used by the solver.
-        :rtype: list[TorchScheduler]
+        :rtype: list[pina.optim.TorchScheduler] |
+            tuple[pina.optim.TorchScheduler, ...]
         """
         return self._pina_schedulers
 

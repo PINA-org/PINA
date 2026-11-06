@@ -17,7 +17,8 @@ class InteractionNetworkBlock(MessagePassing):
 
     The message between two nodes connected by an edge is computed by applying a
     multi-layer perceptron (MLP) to the concatenation of the sender and
-    recipient node features. Messages are then aggregated using an aggregation
+    recipient node features and optional edge attributes. Messages use an
+    aggregation
     scheme (e.g., sum, mean, min, max, or product).
 
     The update step is performed by applying another MLP to the concatenation of
@@ -62,33 +63,33 @@ class InteractionNetworkBlock(MessagePassing):
 
         :param int node_feature_dim: The dimension of the node features.
         :param int edge_feature_dim: The dimension of the edge features.
-            If edge_attr is not provided, it is assumed to be 0.
-            Default is 0.
+            Must be zero when ``edge_attr`` is omitted. Default is ``0``.
         :param int hidden_dim: The dimension of the hidden features.
-            Default is 64.
+            Default is ``64``.
         :param int n_message_layers: The number of layers in the message
-            network. Default is 2.
+            network. Default is ``2``.
         :param int n_update_layers: The number of layers in the update network.
-            Default is 2.
-        :param torch.nn.Module activation: The activation function.
+            Default is ``2``.
+        :param type[torch.nn.Module] activation: No-argument activation class.
             Default is :class:`torch.nn.SiLU`.
         :param str aggr: The aggregation scheme to use for message passing.
-            Available options are "add", "mean", "min", "max", "mul".
+            Available options include ``"add"``, ``"mean"``, ``"min"``,
+            ``"max"``, and ``"mul"``.
             See :class:`torch_geometric.nn.MessagePassing` for more details.
-            Default is "add".
-        :param int node_dim: The axis along which to propagate. Default is -2.
+            Default is ``"add"``.
+        :param int node_dim: The propagation axis. Default is ``-2``.
         :param str flow: The direction of message passing. Available options
-            are "source_to_target" and "target_to_source".
-            The "source_to_target" flow means that messages are sent from
-            the source node to the target node, while the "target_to_source"
+            are ``"source_to_target"`` and ``"target_to_source"``.
+            The ``"source_to_target"`` flow means that messages are sent from
+            the source node to the target node, while ``"target_to_source"``
             flow means that messages are sent from the target node to the
             source node. See :class:`torch_geometric.nn.MessagePassing` for more
-            details. Default is "source_to_target".
-        :raises AssertionError: If `node_feature_dim` is not a positive integer.
-        :raises AssertionError: If `hidden_dim` is not a positive integer.
-        :raises AssertionError: If `n_message_layers` is not a positive integer.
-        :raises AssertionError: If `n_update_layers` is not a positive integer.
-        :raises AssertionError: If `edge_feature_dim` is not a non-negative
+            details. Default is ``"source_to_target"``.
+        :raises AssertionError: If dimensions or layer counts are not positive
+            integers, except for ``edge_feature_dim``, which may be zero.
+        :raises ValueError: If activation or PyG propagation options are
+            invalid.
+        :raises AssertionError: If ``edge_feature_dim`` is not a non-negative
             integer.
         """
         super().__init__(aggr=aggr, node_dim=node_dim, flow=flow)
@@ -122,12 +123,14 @@ class InteractionNetworkBlock(MessagePassing):
         """
         Forward pass of the block, triggering the message-passing routine.
 
-        :param x: The node features.
+        :param x: Node features of shape ``(N, node_feature_dim)``.
         :type x: torch.Tensor | LabelTensor
-        :param torch.Tensor edge_index: The edge indeces.
-        :param edge_attr: The edge attributes. Default is None.
-        :type edge_attr: torch.Tensor | LabelTensor
-        :return: The updated node features.
+        :param torch.Tensor edge_index: Integer connectivity shaped ``(2, E)``.
+        :param edge_attr: Edge attributes of shape ``(E, edge_feature_dim)``.
+            ``None`` omits edge inputs and requires zero configured edge width.
+            Default is ``None``.
+        :type edge_attr: torch.Tensor | LabelTensor | None
+        :return: Updated node features of shape ``(N, node_feature_dim)``.
         :rtype: torch.Tensor
         """
         return self.propagate(edge_index=edge_index, x=x, edge_attr=edge_attr)
@@ -140,6 +143,8 @@ class InteractionNetworkBlock(MessagePassing):
         :type x_i: torch.Tensor | LabelTensor
         :param x_j: The node features of the sender nodes.
         :type x_j: torch.Tensor | LabelTensor
+        :param edge_attr: Per-edge features, or ``None`` to omit edge inputs.
+        :type edge_attr: torch.Tensor | LabelTensor | None
         :return: The message to be passed.
         :rtype: torch.Tensor
         """

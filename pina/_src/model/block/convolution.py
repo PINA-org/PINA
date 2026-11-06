@@ -22,7 +22,8 @@ class BaseContinuousConv(torch.nn.Module, metaclass=ABCMeta):
         For instance, a vectorial function :math:`f = [f_1, f_2]` has
         :math:`N_{in}=2`.
 
-    :Note
+    .. note::
+
         A 2-dimensional vector-valued function defined on a 3-dimensional input
         evaluated on a 100 points input mesh and batch size of 8 is represented
         as a tensor of shape ``[8, 2, 100, 4]``, where the columns
@@ -30,15 +31,13 @@ class BaseContinuousConv(torch.nn.Module, metaclass=ABCMeta):
         components of the function, respectively.
 
     The algorithm returns a tensor of shape:
-    :math:`[B \times N_{out} \times N \times D]`, where :math:`B` is the
-    batch_size, :math:`N_{out}` is the number of output fields, :math:`N`
-    the number of points in the mesh, :math:`D` the dimension of the problem.
+    :math:`[B \times N_{out} \times S \times D]`, where :math:`S` is the
+    number of filter positions rather than the number of input mesh points.
 
     :Example:
 
         >>> import torch
-        >>> from pina.model.block import BaseContinuousConv
-        >>> from pina.model.block.convolution import BaseContinuousConv
+        >>> from pina._src.model.block.convolution import BaseContinuousConv
         >>> class MyConv(BaseContinuousConv):
         ...     def forward(self, X): return X
         ...     def transpose_overlap(self, X): return X
@@ -67,20 +66,20 @@ class BaseContinuousConv(torch.nn.Module, metaclass=ABCMeta):
         Initialization of the :class:`BaseContinuousConv` class.
 
         :param int input_numb_field: The number of input fields.
-        :param int output_numb_field: The number of input fields.
+        :param int output_numb_field: The number of output fields.
         :param filter_dim: The shape of the filter.
-        :type filter_dim: list[int] | tuple[int]
-        :param dict stride: The stride of the filter.
-        :param torch.nn.Module model: The neural network for inner
-            parametrization. Default is ``None``.
-        :param bool optimize: If ``True``, optimization is performed on the
-            continuous filter. It should be used only when the training points
-            are fixed. If ``model`` is in ``eval`` mode, it is reset to
-            ``False``. Default is ``False``.
-        :param bool no_overlap: If ``True``, optimization is performed on the
-            transposed continuous filter. It should be used only when the filter
-            positions do not overlap for different strides.
-            Default is ``False``.
+        :type filter_dim: list[int | float] | tuple[int | float, ...]
+        :param dict[str, list[int | float]] stride: Filter grid specifications,
+            inserted in order: ``"domain"``, ``"start"``, ``"jump"``,
+            ``"direction"``. Zero jumps/directions are mutated by Stride.
+        :param model: Kernel factory retained for subclasses. ``None`` lets the
+            concrete block create default kernels. Default is ``None``.
+        :type model: Callable[[], torch.nn.Module] | None
+        :param bool optimize: Whether to wrap initialization with call-tracking
+            flags. The wrapper still initializes on every call; evaluation
+            bypasses it without resetting this flag. Default is ``False``.
+        :param bool no_overlap: Unsupported transpose optimization flag;
+            ``True`` raises an error. Default is ``False``.
         :raises ValueError: If ``input_numb_field`` is not an integer.
         :raises ValueError: If ``output_numb_field`` is not an integer.
         :raises ValueError: If ``filter_dim`` is not a list or tuple.
@@ -140,8 +139,8 @@ class BaseContinuousConv(torch.nn.Module, metaclass=ABCMeta):
         :Example:
 
             >>> import torch
-            >>> from pina.model.block.convolution import BaseContinuousConv
-            >>> kernel = BaseContinuousConv.DefaultKernel(input_dim=2, output_dim=4)
+            >>> from pina._src.model.block.convolution import BaseContinuousConv
+            >>> kernel = BaseContinuousConv.DefaultKernel(2, 4)
             >>> x = torch.randn(10, 2)
             >>> out = kernel(x)
         """
@@ -152,8 +151,8 @@ class BaseContinuousConv(torch.nn.Module, metaclass=ABCMeta):
 
             :param int input_dim: The input dimension.
             :param int output_dim: The output dimension.
-            :raises ValueError: If ``input_dim`` is not an integer.
-            :raises ValueError: If ``output_dim`` is not an integer.
+            :raises AssertionError: If ``input_dim`` is not an integer.
+            :raises AssertionError: If ``output_dim`` is not an integer.
             """
             super().__init__()
             assert isinstance(input_dim, int)
@@ -181,8 +180,8 @@ class BaseContinuousConv(torch.nn.Module, metaclass=ABCMeta):
         """
         The neural network for inner parametrization.
 
-        :return: The neural network.
-        :rtype: torch.nn.Module
+        :return: The retained factory or, for a concrete block, spawned kernels.
+        :rtype: Callable[[], torch.nn.Module] | torch.nn.ModuleList | None
         """
         return self._net
 
@@ -191,8 +190,9 @@ class BaseContinuousConv(torch.nn.Module, metaclass=ABCMeta):
         """
         The stride of the filter.
 
-        :return: The stride of the filter.
-        :rtype: dict
+        :return: The stride specification, replaced by a position tensor in
+            :class:`pina.model.block.ContinuousConvBlock`.
+        :rtype: Stride | torch.Tensor
         """
         return self._stride
 

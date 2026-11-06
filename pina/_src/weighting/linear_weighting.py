@@ -10,8 +10,9 @@ class LinearWeighting(BaseWeighting):
 
     This scheme progressively adjusts the weights assigned to each loss term,
     transitioning from a set of initial values to corresponding final values.
-    The update follows a linear schedule and is applied at each epoch until the
-    specified target epoch is reached.
+    The update follows a linear schedule based on the current epoch and is
+    recomputed on each aggregation call. Values remain final after the target
+    epoch is reached.
 
     :Example:
 
@@ -33,21 +34,23 @@ class LinearWeighting(BaseWeighting):
         """
         Initialization of the :class:`LinearWeighting` class.
 
-        :param dict initial_weights: The mapping of loss identifiers to their
-            initial weights at the start of training. Keys represent loss terms
+        :param dict[str, int | float | torch.Tensor] initial_weights: Loss names
+            mapped to initial weights at the start of training. Keys are terms
             (e.g., conditions) and values are the corresponding weights. Loss
-            terms not explicitly specified default to a weight of ``1``.
-        :param dict final_weights: The mapping of loss identifiers to their
-            target weights at the specified ``target_epoch``. Keys must match
-            those of ``initial_weights``. Loss terms not explicitly specified
-            default to a weight of ``1``.
+            names must be configured before their losses are aggregated.
+            The dictionary is retained by reference; values are not validated.
+        :param dict[str, int | float | torch.Tensor] final_weights: Loss names
+            mapped to target weights at ``target_epoch``. Keys must match
+            those of ``initial_weights``. The dictionary is retained by
+            reference; values are not validated. There is no missing-key
+            fallback.
         :param int target_epoch: The epoch at which the weights reach their
             final values. The interpolation progresses linearly from epoch ``0``
             to ``target_epoch``. After ``target_epoch``, the weights remain
             constant at their final values.
         :raises ValueError: If ``initial_weights`` is not a dictionary.
         :raises ValueError: If ``final_weights`` is not a dictionary.
-        :raises ValueError: If ``target_epoch`` is not a positive integer.
+        :raises AssertionError: If ``target_epoch`` is not a positive integer.
         :raises ValueError: If the keys of the two dictionaries are not
             consistent.
         """
@@ -72,15 +75,16 @@ class LinearWeighting(BaseWeighting):
 
     def update_weights(self, losses):
         """
-        Update the weights based on the current losses.
+        Interpolate configured weights at the associated trainer's epoch.
 
-        This method defines how the weighting strategy adapts over time. It is
-        responsible for computing and storing updated weights that will be used
-        during aggregation.
-
-        :param dict losses: The mapping from loss names to loss tensors.
-        :return: The updated weights.
-        :rtype: dict
+        :param dict[str, torch.Tensor] losses: The condition losses. Only their
+            names select weights; values do not affect interpolation.
+        :raises AttributeError: If no solver is attached.
+        :raises RuntimeError: If the solver has no trainer.
+        :raises KeyError: If a condition is absent from either configured map.
+        :return: A new mapping of interpolated weights, clamped to final values
+            at and after ``target_epoch``. Does not save the returned weights.
+        :rtype: dict[str, int | float | torch.Tensor]
         """
         # Determine the progress towards the target epoch
         epoch = min(self.solver.trainer.current_epoch, self.target_epoch)

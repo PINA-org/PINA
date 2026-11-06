@@ -72,11 +72,11 @@ class SelfAdaptivePhysicsInformedSolver(PhysicsInformedMixin, MultiModelSolver):
     :Example:
 
         >>> from pina.solver import SelfAdaptivePhysicsInformedSolver
-        >>> from pina.problem import PoissonProblem
+        >>> from pina.problem.zoo import Poisson2DSquareProblem
         >>> # solver = SelfAdaptivePhysicsInformedSolver(
         >>> #     problem=problem, model=model
         >>> # )
-        >>> # solver.train()
+        >>> # Discretise problem domains before constructing this solver.
     """
 
     # Accepted conditions types for this solver
@@ -105,27 +105,44 @@ class SelfAdaptivePhysicsInformedSolver(PhysicsInformedMixin, MultiModelSolver):
         :param torch.nn.Module model: The model used by the solver.
         :param torch.nn.Module weight_function: The weight function used to
             compute self-adaptive weights. Default is ``torch.nn.Sigmoid()``.
-        :param TorchOptimizer optimizer_model: The optimizer of the main model.
+        :param optimizer_model: The optimizer of the main model.
             If ``None``, the ``torch.optim.Adam`` optimizer with a learning rate
             of ``0.001`` is used. Default is ``None``.
-        :param TorchOptimizer optimizer_weights: The optimizer of the
+        :type optimizer_model: pina.optim.TorchOptimizer | None
+        :param optimizer_weights: The optimizer of the
             self-adaptive weights. If ``None``, the ``torch.optim.Adam``
             optimizer with a learning rate of ``0.001`` is used.
             Default is ``None``.
-        :param TorchScheduler scheduler_model: The scheduler of the main model.
+        :type optimizer_weights: pina.optim.TorchOptimizer | None
+        :param scheduler_model: The scheduler of the main model.
             If ``None``, the ``torch.optim.lr_scheduler.ConstantLR`` scheduler
             with a factor of ``1.0`` is used. Default is ``None``.
-        :param TorchScheduler scheduler_weights: The scheduler of the
+        :type scheduler_model: pina.optim.TorchScheduler | None
+        :param scheduler_weights: The scheduler of the
             self-adaptive weights. If ``None``, the
             ``torch.optim.lr_scheduler.ConstantLR`` scheduler with a factor of
             ``1.0`` is used. Default is ``None``.
-        :param BaseWeighting weighting: The weighting strategy used to combine
+        :type scheduler_weights: pina.optim.TorchScheduler | None
+        :param weighting: The weighting strategy used to combine
             condition losses. If ``None``, no weighting is applied. Default is
             ``None``.
+        :type weighting: pina.weighting.BaseWeighting | None
         :param loss: The loss function used to compute residual losses.
             If ``None``, :class:`torch.nn.MSELoss` is used. Default is ``None``.
+        :type loss: torch.nn.modules.loss._Loss | pina.loss.BaseDualLoss | None
         :raises ValueError: If ``weight_function`` is not a ``torch.nn.Module``.
         :raises ValueError: If not all domains have been discretised.
+        :raises ValueError: If base solver validation fails, including
+            incomplete optimizer or scheduler wrapper pairs.
+        :raises KeyError: If a domain condition lacks sampled points under its
+            condition name, even when its separate domain name was sampled.
+
+        .. note::
+
+            Default optimizers are created only if both optimizer arguments
+            are ``None``; otherwise both wrappers must be supplied. The same
+            rule applies independently to the scheduler pair. Pointwise raw
+            weights start at zero; sigmoid maps them initially to ``0.5``.
         """
         # Check consistency
         check_consistency(weight_function, torch.nn.Module)
@@ -186,10 +203,12 @@ class SelfAdaptivePhysicsInformedSolver(PhysicsInformedMixin, MultiModelSolver):
 
     def training_step(self, batch, batch_idx):
         """
-        Solver training step.
+        Maximize weight loss, then minimize model loss on the same batch.
 
-        :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and a dictionary of points.
+        Recomputes residuals after the weight step and steps both schedulers
+        once per batch. Model and weight gradients are not explicitly isolated.
+
+        :param list[tuple[str, dict[str, Any]]] batch: Condition/data pairs.
         :param int batch_idx: The index of the current batch.
         :return: The loss of the training step.
         :rtype: torch.Tensor
@@ -227,9 +246,10 @@ class SelfAdaptivePhysicsInformedSolver(PhysicsInformedMixin, MultiModelSolver):
         Forward pass through the model.
 
         :param x: The input data.
-        :type x: torch.Tensor | LabelTensor | Data | Graph
+        :type x: torch.Tensor | LabelTensor | torch_geometric.data.Data |
+            pina.graph.Graph
         :return: The output of the model.
-        :rtype: torch.Tensor | LabelTensor | Data | Graph
+        :rtype: torch.Tensor | LabelTensor
         """
         return self.model(x)
 
@@ -237,11 +257,14 @@ class SelfAdaptivePhysicsInformedSolver(PhysicsInformedMixin, MultiModelSolver):
         """
         Compute the scalar loss for a given condition and its data.
 
-        :param BaseCondition condition: The condition for which to compute the
+        :param pina.condition.BaseCondition condition: The condition computing
             loss.
-        :param dict data: The data corresponding to the condition.
+        :param dict[str, Any] data: The condition payload, with labeled input
+            points. The input is cloned before condition evaluation.
         :param int batch_idx: The index of the current batch.
-        :return: The scalar loss for the condition.
+        :return: The regularized tensor loss multiplied by transformed pointwise
+            weights, then reduced. Weight rows are chosen by modular arithmetic
+            on ``batch_idx`` and batch length, not by original sample IDs.
         :rtype: torch.Tensor
         """
         # Clone the input tensor if it exists to avoid in-place modifications
@@ -307,7 +330,8 @@ class SelfAdaptivePhysicsInformedSolver(PhysicsInformedMixin, MultiModelSolver):
         """
         The self-adaptive weights used by the solver.
 
-        :return: The self-adaptive weights used by the solver.
+        :return: The module holding one raw parameter of shape ``(n_points, 1)``
+            per condition, and the weight-function submodule under ``func``.
         :rtype: torch.nn.Module
         """
         return self._pina_models[1]

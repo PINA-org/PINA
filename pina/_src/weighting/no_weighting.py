@@ -1,3 +1,5 @@
+"""Unit-weight aggregation of condition losses."""
+
 from pina._src.weighting.scalar_weighting import ScalarWeighting
 
 

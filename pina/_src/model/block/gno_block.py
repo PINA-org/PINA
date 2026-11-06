@@ -12,7 +12,9 @@ class GNOBlock(MessagePassing):
 
         >>> import torch
         >>> from pina.model.block import GNOBlock
-        >>> block = GNOBlock(width=16, edges_features=4)
+        >>> block = GNOBlock(
+        ...     width=16, edges_features=4, external_func=torch.nn.Tanh
+        ... )
         >>> x = torch.randn(10, 16)
         >>> edge_index = torch.randint(0, 10, (2, 30))
         >>> edge_attr = torch.randn(30, 4)
@@ -33,19 +35,23 @@ class GNOBlock(MessagePassing):
         Initialization of the :class:`GNOBlock` class.
 
         :param int width: The width of the kernel.
-        :param int edge_features: The number of edge features.
+        :param int edges_features: The number of edge features.
         :param int n_layers: The number of kernel layers. Default is ``2``.
         :param layers: A list specifying the number of neurons for each layer
             of the neural network. If not ``None``, it overrides the
-            ``inner_size`` and ``n_layers``parameters. Default is ``None``.
-        :type layers: list[int] | tuple[int]
-        :param int inner_size: The size of the inner layer. Default is ``None``.
-        :param torch.nn.Module internal_func: The activation function applied to
-            the output of each layer. If ``None``, it uses the
-            :class:`torch.nn.Tanh` activation. Default is ``None``.
-        :param torch.nn.Module external_func: The activation function applied to
-            the output of the block. If ``None``, it uses the
-            :class:`torch.nn.Tanh`. activation. Default is ``None``.
+            ``inner_size`` and ``n_layers`` parameters. Default is ``None``.
+        :type layers: list[int] | tuple[int, ...] | None
+        :param inner_size: Hidden edge-network width. ``None`` uses ``width``
+            when explicit layers are absent. Default is ``None``.
+        :type inner_size: int | None
+        :param internal_func: No-argument activation class for hidden edge
+            layers. ``None`` creates linear-only layers. Default is ``None``.
+        :type internal_func: type[torch.nn.Module] | None
+        :param external_func: No-argument activation class applied to the block
+            output. Default is ``None``, but no fallback is implemented: callers
+            must supply a class for construction to succeed.
+        :type external_func: type[torch.nn.Module] | None
+        :raises TypeError: If ``external_func`` is ``None`` or not callable.
         """
 
         from ...model.feed_forward import FeedForward
@@ -111,10 +117,14 @@ class GNOBlock(MessagePassing):
         """
         Forward pass of the block.
 
-        :param torch.Tensor x: The node features.
-        :param torch.Tensor edge_index: The edge indeces.
-        :param torch.Tensor edge_attr: The edge features.
-        :return: The updated node features.
+        With ordinary dense ``edge_index`` tensors, PyG uses its inherited
+        messages and mean aggregation; the edge-network implementation in
+        ``message_and_aggregate`` is not dispatched by this path.
+
+        :param torch.Tensor x: Node features of shape ``(N, width)``.
+        :param torch.Tensor edge_index: Integer edge indices shaped ``(2, E)``.
+        :param torch.Tensor edge_attr: Features shaped ``(E, edges_features)``.
+        :return: Updated node features of shape ``(N, width)``.
         :rtype: torch.Tensor
         """
         return self.func(self.propagate(edge_index, x=x, edge_attr=edge_attr))

@@ -16,9 +16,12 @@ class PoissonEquation(Equation):
 
     Here, :math:`f` is the forcing term.
 
+    The Laplacian uses every input coordinate and every output component;
+    pass only spatial coordinates when no time derivative is intended.
+
     :Example:
 
-        >>> from pina.equation import PoissonEquation
+        >>> from pina.equation.zoo import PoissonEquation
         >>> eq = PoissonEquation(forcing_term=lambda x: x**2)
         >>> # Use within a DomainEquationCondition:
         >>> # condition = DomainEquationCondition(domain=domain, equation=eq)
@@ -29,7 +32,9 @@ class PoissonEquation(Equation):
         Initialization of the :class:`PoissonEquation` class.
 
         :param Callable forcing_term: The forcing field function, taking as
-            input the points on which evaluation is required.
+            input the full labeled points. Its numeric or tensor result must
+            broadcast with the componentwise Laplacian, normally ``(n, m)``.
+        :raises ValueError: If ``forcing_term`` is not a callable instance.
         """
         check_consistency(forcing_term, (Callable))
         self.forcing_term = forcing_term
@@ -38,9 +43,15 @@ class PoissonEquation(Equation):
             """
             Implementation of the Poisson equation.
 
-            :param LabelTensor input_: The input data of the problem.
-            :param LabelTensor output_: The output data of the problem.
-            :return: The residual of the Poisson equation.
+            :param LabelTensor input_: Input coordinates of shape ``(n, d)``,
+                with gradient tracking enabled.
+            :param LabelTensor output_: Predictions of shape ``(n, m)``, with
+                an autograd connection supporting second derivatives.
+            :raises TypeError: If arguments are not labeled tensors or an
+                unused gradient cannot be indexed.
+            :raises RuntimeError: If the graph cannot support differentiation
+                or forcing values cannot broadcast with the Laplacian.
+            :return: The Laplacian minus forcing, normally of shape ``(n, m)``.
             :rtype: LabelTensor
             """
             lap = laplacian(output_, input_)

@@ -92,6 +92,16 @@ _REMOVED_IMPORTS = {
 
 
 def __getattr__(name):
+    """
+    Resolve deprecated solver aliases and reject removed names.
+
+    :param str name: The requested public solver attribute.
+    :raises ImportError: If the requested solver/interface has been removed.
+    :raises AttributeError: If no solver or alias has the requested name.
+    :return: The current solver class for a recognized legacy alias, emitting
+        ``DeprecationWarning``.
+    :rtype: type
+    """
     if name in _DEPRECATED_IMPORTS:
 
         warnings.warn(

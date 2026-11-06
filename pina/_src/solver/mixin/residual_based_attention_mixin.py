@@ -35,13 +35,22 @@ class ResidualBasedAttentionMixin:
         :param regularized_conditions: The names of the conditions that should
             receive attention regularization. If ``None``, all conditions are
             regularized. Default is ``None``.
-        :type regularized_conditions: str | list[str]
+        :type regularized_conditions: str | list[str] | tuple[str, ...] | None
         :raises ValueError: If ``eta`` is not a positive float or int.
         :raises ValueError: If ``gamma`` is not a float in the range (0, 1).
         :raises ValueError: If ``regularized_conditions`` is not a string or a
-            list of strings.
+            list or tuple of strings.
         :raises ValueError: If any of the specified ``regularized_conditions``
             are not present in the ``problem``'s conditions.
+        :raises KeyError: If a domain-equation condition lacks discretised
+            points under its condition name, which need not equal its domain.
+        :raises AttributeError: If another selected condition has no ``input``.
+
+        .. note::
+
+            Registers zero-initialized buffers of shape ``(n_points, 1)``.
+            Selected domains must already be sampled. Buffer names are derived
+            directly from condition names and must be valid module attributes.
         """
         # Use all conditions if regularized_conditions is None
         if regularized_conditions is None:
@@ -102,18 +111,24 @@ class ResidualBasedAttentionMixin:
         batch_idx,
     ):
         """
-        Regularize the condition loss if needed. This method can be overridden
-        by mixins to implement specific regularization strategies, such as
-        adding a gradient penalty in gradient-enhanced solvers or applying
-        residual-based attention.
+        Update selected attention rows and multiply the loss by their weights.
+
+        Uses rowwise residual vector norms divided by the maximum norm plus
+        ``1e-12``. Updates run on every evaluation, including validation and
+        testing, under ``no_grad``. Buffer rows use modular indexing from the
+        batch index and current residual count, not original sample IDs.
 
         :param condition_tensor_loss: The original tensor loss for the
             condition.
         :type condition_tensor_loss: torch.Tensor | LabelTensor
-        :param str condition_name: The name of the condition.
-        :param dict data: The data corresponding to the condition.
+        :param condition_name: The condition name; ``None`` is not selected.
+        :type condition_name: str | None
+        :param dict[str, Any] data: The condition payload, unused by this hook.
         :param int batch_idx: The index of the current batch.
-        :return: The regularized tensor loss for the condition.
+        :raises RuntimeError: If residual norm evaluation, buffer updates, or
+            weighted loss broadcasting fails.
+        :return: The attention-weighted loss, or the original tensor for an
+            unselected condition.
         :rtype: torch.Tensor | LabelTensor
         """
         # Apply residual-based attention mechanism if needed

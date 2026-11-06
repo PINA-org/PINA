@@ -21,6 +21,7 @@ class SwitchOptimizer(Callback):
     :Example:
 
         >>> from pina.optim import TorchOptimizer
+        >>> from pina.callback import SwitchOptimizer
         >>> import torch
         >>> optimizer = TorchOptimizer(torch.optim.Adam, lr=0.01)
         >>> switch = SwitchOptimizer(new_optimizers=optimizer, epoch_switch=10)
@@ -32,20 +33,27 @@ class SwitchOptimizer(Callback):
         """
         Initialization of the :class:`SwitchOptimizer` class.
 
-        :param new_optimizers: The model optimizers to switch to. Can be a
-            single :class:`torch.optim.Optimizer` instance or a list of them
-            for multiple model solver.
-        :type new_optimizers: pina.optim.OptimizerInterface | list
-        :param int epoch_switch: The epoch at which the optimizer switch occurs.
+        :param new_optimizers: The optimizer wrappers to attach to the solver's
+            models in order. A single wrapper is converted to a one-item list.
+            Each wrapper must implement :class:`pina.optim.OptimizerInterface`;
+            raw :class:`torch.optim.Optimizer` instances are not accepted.
+        :type new_optimizers: pina.optim.OptimizerInterface |
+            list[pina.optim.OptimizerInterface]
+        :param int epoch_switch: The strictly positive, zero-based epoch index
+            at which the optimizer switch occurs.
         :raises AssertionError: If ``epoch_switch`` is not a positive integer.
         :raises ValueError: If any of the provided optimizers are not instances
             of :class:`pina.optim.OptimizerInterface`.
 
-        Example:
+        :Example:
+
+            >>> import torch
+            >>> from pina.optim import TorchOptimizer
+            >>> from pina.callback import SwitchOptimizer
             >>> optimizer = TorchOptimizer(torch.optim.Adam, lr=0.01)
             >>> switch_callback = SwitchOptimizer(
-            >>>     new_optimizers=optimizer, epoch_switch=10
-            >>> )
+            ...     new_optimizers=optimizer, epoch_switch=10
+            ... )
         """
         super().__init__()
 
@@ -65,9 +73,14 @@ class SwitchOptimizer(Callback):
         """
         Switch the optimizer at the start of the specified training epoch.
 
-        :param Trainer trainer: The trainer object managing the training
+        Each wrapper is hooked to the corresponding model's parameters. Replace
+        both the solver's optimizer wrappers and the strategy's optimizer
+        instances. Existing scheduler objects are not reattached here.
+
+        :param pina.Trainer trainer: The trainer object managing the training
             process.
-        :param __: Placeholder argument, not used.
+        :param pina.solver.BaseSolver __: The solver supplied by
+            Lightning; unused.
         """
         # Check if the current epoch matches the switch epoch
         if trainer.current_epoch == self._epoch_switch:

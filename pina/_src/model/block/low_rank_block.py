@@ -42,22 +42,21 @@ class LowRankBlock(torch.nn.Module):
         r"""
         Initialization of the :class:`LowRankBlock` class.
 
-        :param int input_dimensions: The input dimension of the field.
+        :param int input_dimensions: The number of coordinate components.
         :param int embedding_dimenion: The embedding dimension of the field.
-        :param int rank: The rank of the low rank approximation. The expected
-            value is :math:`2d`, where :math:`d` is the rank of each basis
-            function.
+        :param int rank: Number of terms in each of the two learned bases.
         :param int inner_size: The number of neurons for each hidden layer in
             the basis function neural network. Default is ``20``.
         :param int n_layers: The number of hidden layers in the basis function
             neural network. Default is ``2``.
-        :param func: The activation function. If a list is passed, it must have
-            the same length as ``n_layers``. If a single function is passed, it
-            is used for all layers, except for the last one.
+        :param type[torch.nn.Module] func: Activation class in the basis network
+            and on the final result. Lists accepted by FeedForward fail when
+            invoked as a class.
             Default is :class:`torch.nn.Tanh`.
-        :type func: torch.nn.Module | list[torch.nn.Module]
         :param bool bias: If ``True`` bias is considered for the basis function
             neural network. Default is ``True``.
+        :raises ValueError: If dimensions or rank fail integer validation.
+        :raises TypeError: If ``func`` is not callable without arguments.
         """
         super().__init__()
         from ..feed_forward import FeedForward
@@ -85,10 +84,11 @@ class LowRankBlock(torch.nn.Module):
         field :math:`v` to compute coefficients used to expand
         :math:`\phi^{(i)}`, evaluated in the spatial input :math:`x`.
 
-        :param torch.Tensor x: The input tensor for performing the computation.
-        :param torch.Tensor coords: The coordinates for which the field is
-            evaluated to perform the computation.
-        :return: The output tensor.
+        :param torch.Tensor x: Features shaped ``(..., embedding_dimenion)``.
+        :param torch.Tensor coords: Corresponding coordinates shaped
+            ``(..., input_dimensions)``; labels are stripped before evaluation.
+        :return: Same-shaped field update. Contractions sum over features and
+            rank at each point independently, not over mesh nodes.
         :rtype: torch.Tensor
         """
         # extract basis

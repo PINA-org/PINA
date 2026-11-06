@@ -15,7 +15,7 @@ class SelfAdaptiveWeighting(BaseWeighting):
     during optimization.
 
     In practice, loss terms with smaller gradient norms are assigned larger
-    weights, while those with larger gradients are down-weighted. This helps
+    relative weights than those with larger gradients. This helps
     mitigate training imbalance and prevents dominance of specific loss terms.
 
     .. seealso::
@@ -40,9 +40,11 @@ class SelfAdaptiveWeighting(BaseWeighting):
         Initialization of the :class:`SelfAdaptiveWeighting` class.
 
         :param int update_every_n_epochs: The number of training epochs between
-            weight updates. If set to 1, the weights are updated at every epoch.
-            This parameter is ignored by static weighting schemes.
+            eligible epochs. Every aggregation call in an eligible epoch
+            recomputes weights, including epoch zero.
             Default is ``1``.
+        :raises AssertionError: If the update interval is not a positive
+            integer.
         """
         super().__init__(
             update_every_n_epochs=update_every_n_epochs, aggregator="sum"
@@ -50,15 +52,20 @@ class SelfAdaptiveWeighting(BaseWeighting):
 
     def update_weights(self, losses):
         """
-        Update the weights based on the current losses.
+        Balance losses using inverse model-parameter gradient norms.
 
-        This method defines how the weighting strategy adapts over time. It is
-        responsible for computing and storing updated weights that will be used
-        during aggregation.
-
-        :param dict losses: The mapping from loss names to loss tensors.
-        :return: The updated weights.
-        :rtype: dict
+        :param dict[str, torch.Tensor] losses: Differentiable scalar or
+            one-element losses connected to trainable parameters of the attached
+            solver's ``model``. Unused parameter gradients are omitted.
+        :raises AttributeError: If no solver is attached or it has no ``model``.
+        :raises RuntimeError: If gradients cannot be computed or no trainable
+            parameters exist.
+        :raises ValueError: If a loss has no usable model-parameter gradients.
+        :return: A new mapping with weight equal to the sum of current gradient
+            norms divided by the condition's norm. Gradients use a retained
+            graph but no higher-order graph. Does not save the returned weights.
+            Zero norms are unguarded and can produce infinity or NaN.
+        :rtype: dict[str, torch.Tensor]
         """
         # Get model parameters and define a dictionary to store the norms
         params = [p for p in self.solver.model.parameters() if p.requires_grad]

@@ -34,7 +34,8 @@ class SpectralConvBlock1D(nn.Module):
         :param int input_numb_fields: The number of channels for the input.
         :param int output_numb_fields: The number of channels for the output.
         :param int n_modes: The number of modes to select for each dimension.
-            It must be at most equal to :math:`\floor(Nx/2)+1`.
+            It must not exceed ``Nx // 2 + 1``.
+        :raises ValueError: If channel counts are not integers.
         """
         super().__init__()
 
@@ -79,7 +80,7 @@ class SpectralConvBlock1D(nn.Module):
 
         :param torch.Tensor x: The input tensor. Expected of size
             [``batch``, ``input_numb_fields``, ``N``].
-        :return: The input tensor. Expected of size
+        :return: The filtered tensor. Expected of size
             [``batch``, ``output_numb_fields``, ``N``].
         :rtype: torch.Tensor
         """
@@ -135,11 +136,12 @@ class SpectralConvBlock2D(nn.Module):
         :param int input_numb_fields: The number of channels for the input.
         :param int output_numb_fields: The number of channels for the output.
         :param n_modes: The number of modes to select for each dimension.
-            It must be at most equal to :math:`\floor(Nx/2)+1`,
-            :math:`\floor(Ny/2)+1`.
-        :type n_modes: list[int] | tuple[int]
+            A scalar is repeated over both axes. Counts must fit ``Nx`` and
+            ``Ny // 2 + 1``. Positive and negative first-axis bands overlap if
+            ``2 * n_modes[0] > Nx``, with later assignments overwriting values.
+        :type n_modes: int | list[int] | tuple[int, int]
         :raises ValueError: If the number of modes is not consistent.
-        :raises ValueError: If the number of modes is not a list or tuple.
+        :raises ValueError: If channels or modes have invalid types.
         """
         super().__init__()
 
@@ -212,7 +214,7 @@ class SpectralConvBlock2D(nn.Module):
 
         :param torch.Tensor x: The input tensor. Expected of size
             [``batch``, ``input_numb_fields``, ``Nx``, ``Ny``].
-        :return: The input tensor. Expected of size
+        :return: The filtered tensor. Expected of size
             [``batch``, ``output_numb_fields``, ``Nx``, ``Ny``].
         :rtype: torch.Tensor
         """
@@ -275,11 +277,12 @@ class SpectralConvBlock3D(nn.Module):
         :param int input_numb_fields: The number of channels for the input.
         :param int output_numb_fields: The number of channels for the output.
         :param n_modes: The number of modes to select for each dimension.
-            It must be at most equal to :math:`\floor(Nx/2)+1`,
-            :math:`\floor(Ny/2)+1`, :math:`\floor(Nz/2)+1`.
-        :type n_modes: list[int] | tuple[int]
+            A scalar is repeated over three axes. Counts must fit ``Nx``,
+            ``Ny``, and ``Nz // 2 + 1``. Signed bands can overlap above half
+            the first two extents; later assignments overwrite shared modes.
+        :type n_modes: int | list[int] | tuple[int, int, int]
         :raises ValueError: If the number of modes is not consistent.
-        :raises ValueError: If the number of modes is not a list or tuple.
+        :raises ValueError: If channels or modes have invalid types.
         """
         super().__init__()
 
@@ -377,7 +380,7 @@ class SpectralConvBlock3D(nn.Module):
 
         :param torch.Tensor x: The input tensor. Expected of size
             [``batch``, ``input_numb_fields``, ``Nx``, ``Ny``, ``Nz``].
-        :return: The input tensor. Expected of size
+        :return: The filtered tensor. Expected of size
             [``batch``, ``output_numb_fields``, ``Nx``, ``Ny``, ``Nz``].
         :rtype: torch.Tensor
         """

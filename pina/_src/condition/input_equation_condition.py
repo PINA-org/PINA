@@ -28,7 +28,7 @@ class InputEquationCondition(TensorCondition):
         :param input: The input samples at which the equation is evaluated.
             The first dimension indexes the samples.
         :type input: torch.Tensor | LabelTensor
-        :param BaseEquation equation: The equation used to compute the
+        :param pina.equation.BaseEquation equation: The equation used to compute
             residual at the input samples.
         :raises ValueError: If the input or equation has an unsupported type.
         """
@@ -46,15 +46,17 @@ class InputEquationCondition(TensorCondition):
         and the solver's unknown parameters. The residual is returned
         without loss aggregation.
 
-        :param dict batch: The batch containing the input samples under the
-            ``"input"`` key.
-        :param BaseSolver solver: The solver providing the model forward
+        :param dict[str, Any] batch: The batch containing a tensor or
+            :class:`pina.LabelTensor` under ``"input"``. Stored equation entries
+            are ignored; the condition's own equation is used.
+        :param pina.solver.BaseSolver solver: The solver providing the forward
             pass and the unknown parameters used by the equation.
-        :return: The equation residual evaluated at the input samples.
-        :rtype: torch.Tensor | LabelTensor
         :raises KeyError: If the batch does not contain the ``"input"`` key.
         :raises RuntimeError: If the input tensor does not support gradient
             tracking, for example because it has an integer dtype.
+        :return: The equation residual evaluated at the input samples. Shape
+            and component count are determined by the equation.
+        :rtype: torch.Tensor | LabelTensor
         """
         samples = batch["input"].requires_grad_(True)
         output = solver.forward(samples)
@@ -76,6 +78,6 @@ class InputEquationCondition(TensorCondition):
         Return the equation associated with the condition.
 
         :return: The equation used to compute the condition residual.
-        :rtype: BaseEquation
+        :rtype: pina.equation.BaseEquation
         """
         return self._equation

@@ -17,9 +17,10 @@ def initial_condition(input_, output_):
     """
     Definition of the initial condition of the Burgers' problem.
 
-    :param LabelTensor input_: The input data of the problem.
-    :param LabelTensor output_: The output data of the problem.
-    :return: The residual of the initial condition.
+    :param LabelTensor input_: Points of shape ``(n, d)`` including ``"x"``.
+    :param LabelTensor output_: Predictions of shape ``(n, 1)``.
+    :raises ValueError: If the spatial label is missing.
+    :return: Predictions plus ``sin(pi * x)``, normally of shape ``(n, 1)``.
     :rtype: LabelTensor
     """
     return output_ + torch.sin(torch.pi * input_["x"])
@@ -63,6 +64,7 @@ class BurgersProblem(TimeDependentProblem, SpatialProblem):
 
     :Example:
 
+        >>> from pina.problem.zoo import BurgersProblem
         >>> problem = BurgersProblem()
     """
 
@@ -89,7 +91,7 @@ class BurgersProblem(TimeDependentProblem, SpatialProblem):
         """
         Initialization of the :class:`BurgersProblem` class.
 
-        :param nu: The viscosity coefficient.
+        :param nu: The viscosity coefficient. Default is ``0``.
         :type nu: float | int
         :raises ValueError: If ``nu`` is not a float or an int.
         :raises ValueError: If ``nu`` is negative.

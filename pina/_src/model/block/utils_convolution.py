@@ -7,10 +7,12 @@ def check_point(x, current_stride, dim):
     """
     Check if the point is in the current stride.
 
-    :param torch.Tensor x: The input data.
-    :param int current_stride: The current stride.
-    :param int dim: The shape of the filter.
-    :return: The indeces of the points in the current stride.
+    :param torch.Tensor x: Points of shape ``(..., d + 1)`` with field values
+        in the last column, which is ignored.
+    :param torch.Tensor current_stride: Filter origin of shape ``(d,)``.
+    :param torch.Tensor dim: Filter extents of shape ``(d,)``.
+    :return: Boolean mask of shape ``x.shape[:-1]``, including lower bounds
+        and excluding upper bounds.
     :rtype: torch.Tensor
     """
     max_stride = current_stride + dim
@@ -24,10 +26,10 @@ def map_points_(x, filter_position):
     """
     The mapping function for n-dimensional case.
 
-    :param torch.Tensor x: The two-dimensional input data.
-    :param list[int] filter_position: The position of the filter.
+    :param torch.Tensor x: Coordinates of shape ``(..., d)``, modified in place.
+    :param torch.Tensor filter_position: Broadcastable origin to subtract.
     :return: The data mapped in-place.
-    :rtype: torch.tensor
+    :rtype: torch.Tensor
     """
     x.add_(-filter_position)
 
@@ -36,18 +38,25 @@ def map_points_(x, filter_position):
 
 def optimizing(f):
     """
-    Decorator to call the function only once.
+    Track initialization directions while calling the function every time.
 
-    :param f: python function
-    :type f: Callable
+    :param Callable f: Function called with the original arguments.
+    :return: Wrapper with mutable ``has_run`` and ``has_run_inverse`` flags.
+        Neither flag skips subsequent calls.
+    :rtype: Callable
     """
 
     def wrapper(*args, **kwargs):
         """
         Wrapper function.
 
-        :param args: The arguments of the function.
-        :param kwargs: The keyword arguments of the function.
+        :param tuple[Any, ...] args: Positional arguments forwarded unchanged.
+        :param dict[str, Any] kwargs: Forwarded keywords; ``type_`` must be
+            present. ``"forward"`` sets ``has_run_inverse`` and ``"inverse"``
+            sets ``has_run``; other values just call the function.
+        :raises KeyError: If ``type_`` is absent.
+        :return: The wrapped function's result.
+        :rtype: Any
         """
         if kwargs["type_"] == "forward":
             if not wrapper.has_run_inverse:

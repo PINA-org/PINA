@@ -27,12 +27,20 @@ class DataNormalizer(Callback):
 
     .. note::
 
-        This callback ignores all conditions that are not instances of
-        :class:`~pina.condition.InputTargetCondition`.
+        Only :class:`~pina.condition.InputTargetCondition` instances are
+        normalized. Other tensor conditions are ignored, but any graph
+        condition causes setup to raise :class:`NotImplementedError`.
+
+    .. warning::
+
+        Normalization modifies the backing tensors and stored batches. Scaling
+        values are used without checking for zeros or non-finite values.
 
     :Example:
 
-        >>> DataNormalizer(
+        >>> import torch
+        >>> from pina.callback import DataNormalizer
+        >>> normalizer = DataNormalizer(
         ...     scale_fn=torch.std,
         ...     shift_fn=torch.mean,
         ...     stage="all",
@@ -54,10 +62,15 @@ class DataNormalizer(Callback):
         """
         Initialization of the :class:`DataNormalizer` class.
 
-        :param Callable scale_fn: The function used to compute the scaling
-            factor. Default is  ``torch.std``.
-        :param Callable shift_fn: The function used to compute the shifting
-            factor. Default is ``torch.mean``.
+        :param Callable scale_fn: The function called on the concatenated
+            training tensors for each condition to compute its scaling factor.
+            Its result must broadcast against the selected tensors. The default
+            computes one scalar over all samples and features. Default is
+            ``torch.std``.
+        :param Callable shift_fn: The function called on the same concatenated
+            training tensors to compute a broadcastable shift. The default
+            computes one scalar over all samples and features. Default is
+            ``torch.mean``.
         :param str stage: The stage during which normalization is applied.
             Available options are ``"train"``, ``"validate"``, ``"test"``, and
             ``"all"``. Default is ``"all"``.
@@ -103,11 +116,13 @@ class DataNormalizer(Callback):
         """
         Build a mapping from condition name to list of batch ids for a dataset.
 
-        :param DataModule datamodule: The data module containing the condition
+        :param pina.DataModule datamodule: The data module containing condition
             index mappings.
-        :param torch.Tensor dataset: The dataset tensor of shape ``(N, 2)``
-            with rows ``[condition_id, batch_id]``.
-        :return: Mapping from condition name to list of batch ids.
+        :param dataset: The dataset tensor of shape ``(N, 2)`` with rows
+            ``[condition_id, batch_id]``. ``None`` denotes an absent split.
+        :type dataset: torch.Tensor | None
+        :return: Mapping from condition name to list of batch ids. An absent or
+            empty split produces an empty dictionary.
         :rtype: dict[str, list[int]]
         """
         batch_ids = {}
@@ -122,9 +137,18 @@ class DataNormalizer(Callback):
         """
         Compute and apply normalization during the setup phase.
 
-        :param Trainer trainer: The trainer instance managing the execution.
-        :param BaseSolver pl_module: The solver module being executed.
-        :param str stage: Current execution stage.
+        Estimate statistics from each condition's training batches only when
+        the normalizer dictionary is empty. Conditions with no training batches
+        are skipped. During ``"fit"``, normalize the selected training and
+        validation splits; during ``"test"``, normalize the selected test split.
+        Other stages do not apply normalization. Reuse cached statistics and
+        skip condition/split pairs already normalized by this callback.
+
+        :param pina.Trainer trainer: The trainer managing the execution.
+        :param pina.solver.BaseSolver pl_module: The solver module whose problem
+            supplies the conditions.
+        :param str stage: The Lightning setup stage, such as ``"fit"`` or
+            ``"test"``; distinct from the constructor's split selector.
         :raises NotImplementedError: If any condition contains graph-based data
             and is therefore unsupported.
         """
@@ -203,9 +227,16 @@ class DataNormalizer(Callback):
         that regenerate the batch dictionaries.  Each individual batch dict is
         then also refreshed from the updated backing tensor.
 
-        :param dict conditions: Mapping from condition name to condition.
-        :param dict batch_ids_by_condition: Mapping from condition name to
-            list of batch ids belonging to this split.
+        Conditions without cached statistics and condition/split pairs already
+        normalized by this callback are skipped. The supplied batch ids must
+        refer to the current batch dictionaries; backing tensor offsets are
+        reconstructed from the lengths of earlier batches.
+
+        :param dict[str, pina.condition.BaseCondition] conditions: Mapping from
+            condition name to condition. Entries selected for normalization
+            must be input-target conditions with stored batches.
+        :param dict[str, list[int]] batch_ids_by_condition: Mapping from
+            condition name to list of batch ids belonging to this split.
         :param str split: Name of the split (used to track normalization state).
         """
         for cond, batch_ids in batch_ids_by_condition.items():
@@ -246,7 +277,10 @@ class DataNormalizer(Callback):
         The dictionary mapping each condition to its corresponding ``shift`` and
         ``scale`` values.
 
-        :return: The dictionary of normalization parameters.
-        :rtype: dict
+        :return: The mutable dictionary of cached normalization parameters.
+            Each condition maps to ``"shift"`` and ``"scale"`` entries holding
+            the results returned by the supplied functions. Empty before
+            statistics are computed.
+        :rtype: dict[str, dict[str, Any]]
         """
         return self._normalizer

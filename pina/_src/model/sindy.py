@@ -11,7 +11,8 @@ class SINDy(torch.nn.Module):
 
     The Sparse Identification of Nonlinear Dynamics (SINDy) model identifies the
     governing equations of a dynamical system from data by learning a sparse
-    linear combination of non-linear candidate functions.
+    linear combination of non-linear candidate functions. This module itself
+    imposes no sparsity penalty or thresholding on the learned coefficients.
 
     The output of the model is expressed as product of a library matrix and a
     coefficient matrix:
@@ -25,7 +26,7 @@ class SINDy(torch.nn.Module):
         system state. Here, :math:`B` is the batch size and :math:`D` is the
         number of state variables.
       - :math:`\Theta(X) \in \mathbb{R}^{B \times L}` is the library matrix
-        obtained by evaluating a set of candidate functions on the input data.
+        obtained by summing each candidate's final feature axis.
         Here, :math:`L` is the number of candidate functions in the library.
       - :math:`\Xi \in \mathbb{R}^{L \times D}` is the learned coefficient
         matrix that defines the sparse model.
@@ -57,7 +58,9 @@ class SINDy(torch.nn.Module):
         :param list[Callable] library: The collection of candidate functions
             used to construct the library matrix. Each function must accept an
             input tensor of shape ``[..., D]`` and return a tensor of shape
-            ``[..., 1]``.
+            ``[..., q]`` with a final feature axis of any common size ``q``.
+            The implementation sums that axis in the final contraction; vector
+            outputs do not create separate library entries.
         :param int output_dimension: The number of output variables, typically
             the number of state derivatives. It determines the number of columns
             in the coefficient matrix.
@@ -83,8 +86,11 @@ class SINDy(torch.nn.Module):
         """
         Forward pass of the :class:`SINDy` model.
 
-        :param torch.Tensor x: The input batch of state variables.
-        :return: The predicted time derivatives of the state variables.
+        :param torch.Tensor x: State variables of shape ``(..., d)``.
+        :raises RuntimeError: If library results cannot be stacked or
+            contracted.
+        :return: Predictions of shape ``(..., output_dimension)``. An empty
+            library fails during stacking rather than construction.
         :rtype: torch.Tensor
         """
         theta = torch.stack([f(x) for f in self.library], dim=-2)
@@ -105,7 +111,8 @@ class SINDy(torch.nn.Module):
         """
         The coefficients of the model.
 
-        :return: The coefficients.
-        :rtype: torch.Tensor
+        :return: Trainable matrix shaped ``(len(library), output_dimension)``,
+            initialized to zero.
+        :rtype: torch.nn.Parameter
         """
         return self._coefficients

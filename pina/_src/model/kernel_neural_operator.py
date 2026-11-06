@@ -9,8 +9,8 @@ class KernelNeuralOperator(torch.nn.Module):
     Base class for Neural Operators with integral kernels.
 
     This class serves as a foundation for building Neural Operators that
-    incorporate multiple integral kernels. All Neural Operator models in
-    PINA inherit from this class. The design follows the framework proposed
+    incorporate integral kernels. Several neural operators in PINA inherit
+    from this class. The design follows the framework proposed
     by Kovachki et al., as illustrated in Figure 2 of their work.
 
     Neural Operators derived from this class can be expressed as:
@@ -67,8 +67,9 @@ class KernelNeuralOperator(torch.nn.Module):
 
         :param torch.nn.Module lifting_operator: The lifting operator mapping
             the input to its hidden dimension.
-        :param torch.nn.Module integral_kernels: List of integral kernels
-            mapping each hidden representation to the next one.
+        :param torch.nn.Module integral_kernels: A callable kernel module,
+            possibly :class:`torch.nn.Sequential`, mapping hidden features.
+            A plain list or ModuleList cannot be called by this forward method.
         :param torch.nn.Module projection_operator: The projection operator
             mapping the hidden representation to the output function.
         """
@@ -95,6 +96,7 @@ class KernelNeuralOperator(torch.nn.Module):
         Set the lifting operator module.
 
         :param torch.nn.Module value: The lifting operator module.
+        :raises ValueError: If ``value`` is not a module instance.
         """
         check_consistency(value, torch.nn.Module)
         self._lifting_operator = value
@@ -115,6 +117,7 @@ class KernelNeuralOperator(torch.nn.Module):
         Set the projection operator module.
 
         :param torch.nn.Module value: The projection operator module.
+        :raises ValueError: If ``value`` is not a module instance.
         """
         check_consistency(value, torch.nn.Module)
         self._projection_operator = value
@@ -135,6 +138,7 @@ class KernelNeuralOperator(torch.nn.Module):
         Set the integral kernels operator module.
 
         :param torch.nn.Module value: The integral kernels operator module.
+        :raises ValueError: If ``value`` is not a module instance.
         """
         check_consistency(value, torch.nn.Module)
         self._integral_kernels = value
@@ -148,7 +152,8 @@ class KernelNeuralOperator(torch.nn.Module):
         representation. The ``projection_operator`` maps the hidden
         representation to the output function.
 
-        :param x: The input tensor for performing the computation. It expects
+        :param x: The input tensor, with shape determined by the three supplied
+            modules. A common convention is
             a tensor :math:`B \times N \times D`, where :math:`B` is the
             batch_size, :math:`N` the number of points in the mesh, and
             :math:`D` the dimension of the problem. In particular, :math:`D`
@@ -157,7 +162,7 @@ class KernelNeuralOperator(torch.nn.Module):
             output variables, :math:`D=4`.
         :type x: torch.Tensor | LabelTensor
         :return: The output tensor.
-        :rtype: torch.Tensor
+        :rtype: torch.Tensor | LabelTensor
         """
         x = self.lifting_operator(x)
         x = self.integral_kernels(x)

@@ -10,9 +10,14 @@ class MetricTracker(Callback):
     """
     Callback for collecting selected metrics logged during training.
 
+    Collection starts after epoch index zero. Metric values are copied at each
+    subsequent epoch end, and :attr:`metrics` stacks only names present in every
+    collected epoch.
+
     :Example:
 
-        >>> tracker = MetricTracker(metrics=["train_loss"])
+        >>> from pina.callback import MetricTracker
+        >>> tracker = MetricTracker(metrics_to_track=["train_loss"])
         >>> tracker.metrics_to_track
         ['train_loss']
     """
@@ -22,10 +27,11 @@ class MetricTracker(Callback):
         Initialization of the :class:`MetricTracker` class.
 
         :param metrics_to_track: The names of the metrics to collect. If
-            ``None``, defaults to ``["train_loss"]`` when no batch size is
-            available, otherwise to ``["train_loss_epoch"]``. Default is
-            ``None``.
-        :type metrics_to_track: str | list[str]
+            ``None``, setup selects ``["train_loss"]``. With a batch size, setup
+            expands each name into its ``"_step"`` and ``"_epoch"`` variants,
+            including the default name. Default is ``None``.
+        :type metrics_to_track: str | list[str] | tuple[str, ...] | set[str] |
+            None
         :raises ValueError: If any of the provided metric names are not strings.
         """
         super().__init__()
@@ -52,8 +58,12 @@ class MetricTracker(Callback):
         tracked. For example, ``"train_loss"`` becomes
         ``["train_loss_step", "train_loss_epoch"]``.
 
-        :param Trainer trainer: The trainer instance managing the execution.
-        :param BaseSolver pl_module: The solver module being executed.
+        This method updates ``metrics_to_track``. Calling it again
+        with batching enabled appends suffixes to the already expanded names.
+
+        :param pina.Trainer trainer: The trainer managing the execution.
+        :param pina.solver.BaseSolver pl_module: The solver module
+            being executed; unused by this callback.
         :param str stage: Current execution stage.
         """
         # Set default metrics to train_loss if no batch size is available
@@ -74,8 +84,12 @@ class MetricTracker(Callback):
         """
         Store the selected logged metrics at the end of each training epoch.
 
-        :param Trainer trainer: The trainer instance managing the execution.
-        :param __: Placeholder argument, not used.
+        Skip epoch index zero. Append a deep copy of the matching logged metrics
+        on later epochs, even if no requested names are available.
+
+        :param pina.Trainer trainer: The trainer managing the execution.
+        :param pina.solver.BaseSolver __: The solver supplied by
+            Lightning; unused.
         """
         # Only collect metrics after the first epoch to ensure they are logged
         if trainer.current_epoch > 0:
@@ -93,9 +107,10 @@ class MetricTracker(Callback):
         """
         Return the collected metrics stacked over the tracked epochs.
 
-        :return: The dictionary mapping each metric name to a tensor containing
-            its values across epochs. Returns an empty dictionary if no metrics
-            have been collected.
+        :return: The dictionary mapping each tracked name present in every
+            collected epoch to its stacked values. The first tensor dimension
+            indexes collected epochs. Returns an empty dictionary if no metrics
+            have been collected or no tracked names occur in every epoch.
         :rtype: dict[str, torch.Tensor]
         """
         if not self._collection:

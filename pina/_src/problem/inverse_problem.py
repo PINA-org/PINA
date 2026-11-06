@@ -21,6 +21,7 @@ class InverseProblem(BaseProblem):
         >>> from pina.problem import InverseProblem
         >>> from pina.domain import CartesianDomain
         >>> class MyInverseProblem(InverseProblem):
+        ...     output_variables = ["u"]
         ...     @property
         ...     def unknown_parameter_domain(self):
         ...         return CartesianDomain({"k": [0.1, 5.0]})
@@ -34,6 +35,15 @@ class InverseProblem(BaseProblem):
     def __init__(self):
         """
         Initialization of the :class:`InverseProblem` class.
+
+        :raises KeyError: If an unknown variable has no ranged bounds in
+            ``unknown_parameter_domain._range``.
+
+        .. note::
+
+            Creates an independent one-element trainable parameter per unknown,
+            uniformly initialized between its bounds. This constructor does
+            not enforce bounds after initialization; solvers may clamp them.
         """
         super().__init__()
 
@@ -49,6 +59,10 @@ class InverseProblem(BaseProblem):
     def unknown_parameter_domain(self):
         """
         The domain of the unknown parameters of the problem.
+
+        :return: The primitive domain whose variables all have ranged bounds.
+            Initialization reads its private ``_range`` mapping directly.
+        :rtype: pina.domain.BaseDomain
         """
 
     @property
@@ -66,8 +80,9 @@ class InverseProblem(BaseProblem):
         """
         The unknown parameters of the problem.
 
-        :return: The unknown parameters of the problem.
-        :rtype: torch.nn.Parameter
+        :return: The stored mapping from unknown names to trainable one-element
+            parameters. Mutations affect the problem directly.
+        :rtype: dict[str, torch.nn.Parameter]
         """
         return self.__unknown_parameters
 
@@ -76,6 +91,7 @@ class InverseProblem(BaseProblem):
         """
         Set the unknown parameters of the problem.
 
-        :param torch.nn.Parameter value: The unknown parameters of the problem.
+        :param dict[str, torch.nn.Parameter] value: The new unknown-parameter
+            mapping, stored by reference without validation or conversion.
         """
         self.__unknown_parameters = value

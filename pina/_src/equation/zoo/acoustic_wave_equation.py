@@ -25,7 +25,7 @@ class AcousticWaveEquation(Equation):
 
     :Example:
 
-        >>> from pina.equation import AcousticWaveEquation
+        >>> from pina.equation.zoo import AcousticWaveEquation
         >>> eq = AcousticWaveEquation(c=1.0)
         >>> # Use within a DomainEquationCondition:
         >>> # condition = DomainEquationCondition(domain=domain, equation=eq)
@@ -37,6 +37,7 @@ class AcousticWaveEquation(Equation):
 
         :param c: The wave propagation speed.
         :type c: float | int
+        :raises ValueError: If numeric type validation fails for ``c``.
         """
         check_consistency(c, (float, int))
         self.c = c
@@ -45,12 +46,19 @@ class AcousticWaveEquation(Equation):
             """
             Implementation of the acoustic wave equation.
 
-            :param LabelTensor input_: The input data of the problem.
-            :param LabelTensor output_: The output data of the problem.
-            :return: The residual of the acoustic wave equation.
-            :rtype: LabelTensor
+            :param LabelTensor input_: Points of shape ``(n, d + 1)`` with
+                gradient tracking and time label ``"t"``. Every other label
+                is treated as a spatial coordinate.
+            :param LabelTensor output_: Predictions of shape ``(n, m)``, with
+                an autograd connection supporting second derivatives.
             :raises ValueError: If the ``input_`` labels do not contain the time
-                variable 't'.
+                variable ``"t"``.
+            :raises TypeError: If arguments are not labeled tensors or an
+                unused gradient cannot be indexed.
+            :raises RuntimeError: If the graph cannot support differentiation.
+            :return: Time second derivatives minus ``c ** 2`` times spatial
+                Laplacians, with shape ``(n, m)``.
+            :rtype: LabelTensor
             """
             # Ensure time is passed as input
             if "t" not in input_.labels:
