@@ -171,6 +171,27 @@ fallback, inference, automatic selection, or disabled behavior triggered by
 selects logic. The example above applies only to implementations that batch
 all samples together for `None`.
 
+### PINA types and framework hooks
+
+Trace PINA call sites, validation, and inheritance before choosing a documented
+type. Use the most specific PINA abstraction that describes the supported
+contract, not merely a broader third-party superclass from an inherited
+signature. Apply this to parameters and returns, including unused hook
+arguments; names such as `pl_module` or `__` do not determine their types.
+
+For callbacks invoked through `pina.Trainer`, document the solver argument as
+`pina.solver.BaseSolver`, including when it is named `pl_module` or `__`.
+PINA's trainer validates a `BaseSolver` and passes it to Lightning's loops;
+its inheritance from `lightning.pytorch.LightningModule` does not make the
+broader framework type the appropriate PINA-facing description. Document the
+trainer as `pina.Trainer` when PINA-specific trainer behavior is required.
+Preserve narrower solver requirements where verified, such as
+`pina.solver.PhysicsInformedSingleModelSolver` for refinement callbacks.
+
+Do not narrow a genuinely framework-generic API solely because it lives in
+PINA, and do not name a concrete solver when a PINA base class or interface
+captures the supported contract. Verify the actual requirements instead.
+
 ### Container types
 
 Specify element types for lists and tuples, and key and value types for
@@ -373,8 +394,27 @@ they return only `None`.
   overlong lines. Report the check result and fix violations before delivery.
 - Compare corresponding interface, base-class, and concrete-class contracts
   for consistent wording without concealing logical differences.
+- Verify hook argument and return types against PINA call sites and validation,
+  rather than copying third-party superclass types. Confirm callback solver
+  arguments use `pina.solver.BaseSolver` or a verified narrower PINA contract
+  where appropriate, even when the argument is unused.
 - Check that references resolve and examples use existing APIs. Run focused
   examples or documentation checks when available and report what was checked.
+- Require edited docstrings to support PINA's documentation build without
+  Sphinx warnings or errors. From the repository root, run the CI-equivalent
+  command:
+
+  ```bash
+  make -C docs html SPHINXOPTS+='-W'
+  ```
+
+  If documentation dependencies are missing, explicitly ask the user permission
+  to install them with `python3 -m pip install '.[doc]'`.
+  Fix build warnings and errors caused by the edited docstrings without
+  suppressing diagnostics or changing Sphinx configuration. Report unrelated
+  failures or environment blockers separately; do not expand the approved
+  scope to fix them. State whether the build passed, failed, or could not run,
+  and do not claim successful verification unless it passed.
 - Inspect the diff to ensure that documentation-only changes have not altered
   implementation code. Do not fix unrelated behavior while documenting it.
 - Confirm all modified Python files are inside `pina/`, and that only actual
@@ -384,6 +424,9 @@ they return only `None`.
 
 ## Checklist
 
+- [ ] The documentation build passed with
+      `make -C docs html SPHINXOPTS+='-W'`, or failures/blockers were explicitly
+      reported without claiming successful verification.
 - [ ] Only docstrings of Python files inside `pina/` were modified.
 - [ ] Every changed docstring addresses a specific, identified issue;
       already compliant and unrelated docstrings remain unchanged.
@@ -400,6 +443,8 @@ they return only `None`.
 - [ ] Single types are inline; unions use a separate `:type:` field with `|`.
 - [ ] Container element, key, and value types are specified where verifiable;
       fixed-length and variable-length tuples use accurate generic syntax.
+- [ ] Parameter and return types reflect the verified PINA contract, including
+      unused callback arguments, rather than unnecessarily broad framework types.
 - [ ] Accepted `None` values, defaults, shapes, keyword options, and side effects
       are explained where relevant.
 - [ ] Defaults of `None` explain the specific logic they trigger, if any.
