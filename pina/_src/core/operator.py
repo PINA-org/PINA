@@ -77,22 +77,24 @@ def _scalar_grad(output_, input_, d):
         computed. It must be a column tensor.
     :param LabelTensor input_: The input tensor with respect to which the
         gradient is computed.
-    :param list[str] d: The names of the input variables with respect to
-        which the gradient is computed. It must be a subset of the input
-        labels. If ``None``, all input variables are considered.
+    :param d: The indices of the input variables with respect to which the
+        gradient is computed. If ``None``, all input variables are kept.
+    :type d: list[int] | None
     :return: The computed gradient tensor.
-    :rtype: LabelTensor
+    :rtype: torch.Tensor
     """
-    grad_out = torch.autograd.grad(
-        outputs=output_,
-        inputs=input_,
-        grad_outputs=torch.ones_like(output_),
-        create_graph=True,
-        retain_graph=True,
-        allow_unused=True,
-    )[0]
+    # Skip LabelTensor dispatch so autograd returns a plain tensor
+    with torch._C.DisableTorchFunctionSubclass():
+        grad_out = torch.autograd.grad(
+            outputs=output_,
+            inputs=input_,
+            grad_outputs=torch.ones_like(output_),
+            create_graph=True,
+            retain_graph=True,
+            allow_unused=True,
+        )[0]
 
-    return grad_out[..., [input_.labels.index(i) for i in d]]
+    return grad_out if d is None else grad_out[..., d]
 
 
 def _scalar_laplacian(output_, input_, d):
@@ -143,21 +145,20 @@ def fast_grad(output_, input_, components, d):
     :return: The computed gradient tensor.
     :rtype: LabelTensor
     """
-    # Scalar gradient
-    if output_.shape[-1] == 1:
-        return LabelTensor(
-            _scalar_grad(output_=output_, input_=input_, d=d),
-            labels=[f"d{output_.labels[0]}d{i}" for i in d],
-        )
+    # Work on the plain output tensor to skip LabelTensor overhead
+    out = output_.tensor
+    labels = output_.labels
 
-    # Vector gradient
-    grads = torch.cat(
-        [
-            _scalar_grad(output_=output_.extract(c), input_=input_, d=d)
-            for c in components
-        ],
-        dim=-1,
-    )
+    # A one-column output is treated as its single component
+    if out.shape[-1] == 1:
+        components = labels[:1]
+
+    # Skip indexing the gradient when all inputs are requested in order
+    in_labels = input_.labels
+    d_idx = None if d == in_labels else [in_labels.index(i) for i in d]
+    cols = [labels.index(c) for c in components]
+    grads = [_scalar_grad(out[..., j : j + 1], input_, d_idx) for j in cols]
+    grads = grads[0] if len(grads) == 1 else torch.cat(grads, dim=-1)
 
     return LabelTensor(
         grads, labels=[f"d{c}d{i}" for c in components for i in d]
