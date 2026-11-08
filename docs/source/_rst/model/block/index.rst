@@ -13,6 +13,8 @@ pina.model.block
     Graph Neural Operator Block <gno_block>
     Continuous Convolution Interface <convolution_interface>
     Continuous Convolution Block <convolution>
+    Integral <integral>
+    Stride <stride>
     Orthogonal Block <orthogonal>
     PirateNet Block <pirate_network_block>
     KAN Block <kan_block>
