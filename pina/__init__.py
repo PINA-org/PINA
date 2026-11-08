@@ -33,7 +33,7 @@ def __getattr__(name):
         warnings.warn(
             "Importing 'Condition' from 'pina' is deprecated; use the direct "
             "condition classes from 'pina.condition' instead.",
-            DeprecationWarning,
+            FutureWarning,
             stacklevel=2,
         )
         from pina._src.condition.condition import Condition
