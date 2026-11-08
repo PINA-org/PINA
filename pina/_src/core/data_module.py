@@ -12,8 +12,9 @@ class DataModule(LightningDataModule):
     Lightning data module for PINA conditions.
 
     Each dataset row is ``[condition_id, batch_id]``. The condition batch is
-    materialized in :meth:`transfer_batch_to_device`, so the dataloaders yield
-    one condition batch per step.
+    materialized in :meth:`transfer_batch_to_device`. Each step groups one
+    batch from every condition present in the split. Shorter conditions cycle
+    until the condition with the most batches is exhausted.
     """
 
     def __init__(
@@ -59,7 +60,9 @@ class DataModule(LightningDataModule):
             Default is ``0.0``.
         :param batch_size: Default batch size passed to each condition's
             ``store_data`` method. Interpretation of ``None`` depends on
-            the condition. Default is ``None``.
+            the condition. Each step evaluates one stored batch per condition,
+            cycling shorter conditions. When each condition stores one batch,
+            all conditions are evaluated in one step. Default is ``None``.
         :type batch_size: int | None
         :param str batching_mode: Batching mode identifier. Stored but not
             used by the current implementation. Default is
@@ -226,8 +229,10 @@ class DataModule(LightningDataModule):
         """
         Create a dataloader for condition and batch identifiers.
 
-        Each iteration yields one dataset row with shape ``[1, 2]``.
-        Rows are visited in dataset order using default collation.
+        Each iteration yields one row per condition present in the split.
+        Rows for each condition are visited in dataset order, cycling shorter
+        conditions until the longest is exhausted. Conditions absent from the
+        split are omitted. Default collation groups the selected rows.
 
         :param torch.Tensor dataset: The identifier dataset with shape
             ``[n_batches, 2]``.
@@ -237,9 +242,25 @@ class DataModule(LightningDataModule):
         """
         if len(dataset) == 0:
             return []
+
+        # Group row indices, not samples: each row identifies a stored batch
+        condition_indices = {}
+        for index, condition_id in enumerate(dataset[:, 0].tolist()):
+            condition_indices.setdefault(condition_id, []).append(index)
+
+        # Exactly one batch per condition avoids overwriting condition losses
+        n_steps = max(len(indices) for indices in condition_indices.values())
+        batch_indices = [
+            [
+                indices[step % len(indices)]
+                for indices in condition_indices.values()
+            ]
+            for step in range(n_steps)
+        ]
+
         return DataLoader(
             dataset,
-            batch_size=1,
+            batch_sampler=batch_indices,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
         )
@@ -287,9 +308,9 @@ class DataModule(LightningDataModule):
         condition's ``materialize`` method with the batch identifier and
         requested device.
 
-        :param torch.Tensor batch: Identifier rows with shape
-            ``[n_rows, 2]``, each containing a condition identifier and a
-            batch identifier. Dataloaders normally provide one row.
+        :param torch.Tensor batch: Identifier rows with shape ``[n_rows, 2]``,
+            each containing a condition identifier and a batch identifier. Each
+            step provides one row per condition present in the split.
         :param device: The device on which condition batches are
             materialized. If ``None``, device handling is delegated to
             each condition without a target device.
