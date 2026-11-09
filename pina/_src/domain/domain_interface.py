@@ -13,23 +13,23 @@ class DomainInterface(metaclass=ABCMeta):
         """
         Check if a point is inside the domain.
 
-        :param LabelTensor point: The point to check.
-        :param bool check_border: If ``True``, the boundary is considered inside
-            the domain.
+        :param LabelTensor point: A single point with labeled coordinates
+            matching the domain variables.
+        :param bool check_border: Whether to include boundaries in membership
+            tests. Concrete domains may apply tolerances or surface-only rules.
         :return: Whether the point is inside the domain or not.
-        :rtype: bool
+        :rtype: bool | torch.Tensor
         """
 
     @abstractmethod
     def update(self, domain):
         """
-        Update the current domain by adding the labels contained in ``domain``.
-        Each new label introduces a new dimension. Only domains of the same type
-        can be used for update.
+        Return a new domain incorporating compatible geometry definitions.
 
-        :param BaseDomain domain: The domain whose labels are to be merged into
-            the current one.
-        :return: A new domain instance with the merged labels.
+        :param DomainInterface domain: The compatible domain providing updated
+            definitions. Merge or replacement semantics depend on the concrete
+            domain implementation.
+        :return: A new domain with the updated geometry.
         :rtype: DomainInterface
         """
 
@@ -38,10 +38,13 @@ class DomainInterface(metaclass=ABCMeta):
         """
         The sampling routine.
 
-        :param int n: The number of samples to generate.
-        :param str mode: The sampling method.
-        :param list[str] variables: The list of variables to sample.
-        :return: The sampled points.
+        :param int n: The positive sample count or per-axis resolution,
+            depending on the concrete domain and mode.
+        :param str mode: A method supported by ``sample_modes``.
+        :param variables: The coordinate names to return, or ``"all"`` for
+            every variable.
+        :type variables: str | list[str] | tuple[str, ...] | set[str]
+        :return: The sampled points with labeled coordinate columns.
         :rtype: LabelTensor
         """
 
@@ -50,7 +53,8 @@ class DomainInterface(metaclass=ABCMeta):
         """
         Return the boundary of the domain as a new domain object.
 
-        :return: The boundary of the domain.
+        :raises NotImplementedError: If boundary construction is unsupported.
+        :return: A new domain representing the boundary for sampling.
         :rtype: DomainInterface
         """
 
@@ -81,7 +85,7 @@ class DomainInterface(metaclass=ABCMeta):
         The dictionary representing the domain.
 
         :return: The dictionary representing the domain.
-        :rtype: dict
+        :rtype: dict[str, Any]
         """
 
     @property
@@ -91,7 +95,7 @@ class DomainInterface(metaclass=ABCMeta):
         The range variables of the domain.
 
         :return: The range variables of the domain.
-        :rtype: dict
+        :rtype: dict[str, Any]
         """
 
     @property
@@ -101,5 +105,5 @@ class DomainInterface(metaclass=ABCMeta):
         The fixed variables of the domain.
 
         :return: The fixed variables of the domain.
-        :rtype: dict
+        :rtype: dict[str, Any]
         """

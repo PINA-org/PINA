@@ -52,11 +52,13 @@ class PhysicsInformedSingleModelSolver(PhysicsInformedMixin, SingleModelSolver):
 
     :Example:
 
-        >>> from pina.solver import PINN
-        >>> from pina.problem import PoissonProblem
-        >>> # problem = PoissonProblem()
-        >>> # solver = PINN(problem=problem, model=model)
-        >>> # solver.train()
+        >>> import torch
+        >>> from pina.solver import PhysicsInformedSingleModelSolver
+        >>> from pina.problem.zoo import Poisson2DSquareProblem
+        >>> problem = Poisson2DSquareProblem()
+        >>> solver = PhysicsInformedSingleModelSolver(
+        ...     problem=problem, model=torch.nn.Linear(2, 1)
+        ... )
     """
 
     # Accepted conditions types for this solver
@@ -80,17 +82,23 @@ class PhysicsInformedSingleModelSolver(PhysicsInformedMixin, SingleModelSolver):
 
         :param BaseProblem problem: The problem to be solved.
         :param torch.nn.Module model: The model used by the solver.
-        :param TorchOptimizer optimizer: The optimizer used by the solver.
+        :param optimizer: The optimizer wrapper used by the solver.
             If ``None``, the ``torch.optim.Adam`` optimizer with a learning rate
             of ``0.001`` is used. Default is ``None``.
-        :param TorchScheduler scheduler: The scheduler used by the solver.
+        :type optimizer: pina.optim.TorchOptimizer | None
+        :param scheduler: The scheduler wrapper used by the solver.
             If ``None``, the ``torch.optim.lr_scheduler.ConstantLR`` scheduler
             with a factor of ``1.0`` is used. Default is ``None``.
-        :param BaseWeighting weighting: The weighting strategy used to combine
+        :type scheduler: pina.optim.TorchScheduler | None
+        :param weighting: The weighting strategy used to combine
             condition losses. If ``None``, no weighting is applied. Default is
             ``None``.
+        :type weighting: pina.weighting.BaseWeighting | None
         :param loss: The loss function used to compute residual losses.
             If ``None``, :class:`torch.nn.MSELoss` is used. Default is ``None``.
+        :type loss: torch.nn.modules.loss._Loss | pina.loss.BaseDualLoss | None
+        :raises ValueError: If the problem, conditions, model, wrappers, loss,
+            or weighting fail base-solver validation.
         """
         SingleModelSolver.__init__(
             self,

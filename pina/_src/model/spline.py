@@ -57,7 +57,7 @@ class Spline(torch.nn.Module):
         Initialization of the :class:`Spline` class.
 
         :param int order: The order of the spline. The corresponding basis
-            functions are polynomials of degree ``order - 1``. Default is 4.
+            functions are polynomials of degree ``order - 1``. Default is ``4``.
         :param knots: The knots of the spline. If a tensor is provided, knots
             are set directly from the tensor. If a dictionary is provided, it
             must contain the keys ``"n"``, ``"min"``, ``"max"``, and ``"mode"``.
@@ -67,13 +67,16 @@ class Spline(torch.nn.Module):
             spaced over :math:`[min, max]`, and ``"auto"``, where knots are
             constructed to ensure that the spline interpolates the first and
             last control points. In this case, the number of knots is adjusted
-            if :math:`n < 2 * order`. If None is given, knots are initialized
+            if :math:`n < 2 * order`. With ``None``, knots are initialized
             automatically over :math:`[0, 1]` ensuring interpolation of the
-            first and last control points. Default is None.
-        :type knots: torch.Tensor | dict
-        :param torch.Tensor control_points: The control points of the spline.
-            If None, they are initialized as learnable parameters with an
-            initial value of zero. Default is None.
+            first and last control points, using the supplied control count.
+            Knots or controls must be supplied. Default is ``None``.
+        :type knots: torch.Tensor | dict[str, int | float | str] | None
+        :param control_points: The one-dimensional floating control tensor.
+            ``None`` creates a zero-initialized trainable tensor from the knot
+            count. Supplied tensors are also wrapped as trainable parameters.
+            Default is ``None``.
+        :type control_points: torch.Tensor | None
         :raises AssertionError: If ``order`` is not a positive integer.
         :raises ValueError: If ``knots`` is neither a torch.Tensor nor a
             dictionary, when provided.
@@ -84,8 +87,11 @@ class Spline(torch.nn.Module):
         :raises ValueError: If ``control_points`` is not one-dimensional.
         :raises ValueError: If the number of ``knots`` is not equal to the sum
             of ``order`` and the number of ``control_points.``
-        :raises UserWarning: If the number of control points is lower than the
-            order, resulting in a degenerate spline.
+
+        .. warning::
+
+            Too few control points emits ``UserWarning`` rather than raising.
+            Knots are sorted, but control coefficients are not reordered.
         """
         super().__init__()
 
@@ -199,12 +205,13 @@ class Spline(torch.nn.Module):
         Compute the basis functions for the spline using an iterative approach.
         This is a vectorized implementation based on the Cox-de Boor recursion.
 
-        :param torch.Tensor x: The points to be evaluated.
-        :param bool collection: If True, returns a list of basis functions for
-            all orders up to the spline order. Default is False.
+        :param torch.Tensor x: Evaluation coordinates of shape ``(..., n)``.
+        :param bool collection: Whether to return bases for every order, with a
+            dummy ``None`` at index zero. Default is ``False``.
         :raises ValueError: If ``collection`` is not a boolean.
-        :return: The basis functions evaluated at x.
-        :rtype: torch.Tensor | list[torch.Tensor]
+        :return: Basis values with a final control-coefficient axis, or an
+            order-indexed list of such tensors when ``collection=True``.
+        :rtype: torch.Tensor | list[torch.Tensor | None]
         """
         # Check consistency
         check_consistency(collection, bool)
@@ -272,9 +279,12 @@ class Spline(torch.nn.Module):
         """
         Forward pass for the :class:`Spline` model.
 
-        :param x: The input tensor.
+        :param x: Coordinates of shape ``(..., n)`` or ``(..., n, 1)``.
         :type x: torch.Tensor | LabelTensor
-        :return: The output tensor.
+        :return: Plain spline values with the same shape as ``x`` for nonscalar
+            input and more than one control coefficient. A scalar input yields
+            shape ``(1,)``; a single control coefficient can fail contraction
+            because the implementation squeezes the final basis axis.
         :rtype: torch.Tensor
         """
         return torch.einsum(
@@ -290,8 +300,10 @@ class Spline(torch.nn.Module):
         :param x: The input tensor.
         :type x: torch.Tensor | LabelTensor
         :param int degree: The derivative degree to compute.
-        :raises ValueError: If ``degree`` is not an integer.
-        :return: The derivative tensor.
+        :raises AssertionError: If ``degree`` is not a nonnegative integer.
+        :return: The derivative contraction, with the same shape convention as
+            forward. Degree zero evaluates the spline; degrees at least the
+            spline order produce zero away from knot discontinuities.
         :rtype: torch.Tensor
         """
         # Check consistency
@@ -354,8 +366,8 @@ class Spline(torch.nn.Module):
         """
         The control points of the spline.
 
-        :return: The control points.
-        :rtype: torch.Tensor
+        :return: The stored one-dimensional trainable control coefficients.
+        :rtype: torch.nn.Parameter
         """
         return self._control_points
 
@@ -364,9 +376,10 @@ class Spline(torch.nn.Module):
         """
         Set the control points of the spline.
 
-        :param torch.Tensor control_points: The control points tensor. If None,
+        :param control_points: The control points tensor. If ``None``,
             control points are initialized to learnable parameters with zero
-            initial value. Default is None.
+            initial value, inferred from current knots and order.
+        :type control_points: torch.Tensor | None
         :raises ValueError: If there are not enough knots to define the control
             points, due to the relation: #knots = order + #control_points.
         """
@@ -412,9 +425,11 @@ class Spline(torch.nn.Module):
             The supported modes are ``"uniform"``, where the knots are evenly
             spaced over :math:`[min, max]`, and ``"auto"``, where knots are
             constructed to ensure that the spline interpolates the first and
-            last control points. In this case, the number of knots is inferred
-            and the ``"n"`` key is ignored.
-        :type value: torch.Tensor | dict
+            last control points. ``"n"`` is used, but values below twice the
+            order produce exactly twice the order knots. Tensor knots are
+            sorted before storage. Derivative buffers are refreshed, but
+            existing controls are not resized or revalidated by this setter.
+        :type value: torch.Tensor | dict[str, int | float | str]
         :raises ValueError: If a dictionary is provided but does not contain
             the required keys.
         :raises ValueError: If the mode specified in the dictionary is invalid.

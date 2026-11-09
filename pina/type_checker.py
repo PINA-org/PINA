@@ -1,9 +1,8 @@
 """Runtime type enforcement and validation utilities.
 
-This module provides decorators to validate function arguments against type
-annotations at runtime. This ensures that PINA components receive inputs
-adhering to expected specifications, improving the robustness of the
-scientific computing pipeline.
+The decorator checks annotated arguments and return values with ``isinstance``
+only when the root logger's effective level is ``DEBUG``. It is not a recursive
+validator for parameterized container annotations.
 """
 
 from pina._src.core.type_checker import enforce_types

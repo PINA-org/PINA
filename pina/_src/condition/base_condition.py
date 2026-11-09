@@ -7,12 +7,12 @@ from pina._src.problem.problem_interface import ProblemInterface
 
 def _unwrap_single(value):
     """
-    Unwrap a single-element list into its only element.
+    Unwrap a single-element list or tuple into its only element.
 
     This is used to expose a list of one graph as the graph itself.
 
     :param Any value: The value to unwrap.
-    :return: The single element when ``value`` is a list of length one,
+    :return: The single element when ``value`` is a list or tuple of length one,
         otherwise ``value``.
     :rtype: Any
     """
@@ -36,8 +36,9 @@ class BaseCondition(ConditionInterface):
         """
         The problem associated with this condition.
 
+        :raises AttributeError: If no problem has been assigned.
         :return: The problem associated with this condition.
-        :rtype: BaseProblem
+        :rtype: pina.problem.ProblemInterface
         """
         return self._problem
 
@@ -46,8 +47,10 @@ class BaseCondition(ConditionInterface):
         """
         Set the problem associated with this condition.
 
-        :param BaseProblem value: The problem to associate with this condition.
-        :raises ValueError: If the problem is not an instance of BaseProblem.
+        :param pina.problem.ProblemInterface value: The problem to associate
+            with this condition.
+        :raises ValueError: If ``value`` fails validation against
+            :class:`pina.problem.ProblemInterface`.
         """
         check_consistency(value, ProblemInterface)
         self._problem = value

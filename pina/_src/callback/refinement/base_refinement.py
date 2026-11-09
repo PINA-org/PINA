@@ -33,10 +33,10 @@ class BaseRefinement(Callback, RefinementInterface):
         :param condition_to_update: The condition(s) to be updated during
             refinement. If ``None``, all conditions associated with a domain are
             updated. Default is ``None``.
-        :type condition_to_update: str | list[str] | tuple[str]
+        :type condition_to_update: str | list[str] | tuple[str, ...] | None
         :raises AssertionError: If ``sample_every`` is not a positive integer.
         :raises ValueError: If ``condition_to_update``, when provided, is not a
-            string or an iterable of strings.
+            string, list of strings, or tuple of strings.
         """
         # Check consistency
         check_positive_integer(sample_every, strict=True)
@@ -54,17 +54,22 @@ class BaseRefinement(Callback, RefinementInterface):
 
     def on_train_start(self, trainer, solver):
         """
-        This method is called once before training begins and is typically used
-        to initialize datasets, sampling conditions, or internal state.
+        Initialize the refinement state before training begins.
 
-        :param Trainer trainer: The trainer managing the training loop.
-        :param BaseSolver solver: The solver associated with the trainer.
-        :raise RuntimeError: If the solver is not physics-informed (i.e., does
-            not implement PINNInterface).
-        :raise RuntimeError: If any of the specified conditions do not exist in
+        Resolve the selected conditions, map training batch ids to condition
+        names, and record each selected condition's initial training-point
+        count. If no condition names were supplied, select conditions with a
+        ``domain`` attribute.
+
+        :param pina.Trainer trainer: The trainer managing the training loop.
+        :param pina.solver.PhysicsInformedSingleModelSolver solver: The solver
+            associated with the trainer.
+        :raises RuntimeError: If ``solver`` is not an instance of
+            :class:`pina.solver.PhysicsInformedSingleModelSolver`.
+        :raises RuntimeError: If any of the specified conditions do not exist in
             the problem.
-        :raise RuntimeError: If any of the specified conditions do not have a
-            'domain' attribute for sampling.
+        :raises RuntimeError: If any of the specified conditions do not have a
+            ``domain`` attribute for sampling.
         """
         # Check solver consistency
         if not isinstance(solver, PhysicsInformedSingleModelSolver):
@@ -121,11 +126,14 @@ class BaseRefinement(Callback, RefinementInterface):
         """
         Apply refinement at the end of a training epoch.
 
-        This method is invoked after each epoch and can update the dataset based
-        on the current state of the model.
+        At nonzero, zero-based epoch indices divisible by ``sample_every``,
+        replace each selected training batch's ``"input"`` entry with the result
+        of :meth:`sample`. Other splits and the condition's backing input tensor
+        are not updated here.
 
-        :param Trainer trainer: The trainer managing the training loop.
-        :param BaseSolver solver: The solver associated with the trainer.
+        :param pina.Trainer trainer: The trainer managing the training loop.
+        :param pina.solver.PhysicsInformedSingleModelSolver solver: The solver
+            associated with the trainer.
         """
         # Store current epoch
         epoch = trainer.current_epoch
@@ -146,14 +154,12 @@ class BaseRefinement(Callback, RefinementInterface):
     @property
     def dataset(self):
         """
-        The training datasets managed by the refinement strategy.
+        Return the training batch ids grouped by condition name.
 
-        The dataset is stored as a dictionary whose keys are condition names and
-        whose values are the corresponding dataset subsets. The content of this
-        dictionary can be updated dynamically during refinement.
-
-        :return: The mapping between condition names and dataset subsets.
-        :rtype: dict
+        :return: The mutable mapping from each training condition name to its
+            batch ids, or ``None`` before :meth:`on_train_start` initializes it.
+            The mapping includes conditions not selected for refinement.
+        :rtype: dict[str, list[int]] | None
         """
         return self._dataset
 
@@ -163,8 +169,8 @@ class BaseRefinement(Callback, RefinementInterface):
         Initial size of the sampled dataset for each condition before any
         refinement is applied.
 
-        :return: A mapping between each condition name and its initial number
-            of sampled points.
-        :rtype: dict[str, int]
+        :return: A mapping between each selected condition name and its initial
+            number of training points, or ``None`` before training starts.
+        :rtype: dict[str, int] | None
         """
         return self._initial_population_size

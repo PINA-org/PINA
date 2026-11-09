@@ -23,7 +23,8 @@ def thin_plate_spline(r, eps=1e-7):
     Thin plate spline radial basis function.
 
     :param torch.Tensor r: Distance between points.
-    :param float eps: Small value to avoid log(0).
+    :param float eps: Minimum distance before evaluating the logarithm.
+        Default is ``1e-7``.
     :return: The thin plate spline radial basis function.
     :rtype: torch.Tensor
     """
@@ -127,7 +128,7 @@ class RBFBlock(torch.nn.Module):
     interpolate new points. The layer is not trainable.
 
     .. note::
-        It reproduces the implementation of :class:`scipy.interpolate.RBFBlock`
+        It follows :class:`scipy.interpolate.RBFInterpolator`
         and it is inspired from the implementation in `torchrbf.
         <https://github.com/ArmanMaesumi/torchrbf>`_
 
@@ -154,23 +155,36 @@ class RBFBlock(torch.nn.Module):
         """
         Initialization of the :class:`RBFBlock` class.
 
-        :param int neighbors: The number of neighbors used for interpolation.
-            If ``None``, all data are used.
-        :param float smoothing: The moothing parameter for the interpolation.
-            If ``0.0``, the interpolation is exact and no smoothing is applied.
+        :param neighbors: Neighbor count, currently unsupported by ``fit``.
+            ``None`` uses all observations. Default is ``None``.
+        :type neighbors: int | None
+        :param smoothing: Diagonal regularization, scalar or per-observation
+            tensor shaped ``(n_points,)``. ``0.0`` requests exact interpolation.
+            Default is ``0.0``.
+        :type smoothing: int | float | torch.Tensor
         :param str kernel: The radial basis function to use.
             The available kernels are: ``linear``, ``thin_plate_spline``,
             ``cubic``, ``quintic``, ``multiquadric``, ``inverse_multiquadric``,
             ``inverse_quadratic``, or ``gaussian``.
-        :param float epsilon: The shape parameter that scales the input to the
-            RBF. Default is ``1`` for kernels in the ``scale_invariant``
-            dictionary, while it must be specified for other kernels.
-        :param int degree: The degree of the polynomial. Some kernels require a
+            Default is ``"thin_plate_spline"``.
+        :param epsilon: Input distance scale. ``None`` selects ``1.0`` for
+            scale-invariant kernels and raises for other kernels.
+            Default is ``None``.
+        :type epsilon: float | None
+        :param degree: The polynomial degree. Some kernels require a
             minimum degree of the polynomial to ensure that the RBF is well
             defined. These minimum degrees are specified in the
-            ``min_degree_funcs`` dictionary. If ``degree`` is less than the
-            minimum degree required, a warning is raised and the degree is set
-            to the minimum value.
+            ``min_degree_funcs`` dictionary. ``None`` uses the larger of zero
+            and that minimum; ``-1`` omits polynomial terms. A below-minimum
+            degree emits a warning but is retained. Default is ``None``.
+        :type degree: int | None
+        :raises ValueError: If argument types, kernel name, epsilon selection,
+            or degree below ``-1`` fail validation.
+
+        .. note::
+
+            Fitted tensors are ordinary attributes, not registered buffers.
+            They are neither moved by ``to`` nor saved in ``state_dict``.
         """
 
         super().__init__()
@@ -200,7 +214,7 @@ class RBFBlock(torch.nn.Module):
         The smoothing parameter for the interpolation.
 
         :return: The smoothing parameter.
-        :rtype: float
+        :rtype: int | float | torch.Tensor
         """
         return self._smoothing
 
@@ -209,7 +223,8 @@ class RBFBlock(torch.nn.Module):
         """
         Set the smoothing parameter for the interpolation.
 
-        :param float value: The smoothing parameter.
+        :param value: Scalar or per-observation diagonal regularization.
+        :type value: int | float | torch.Tensor
         """
         self._smoothing = value
 
@@ -229,6 +244,7 @@ class RBFBlock(torch.nn.Module):
         Set the radial basis function.
 
         :param str value: The radial basis function.
+        :raises ValueError: If the name is not a supported lowercase kernel key.
         """
         if value not in radial_functions:
             raise ValueError(f"Unknown kernel: {value}")
@@ -249,7 +265,9 @@ class RBFBlock(torch.nn.Module):
         """
         Set the shape parameter.
 
-        :param float value: The shape parameter.
+        :param value: Shape scale; ``None`` selects one for scale-invariant
+            kernels and is rejected otherwise.
+        :type value: float | None
         :raises ValueError: If the kernel requires an epsilon and it is not
             specified.
         """
@@ -277,10 +295,15 @@ class RBFBlock(torch.nn.Module):
         """
         Set the degree of the polynomial.
 
-        :param int value: The degree of the polynomial.
-        :raises UserWarning: If the degree is less than the minimum required
-            for the kernel.
-        :raises ValueError: If the degree is less than -1.
+        :param value: Polynomial degree; ``None`` selects the larger of zero
+            and the kernel minimum.
+        :type value: int | None
+        :raises ValueError: If the degree is less than ``-1``.
+
+        .. warning::
+
+            A value below the kernel minimum emits ``UserWarning`` but is kept,
+            despite the warning text claiming it will be raised to the minimum.
         """
         min_degree = min_degree_funcs.get(self.kernel, -1)
         if value is None:
@@ -301,8 +324,8 @@ class RBFBlock(torch.nn.Module):
         """
         Check the data consistency.
 
-        :param torch.Tensor y: The tensor of data points.
-        :param torch.Tensor d: The tensor of data values.
+        :param torch.Tensor y: Centers of shape ``(n_points, n_dimensions)``.
+        :param torch.Tensor d: Values with matching leading point count.
         :raises ValueError: If the data is not consistent.
         """
         if y.ndim != 2:
@@ -321,10 +344,10 @@ class RBFBlock(torch.nn.Module):
 
     def fit(self, y, d):
         """
-        Fit the RBF interpolator to the data.
+        Fit the RBF interpolator and retain references to training data.
 
-        :param torch.Tensor y: The tensor of data points.
-        :param torch.Tensor d: The tensor of data values.
+        :param torch.Tensor y: Centers of shape ``(n_points, n_dimensions)``.
+        :param torch.Tensor d: Values of shape ``(n_points, ...)``.
         :raises NotImplementedError: If the neighbors are not ``None``.
         :raises ValueError: If the data is not compatible with the requested
             degree.
@@ -363,11 +386,12 @@ class RBFBlock(torch.nn.Module):
         """
         Forward pass.
 
-        :param torch.Tensor x: The tensor of points to interpolate.
+        :param torch.Tensor x: Queries shaped ``(n_queries, n_dimensions)``.
         :raises ValueError: If the input is not a 2-dimensional tensor.
         :raises ValueError: If the second dimension of the input is not the same
             as the second dimension of the data.
-        :return: The interpolated data.
+        :return: Values of shape ``(n_queries, *d.shape[1:])``. Fit must have
+            completed beforehand; no explicit fitted-state validation occurs.
         :rtype: torch.Tensor
         """
         if x.ndim != 2:
@@ -400,7 +424,7 @@ class RBFBlock(torch.nn.Module):
 
         :param torch.Tensor x: The tensor of points.
         :param torch.Tensor y: The tensor of centres.
-        :param str kernel_func: Radial basis function to use.
+        :param Callable kernel_func: Map distance tensors to kernel values.
         :return: The radial function values.
         :rtype: torch.Tensor
         """
@@ -426,7 +450,7 @@ class RBFBlock(torch.nn.Module):
         Return the radial function values for all pairs of points in ``x``.
 
         :param torch.Tensor x: The tensor of points.
-        :param str kernel_func: The radial basis function to use.
+        :param Callable kernel_func: Map distance tensors to kernel values.
         :return: The radial function values.
         :rtype: torch.Tensor
         """

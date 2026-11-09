@@ -16,6 +16,7 @@ class SwitchScheduler(Callback):
     :Example:
 
         >>> from pina.optim import TorchScheduler
+        >>> from pina.callback import SwitchScheduler
         >>> import torch
         >>> scheduler = TorchScheduler(
         ...     torch.optim.lr_scheduler.StepLR, step_size=5)
@@ -32,18 +33,23 @@ class SwitchScheduler(Callback):
             Use a single scheduler for single-model solvers, or a list of
             schedulers when working with multiple models.
         :type new_schedulers: SchedulerInterface | list[SchedulerInterface]
-        :param int epoch_switch: The epoch at which the scheduler switch occurs.
+        :param int epoch_switch: The strictly positive, zero-based epoch index
+            at which the scheduler switch occurs.
         :raises AssertionError: If ``epoch_switch`` is not a positive integer.
-        :raises ValueError:  If any of the provided schedulers are not instances
+        :raises ValueError: If any of the provided schedulers are not instances
             of :class:`pina.optim.SchedulerInterface`.
 
-        Example:
+        :Example:
+
+            >>> import torch
+            >>> from pina.optim import TorchScheduler
+            >>> from pina.callback import SwitchScheduler
             >>> scheduler = TorchScheduler(
-            >>>     torch.optim.lr_scheduler.StepLR, step_size=5
-            >>> )
+            ...     torch.optim.lr_scheduler.StepLR, step_size=5
+            ... )
             >>> switch_callback = SwitchScheduler(
-            >>>     new_schedulers=scheduler, epoch_switch=10
-            >>> )
+            ...     new_schedulers=scheduler, epoch_switch=10
+            ... )
         """
         super().__init__()
 
@@ -63,9 +69,14 @@ class SwitchScheduler(Callback):
         """
         Switch the scheduler at the start of the specified training epoch.
 
-        :param Trainer trainer: The trainer object managing
+        Hook each new scheduler wrapper to the corresponding current optimizer
+        and replace its existing Lightning scheduler configuration. Store the
+        new wrappers on the solver in the same order.
+
+        :param pina.Trainer trainer: The trainer object managing
             the training process.
-        :param __: Placeholder argument, not used.
+        :param pina.solver.BaseSolver __: The solver supplied by
+            Lightning; unused.
         """
         # Check if the current epoch matches the switch epoch
         if trainer.current_epoch == self._epoch_switch:

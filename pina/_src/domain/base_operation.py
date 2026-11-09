@@ -14,39 +14,45 @@ class BaseOperation(OperationInterface, BaseDomain, metaclass=ABCMeta):
 
     All specific operation types should inherit from this class and implement
     the abstract methods defined in both the following interfaces:
-    :class:`~pina.domain.operation_interface.OperationInterface`, and
-    :class:`~pina.domain.domain_interface.DomainInterface`.
+    :class:`~pina.domain.OperationInterface`, and
+    :class:`~pina.domain.DomainInterface`.
 
     This class is not meant to be instantiated directly.
     """
 
     def __init__(self, geometries):
         """
-        Initialization of the :class:`OperationInterface` class.
+        Initialization of the :class:`BaseOperation` class.
 
         :param geometries: The list of domains on which to perform the set
-            operation.
-        :type geometries: list[BaseDomain] | tuple[BaseDomain]
+            operation, including nested operations. The container is stored by
+            reference. Empty containers are accepted, but sampling and updates
+            generally require at least one geometry.
+        :type geometries: list[BaseDomain] | tuple[BaseDomain, ...]
         :raises TypeError: If geometries is neither a list nor a tuple.
         :raises ValueError: If geometries elements are not instances of
-            :class:`~pina.domain.base_domain.BaseDomain`.
-        :raises NotImplementedError: If the dimensions of the geometries are not
-            consistent.
+            :class:`~pina.domain.BaseDomain`.
+        :raises NotImplementedError: If the geometries have different variable
+            names or dimensions.
         """
         super().__init__()
         self.geometries = geometries
 
     def update(self, domain):
         """
-        Update the domain resulting from the operation.
+        Apply a compatible domain update to every constituent geometry.
 
-        :param DomainInterface domain: The domain whose labels are to be merged
-            into the current one.
+        The receiver is deep-copied, then each original geometry's ``update``
+        method supplies the corresponding new constituent.
+
+        :param BaseDomain domain: The geometry definitions to apply. Must be an
+            instance of the first constituent's class.
         :raises NotImplementedError: If the geometries involved in the operation
             are of different types.
         :raises TypeError: If the passed domain is not of the same type of all
             the geometries involved in the operation.
-        :return: A new domain instance with the merged labels.
+        :raises IndexError: If there are no constituent geometries.
+        :return: A new operation with updated constituent geometries.
         :rtype: BaseOperation
         """
         # Check all geometries are of the same type
@@ -76,7 +82,9 @@ class BaseOperation(OperationInterface, BaseDomain, metaclass=ABCMeta):
         """
         The list of available sampling modes.
 
-        :return: The list of available sampling modes.
+        :raises TypeError: If there are no constituent geometries.
+        :return: A new list of modes supported by every constituent, with no
+            guaranteed ordering.
         :rtype: list[str]
         """
         return list(
@@ -90,7 +98,7 @@ class BaseOperation(OperationInterface, BaseDomain, metaclass=ABCMeta):
         """
         The list of variables of the domain.
 
-        :return: The list of variables of the domain.
+        :return: A new sorted list of constituent variable names.
         :rtype: list[str]
         """
         return sorted({v for g in self.geometries for v in g.variables})
@@ -100,8 +108,10 @@ class BaseOperation(OperationInterface, BaseDomain, metaclass=ABCMeta):
         """
         Returns a dictionary representation of the operation domain.
 
-        :return: The dictionary representation of the operation domain.
-        :rtype: dict
+        :return: A new mapping with ``"type"`` holding the operation class name
+            and ``"geometries"`` holding the constituents' domain dictionaries.
+            Nested operations produce recursive dictionaries.
+        :rtype: dict[str, str | list[dict[str, Any]]]
         """
         return {
             "type": self.__class__.__name__,
@@ -113,8 +123,9 @@ class BaseOperation(OperationInterface, BaseDomain, metaclass=ABCMeta):
         """
         The domains on which to perform the set operation.
 
-        :return: The domains on which to perform the set operation.
-        :rtype: list[BaseDomain]
+        :return: The stored constituent container, including nested operations.
+            Mutating a returned list bypasses setter validation.
+        :rtype: list[BaseDomain] | tuple[BaseDomain, ...]
         """
         return self._geometries
 
@@ -123,8 +134,9 @@ class BaseOperation(OperationInterface, BaseDomain, metaclass=ABCMeta):
         """
         The range variables of each geometry.
 
-        :return: The range variables of each geometry.
-        :rtype: dict
+        :return: A new ``"geometry_i"`` mapping to each constituent's ranged
+            definitions. Nested operations introduce further mapping levels.
+        :rtype: dict[str, dict[str, Any]]
         """
         return {f"geometry_{i}": g.range for i, g in enumerate(self.geometries)}
 
@@ -133,8 +145,9 @@ class BaseOperation(OperationInterface, BaseDomain, metaclass=ABCMeta):
         """
         The fixed variables of each geometry.
 
-        :return: The fixed variables of each geometry.
-        :rtype: dict
+        :return: A new ``"geometry_i"`` mapping to each constituent's fixed
+            definitions. Nested operations introduce further mapping levels.
+        :rtype: dict[str, dict[str, Any]]
         """
         return {f"geometry_{i}": g.fixed for i, g in enumerate(self.geometries)}
 
@@ -143,13 +156,14 @@ class BaseOperation(OperationInterface, BaseDomain, metaclass=ABCMeta):
         """
         Setter for the ``geometries`` property.
 
-        :param values: The geometries to be set.
-        :type values: list[BaseDomain] | tuple[BaseDomain]
+        :param values: The constituent domains, including nested operations,
+            stored by reference after validation. Empty containers are accepted.
+        :type values: list[BaseDomain] | tuple[BaseDomain, ...]
         :raises TypeError: If values is neither a list nor a tuple.
         :raises ValueError: If values elements are not instances of
-            :class:`~pina.domain.base_domain.BaseDomain`.
-        :raises NotImplementedError: If the dimensions of the geometries are not
-            consistent.
+            :class:`~pina.domain.BaseDomain`.
+        :raises NotImplementedError: If the geometries have different variable
+            names or dimensions.
         """
         # Check geometries are list or tuple
         if not isinstance(values, (list, tuple)):

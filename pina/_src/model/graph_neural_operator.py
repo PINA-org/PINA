@@ -18,12 +18,13 @@ class GraphNeuralKernel(torch.nn.Module):
         Liu, B., Bhattacharya, K., Stuart, A., Anandkumar, A. (2020).
         *Neural Operator: Graph Kernel Network for Partial Differential
         Equations*.
-        DOI: `arXiv preprint arXiv:2003.03485         <https://arxiv.org/abs/2003.03485>`_
+        DOI: `arXiv preprint arXiv:2003.03485
+        <https://arxiv.org/abs/2003.03485>`_
 
     :Example:
 
         >>> import torch
-        >>> from pina.model._src.model.graph_neural_operator import (
+        >>> from pina._src.model.graph_neural_operator import (
         ...     GraphNeuralKernel
         ... )
         >>> model = GraphNeuralKernel(width=16, edge_features=4)
@@ -54,14 +55,20 @@ class GraphNeuralKernel(torch.nn.Module):
         :param int internal_n_layers: The number of layers of the neural network
             inside each kernel layer. Default is ``0``.
         :param internal_layers: The number of neurons for each layer of the
-            neural network inside each kernel layer. Default is ``None``.
-        :type internal_layers: list[int] | tuple[int]
-        :param torch.nn.Module internal_func: The activation function used
+            neural network inside each kernel layer. ``None`` uses
+            ``internal_n_layers`` and ``inner_size``. Default is ``None``.
+        :type internal_layers: list[int] | tuple[int, ...] | None
+        :param inner_size: Hidden width of the edge network. ``None`` uses
+            ``width`` unless explicit widths are supplied. Default is ``None``.
+        :type inner_size: int | None
+        :param internal_func: The activation class used
             inside each kernel layer. If ``None``, it uses the
             :class:`torch.nn.Tanh` activation. Default is ``None``.
-        :param torch.nn.Module external_func: The activation function applied to
+        :type internal_func: type[torch.nn.Module] | None
+        :param external_func: The activation class applied to
             the output of the each kernel layer. If ``None``, it uses the
             :class:`torch.nn.Tanh` activation. Default is ``None``.
+        :type external_func: type[torch.nn.Module] | None
         :param bool shared_weights: If ``True``, the weights of each kernel
             layer are shared. Default is ``False``.
         """
@@ -169,8 +176,8 @@ class GraphNeuralOperator(KernelNeuralOperator):
 
         >>> import torch
         >>> from pina.model import GraphNeuralOperator, FeedForward
-        >>> lifting_net = FeedForward(input_dimensions=3, output_dimensions=16)
-        >>> projecting_net = FeedForward(input_dimensions=16, output_dimensions=1)
+        >>> lifting_net = torch.nn.Linear(3, 16)
+        >>> projecting_net = FeedForward(16, 1)
         >>> model = GraphNeuralOperator(
         ...     lifting_operator=lifting_net,
         ...     projection_operator=projecting_net,
@@ -195,26 +202,32 @@ class GraphNeuralOperator(KernelNeuralOperator):
         Initialization of the :class:`GraphNeuralOperator` class.
 
         :param torch.nn.Module lifting_operator: The lifting neural network
-            mapping the input to its hidden dimension.
+            mapping the input to its hidden dimension. Its ``out_features``
+            attribute must give the kernel width, as for ``torch.nn.Linear``.
         :param torch.nn.Module projection_operator: The projection neural
             network mapping the hidden representation to the output function.
         :param int edge_features: The number of edge features.
         :param int n_layers: The number of kernel layers. Default is ``10``.
         :param int internal_n_layers: The number of layers of the neural network
             inside each kernel layer. Default is ``0``.
-        :param int inner_size: The size of the hidden layers of the neural
-            network inside each kernel layer. Default is ``None``.
+        :param inner_size: Hidden width of the edge network. ``None`` uses the
+            lifting output width unless explicit widths are given.
+            Default is ``None``.
+        :type inner_size: int | None
         :param internal_layers: The number of neurons for each layer of the
-            neural network inside each kernel layer. Default is ``None``.
-        :type internal_layers: list[int] | tuple[int]
-        :param torch.nn.Module internal_func: The activation function used
+            neural network inside each kernel layer. ``None`` uses
+            ``internal_n_layers`` and ``inner_size``. Default is ``None``.
+        :type internal_layers: list[int] | tuple[int, ...] | None
+        :param internal_func: The activation class used
             inside each kernel layer. If ``None``, it uses the
-            :class:`torch.nn.Tanh`. activation. Default is ``None``.
-        :param torch.nn.Module external_func: The activation function applied to
+            :class:`torch.nn.Tanh` activation. Default is ``None``.
+        :type internal_func: type[torch.nn.Module] | None
+        :param external_func: The activation class applied to
             the output of the each kernel layer. If ``None``, it uses the
-            :class:`torch.nn.Tanh`. activation. Default is ``None``.
+            :class:`torch.nn.Tanh` activation. Default is ``None``.
+        :type external_func: type[torch.nn.Module] | None
         :param bool shared_weights: If ``True``, the weights of each kernel
-            layer are shared. Default is ``False``.
+            layer are shared. Default is ``True``.
         """
 
         if internal_func is None:
@@ -242,9 +255,12 @@ class GraphNeuralOperator(KernelNeuralOperator):
         """
         The forward pass of the Graph Neural Operator.
 
-        :param torch_geometric.data.Batch x: The input graph.
-        :return: The output tensor.
-        :rtype: torch.Tensor
+        :param x: A graph with node features ``(N, input_width)``, integer
+            connectivity ``(2, E)``, and edge features ``(E, edge_features)``.
+        :type x: pina.Graph | torch_geometric.data.Data
+        :return: Projected node features of shape ``(N, output_width)``; the
+            input graph is not modified.
+        :rtype: torch.Tensor | LabelTensor
         """
         x, edge_index, edge_attr = x.x, x.edge_index, x.edge_attr
         x = self.lifting_operator(x)

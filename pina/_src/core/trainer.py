@@ -27,13 +27,24 @@ class Trainer(lightning.pytorch.Trainer):
 
     :Example:
 
-        >>> from pina.solver import BaseSolver
-        >>> from pina.problem import BaseProblem
         >>> import torch
-        >>> # Trainer is typically used with a solver and problem:
-        >>> # trainer = Trainer(solver=solver_instance, batch_size=32,
-        >>> #     max_epochs=100)
-        >>> # trainer.train()
+        >>> from pina import LabelTensor, Trainer
+        >>> from pina.problem.zoo import SupervisedProblem
+        >>> from pina.solver import SupervisedSingleModelSolver
+        >>> x = torch.linspace(0.0, 1.0, 8).reshape(-1, 1)
+        >>> problem = SupervisedProblem(
+        ...     LabelTensor(x, ["x"]), LabelTensor(x.square(), ["y"]),
+        ...     input_variables=["x"], output_variables=["y"],
+        ... )
+        >>> solver = SupervisedSingleModelSolver(
+        ...     problem=problem, model=torch.nn.Linear(1, 1)
+        ... )
+        >>> trainer = Trainer(
+        ...     solver=solver, max_epochs=1, accelerator="cpu", logger=False,
+        ...     enable_checkpointing=False, enable_progress_bar=False,
+        ...     enable_model_summary=False,
+        ... )
+        >>> trainer.train()
     """
 
     # Available batching modes
@@ -60,60 +71,97 @@ class Trainer(lightning.pytorch.Trainer):
         """
         Initialization of the :class:`Trainer` class.
 
-        :param BaseSolver solver: The solver used to train, validate, and test
-            the associated problem.
-        :param int batch_size: The number of samples per batch. If ``None``, the
-            entire dataset is processed as a single batch. Default is ``None``.
-        :param float train_size: The fraction of samples assigned to the
-            training split. Must belong to the interval ``[0, 1]``.
-            Default is ``1.0``.
-        :param float val_size: The fraction of samples assigned to the
-            validation split. Must belong to the interval ``[0, 1]``.
-            Default is ``0.0``.
-        :param float test_size: The fraction of samples assigned to the test
-            split. Must belong to the interval ``[0, 1]``. Default is ``0.0``.
-        :param str batching_mode: The strategy used to aggregate batches across
-            dataloaders. Available options are ``"common_batch_size"`` for
-            uniform batch sizes across conditions, and ``"proportional"`` for
-            batch sizes proportional to dataset sizes.
+        :param pina.solver.BaseSolver solver: The solver used to train and test
+            the associated problem. All problem domains must be discretised.
+        :param batch_size: The positive number of tensor samples per condition
+            batch. ``None`` stores each tensor condition in one batch; graph
+            conditions use their subgraph sampling settings instead. Default
+            is ``None``.
+        :type batch_size: int | None
+        :param float train_size: The fraction of each condition's stored batches
+            assigned to training. Positive fractions allocate at least one
+            batch when available, otherwise round down. Default is ``1.0``.
+        :param float val_size: The fraction of each condition's stored batches
+            assigned to validation after training allocation. Positive fractions
+            allocate at least one remaining batch when available, otherwise
+            round down. Default is ``0.0``.
+        :param float test_size: The requested test fraction. Used in the
+            sum-to-one check, but not directly in splitting: all batches left
+            after training and validation become test batches. Default is
+            ``0.0``.
+        :param str batching_mode: The batching identifier, either
+            ``"common_batch_size"`` or ``"proportional"``. The current data
+            module stores this setting without changing its batching behavior.
             Default is ``"common_batch_size"``.
-        :param int num_workers: The number of worker processes used by
-            dataloaders. Default is ``0`` for sequential loading.
-        :param bool pin_memory: Whether pinned memory should be enabled during
-            data loading. Default is ``False``.
-        :param bool shuffle: Whether condition samples should be shuffled before
-            splitting. Default is ``True``.
-        :param dataloader_cls: The dataloader class to use for each condition,
-            defaulting to :class:`torch.utils.data.DataLoader`. It can either
-            be a single class applied to all conditions, or a mapping between
-            condition names and dataloader classes. Custom classes must accept
-            the ``batch_size``, ``sampler``, ``num_workers``, and ``pin_memory``
-            arguments and yield batches of sample ids. Default is ``None``.
-        :type dataloader_cls: type | dict[str, type] | None
-        :param collate_fn: Optional callable (or mapping between condition
-            names and callables) used to collapse the raw data selected by a
-            condition into a batch. It receives the selected raw data and the
-            ids, and returns the batch. Default is ``None``.
-        :type collate_fn: Callable | dict[str, Callable] | None
-        :param dict kwargs: Additional keyword arguments forwarded to the
-            Lightning trainer.
-        :raises ValueError: If ``solver`` is not a PINA solver.
+        :param int num_workers: The nonnegative number of workers loading batch
+            identifiers, not condition tensors. Default is ``0``.
+        :param bool pin_memory: Whether dataloaders pin batch identifier tensors
+            in memory, not the materialized condition data. Default is
+            ``False``.
+        :param bool shuffle: Whether to permute each condition's stored batch
+            indices before splitting. Does not shuffle samples inside batches
+            or enable dataloader shuffling. Default is ``True``.
+        :param dataloader_cls: The custom dataloader class or per-condition
+            mapping, normalized and stored but unused by the current data
+            module. ``None`` produces a mapping of condition names to ``None``;
+            standard PyTorch dataloaders are always used. Default is ``None``.
+        :type dataloader_cls: type | dict[str, type | None] | None
+        :param collate_fn: The custom collator or per-condition mapping,
+            normalized and stored but unused by the current data module.
+            ``None`` produces a mapping of condition names to ``None``; default
+            collation is always used. Default is ``None``.
+        :type collate_fn: Callable | dict[str, Callable | None] | None
+        :param dict[str, Any] kwargs: Options forwarded to
+            :class:`lightning.pytorch.Trainer`, including device and strategy
+            options (``accelerator``, ``devices``, ``num_nodes``, ``strategy``,
+            ``precision``), stopping limits (``max_epochs``, ``max_steps``,
+            ``max_time``), ``logger``, ``callbacks``, ``default_root_dir``, and
+            Lightning's validation, gradient, checkpointing, and debugging
+            options. Their types and defaults follow Lightning's constructor
+            except for the following PINA overrides:
+
+            * ``inference_mode`` (bool): Whether evaluation uses inference mode.
+              Forced to ``False`` for physics-informed solvers, even if supplied
+              as ``True``. Otherwise Lightning's default is ``True``.
+            * ``log_every_n_steps`` (int): The logging interval. Forced to ``0``
+              when ``batch_size`` is ``None``. Default is ``50`` when batching
+              is enabled.
+            * ``enable_progress_bar`` (bool): Whether to enable progress
+              reporting. Default is ``True``.
+            * ``compile`` (Any): The deprecated option, removed before
+              forwarding and ignored with a :class:`DeprecationWarning` for any
+              value.
+        :raises ValueError: If ``solver`` fails validation against
+            :class:`pina.solver.BaseSolver`.
         :raises ValueError: If ``train_size``, ``val_size``, or ``test_size`` is
-            not a float in the interval ``[0, 1]``.
+            not a float.
         :raises ValueError: If the sum of ``train_size``, ``val_size``, and
-            ``test_size`` is not equal to 1.
+            ``test_size`` is not close to ``1.0`` under :func:`torch.isclose`.
         :raises ValueError: If ``pin_memory`` or ``shuffle`` is not a boolean.
-        :raises AssertionError: If ``num_workers`` is a negative integer.
-        :raises ValueError: If ``batch_size``, when provided, is not a positive
-            integer.
+        :raises AssertionError: If ``num_workers`` is not a nonnegative integer,
+            or ``batch_size``, when provided, is not a positive integer.
         :raises ValueError: If ``batching_mode`` is not one of the available
              options.
         :raises ValueError: If ``dataloader_cls`` or ``collate_fn`` is a mapping
             referring to unknown conditions.
-        :raises UserWarning: If the provided ``batching_mode`` is incompatible
-            with the ``batch_size``.
+        :raises TypeError: If an unsupported keyword is forwarded to Lightning.
         :raises RuntimeError: If any domain in the problem has not been
-            discretised.
+             discretised.
+
+        .. note::
+
+            Split fractions are not individually range-checked. Constructor
+            setup moves inverse-problem parameters to the first configured
+            device and creates a data module, but stores batches only when a
+            training or testing loop runs its setup.
+
+        .. warning::
+
+            Requesting ``"proportional"`` emits :class:`UserWarning` and resets
+            the identifier to ``"common_batch_size"`` when ``batch_size`` is
+            ``None`` or no larger than the number of conditions. With
+            ``batch_size=None``, using workers or pinning also emits a warning,
+            but those settings are still forwarded unchanged to the data module.
         """
         # Backward compatibility: compile has been removed
         if "compile" in kwargs:
@@ -264,14 +312,16 @@ class Trainer(lightning.pytorch.Trainer):
         """
         Normalize the dataloader and collate options to per-condition mappings.
 
-        :param dataloader_cls: The dataloader class to use. It can be a single
-            class applied to all conditions, or a mapping between condition
-            names and dataloader classes.
-        :type dataloader_cls: type | dict[str, type] | None
-        :param collate_fn: The collate function to use. It can be a single
-            callable applied to all conditions, or a mapping between condition
-            names and callables.
-        :type collate_fn: Callable | dict[str, Callable] | None
+        Dictionary inputs are returned unchanged, including omitted condition
+        names; only unknown keys are rejected. Scalar inputs are broadcast to
+        every condition. Values are not checked for being classes or callables.
+
+        :param dataloader_cls: The dataloader class or per-condition mapping.
+            ``None`` fills every condition entry with ``None``.
+        :type dataloader_cls: type | dict[str, type | None] | None
+        :param collate_fn: The collator or per-condition mapping. ``None`` fills
+            every condition entry with ``None``.
+        :type collate_fn: Callable | dict[str, Callable | None] | None
         :param set[str] conditions: The names of the problem conditions.
         :raises ValueError: If a mapping refers to unknown conditions.
         :return: The normalized per-condition mappings.
@@ -279,6 +329,18 @@ class Trainer(lightning.pytorch.Trainer):
         """
 
         def _normalize(value, label):
+            """
+            Expand a scalar option or validate a per-condition mapping's keys.
+
+            :param Any value: The option value. ``None`` fills each condition
+                entry with ``None``. Dictionaries are returned unchanged after
+                their keys are checked; other values are broadcast to every
+                condition without type validation.
+            :param str label: The option name used in validation errors.
+            :raises ValueError: If a dictionary key is not a known condition.
+            :return: The normalized per-condition mapping.
+            :rtype: dict[str, Any]
+            """
             if value is None:
                 return {name: None for name in conditions}
 
@@ -302,8 +364,11 @@ class Trainer(lightning.pytorch.Trainer):
         Move problem unknown parameters to the trainer device.
 
         If the associated problem defines ``unknown_parameters``, each parameter
-        is moved to the first device configured by the Lightning accelerator
-        connector.
+        is replaced in that dictionary by a new :class:`torch.nn.Parameter`
+        wrapping its detached data on the first device configured by the
+        Lightning accelerator connector. This also replaces parameters already
+        on that device; existing references to the old objects are not updated.
+        If the problem has no ``unknown_parameters`` attribute, do nothing.
         """
         # Get the device from the accelerator connector
         device = self._accelerator_connector._parallel_devices[0]
@@ -322,10 +387,22 @@ class Trainer(lightning.pytorch.Trainer):
         """
         Fit the solver using the trainer data module.
 
-        :param dict kwargs: Additional keyword arguments forwarded to the
-            Lightning trainer ``fit`` method.
-        :return: Result returned by Lightning's ``fit`` method.
-        :rtype: Any
+        The solver and ``data_module`` are supplied automatically.
+
+        :param dict[str, Any] kwargs: Options forwarded to
+            :meth:`lightning.pytorch.Trainer.fit`. Supported options include
+            ``ckpt_path`` (str | pathlib.Path | None), the checkpoint selection;
+            ``None`` normally keeps the supplied solver's current weights.
+            Default is ``None``. In Lightning versions supporting
+            ``weights_only`` (bool | None), it controls restricted checkpoint
+            loading; ``None`` uses Lightning/PyTorch's loading policy. Default
+            is ``None``. Do not supply ``model`` or ``datamodule``, which are
+            already provided, or custom training/validation dataloaders.
+        :raises TypeError: If a keyword is unsupported by the installed
+            Lightning version, or ``model`` or ``datamodule`` is duplicated.
+        :raises lightning.fabric.utilities.exceptions.MisconfigurationException:
+            If custom training or validation dataloaders conflict with the
+            automatically supplied data module.
         """
         return super().fit(self.solver, datamodule=self.data_module, **kwargs)
 
@@ -333,10 +410,30 @@ class Trainer(lightning.pytorch.Trainer):
         """
         Test the solver using the trainer data module.
 
-        :param dict kwargs: Additional keyword arguments forwarded to the
-            Lightning trainer ``test`` method.
-        :return: Result returned by Lightning's ``test`` method.
-        :rtype: Any
+        The solver and ``data_module`` are supplied automatically. Setup
+        rebuilds condition batches and all dataset splits before testing.
+
+        :param dict[str, Any] kwargs: Options forwarded to
+            :meth:`lightning.pytorch.Trainer.test`:
+
+            * ``ckpt_path`` (str | pathlib.Path | None): The checkpoint
+              selection. ``None`` normally keeps the supplied solver's current
+              weights. Default is ``None``.
+            * ``verbose`` (bool): Whether to print test results. Default is
+              ``True``.
+            * ``weights_only`` (bool | None): The restricted checkpoint-loading
+              option, in Lightning versions supporting it. ``None`` uses
+              Lightning/PyTorch's loading policy. Default is ``None``.
+
+            Do not supply ``model`` or ``datamodule``, which are already
+            provided, or custom test dataloaders.
+        :raises TypeError: If a keyword is unsupported by the installed
+            Lightning version, or ``model`` or ``datamodule`` is duplicated.
+        :raises lightning.fabric.utilities.exceptions.MisconfigurationException:
+            If custom test dataloaders conflict with the supplied data module.
+        :return: The logged test metrics, one dictionary per test dataloader.
+            Returns an empty list if no test batches are available.
+        :rtype: list[dict[str, float]]
         """
         return super().test(self.solver, datamodule=self.data_module, **kwargs)
 
@@ -346,7 +443,7 @@ class Trainer(lightning.pytorch.Trainer):
         Return the solver attached to the trainer.
 
         :return: The solver used by the trainer.
-        :rtype: BaseSolver
+        :rtype: pina.solver.BaseSolver
         """
         return self._solver
 
@@ -355,6 +452,9 @@ class Trainer(lightning.pytorch.Trainer):
         """
         Set the solver attached to the trainer.
 
-        :param BaseSolver solver: The solver instance to attach.
+        Store the reference without repeating constructor validation or
+        rebuilding the existing data module.
+
+        :param pina.solver.BaseSolver solver: The solver instance to attach.
         """
         self._solver = solver

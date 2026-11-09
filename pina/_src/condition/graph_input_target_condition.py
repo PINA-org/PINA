@@ -44,9 +44,21 @@ class GraphInputTargetCondition(GraphCondition):
         """
         Evaluate the residual of the condition on the given graph batch.
 
-        :param Graph batch: The graph batch containing input and output data.
-        :param BaseSolver solver: The solver used to perform the forward pass.
-        :return: The non-aggregated residual tensor.
+        Pass the graph batch to the solver and subtract its target attribute.
+        No reduction or loss aggregation is applied.
+
+        :param batch: The graph batch containing input and output data.
+        :type batch: pina.graph.Graph | torch_geometric.data.Data
+        :param pina.solver.BaseSolver solver: The solver used for the forward
+            pass. Predictions must be compatible with the target attribute
+            selected by ``output_key``.
+        :raises AttributeError: If lookup of a missing target attribute raises.
+        :raises TypeError: If the target resolves to ``None``, as an unset
+            PyG ``y`` attribute does, or otherwise does not support subtraction.
+        :raises RuntimeError: If prediction and target shapes are incompatible
+            for subtraction.
+        :return: The prediction-minus-target residuals, with the shape resulting
+            from their broadcasted subtraction.
         :rtype: torch.Tensor | LabelTensor
         """
         return solver.forward(batch) - getattr(batch, self.output_key)

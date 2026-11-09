@@ -28,7 +28,8 @@ class SinkhornLoss(BaseDualLoss):
 
     .. math::
 
-        C_{ij} = \left\| x_i - y_j \right\|_2^p
+        C_{ij} = \left\| x_i - y_j \right\|_p^p
+               = \sum_{k=1}^{D} |x_i^k - y_j^k|^p
 
     and the entropy term is:
 
@@ -39,19 +40,21 @@ class SinkhornLoss(BaseDualLoss):
     where :math:`\varepsilon > 0` controls the strength of the entropic
     regularization.
 
-    The Sinkhorn iterations compute the optimal dual potentials :math:`f^\ast`
-    and :math:`g^\ast` in log space. The regularized optimal transport cost is
-    then recovered from the dual formulation as:
+    A fixed number of Sinkhorn iterations approximates dual potentials
+    :math:`f` and :math:`g` in log space. The returned estimate is:
 
     .. math::
 
-        W_\varepsilon = \langle a, f^\ast \rangle + \langle b, g^\ast \rangle
+        \widehat{W}_\varepsilon = \langle a, f \rangle + \langle b, g \rangle
 
     where :math:`a` and :math:`b` are uniform probability weights over the
     :math:`N` input samples and :math:`M` target samples, respectively.
 
     Unlike pointwise losses, the Sinkhorn loss compares whole empirical
-    distributions. Therefore, the output is always a scalar value.
+    distributions. The output contains one value with shape ``(1,)``, not a
+    zero-dimensional scalar. No convergence check or self-transport debiasing
+    is performed; the entropy-regularized value can be negative and need not
+    vanish when the input and target distributions coincide.
 
     Smaller values of ``eps`` provide a closer approximation to the true
     Wasserstein distance, but may require more Sinkhorn iterations to converge.
@@ -70,22 +73,24 @@ class SinkhornLoss(BaseDualLoss):
         >>> import torch
         >>> from pina.loss import SinkhornLoss
         >>> loss = SinkhornLoss(p=2, eps=0.1, iterations=50)
-        >>> input = torch.randn(10, 3)
-        >>> target = torch.randn(10, 3)
+        >>> input = torch.tensor([[0., 0.]])
+        >>> target = torch.tensor([[3., 4.]])
         >>> loss(input, target)
-        tensor(...)
+        tensor([25.])
     """
 
     def __init__(self, p=2, eps=0.1, iterations=100):
         """
         Initialization of the :class:`SinkhornLoss` class.
 
-        :param int p: The exponent of the cost function. Default is ``2``.
+        :param int p: The positive integer distance order and cost exponent:
+            ``torch.cdist(input, target, p=p) ** p``. Default is ``2``.
         :param eps: The entropy regularization strength. Smaller values provide
             a closer approximation to the unregularized Wasserstein distance,
             but may require more iterations for convergence. Default is ``0.1``.
         :type eps: int | float
-        :param int iterations: The number of Sinkhorn iterations.
+        :param int iterations: The fixed positive number of Sinkhorn iterations;
+            there is no early stopping based on convergence.
             Default is ``100``.
         :raises AssertionError: If ``iterations`` is not a positive integer.
         :raises AssertionError: If ``p`` is not a positive integer.
@@ -112,9 +117,17 @@ class SinkhornLoss(BaseDualLoss):
         """
         Forward method of the loss function.
 
-        :param torch.Tensor input: The input tensor.
-        :param torch.Tensor target: The target tensor.
-        :return: The computed Sinkhorn loss value.
+        :param torch.Tensor input: The nonempty two-dimensional point cloud of
+            shape ``(n, d)``, with a floating dtype supported by
+            :func:`torch.cdist`. Samples have uniform probability weights.
+        :param torch.Tensor target: The nonempty cloud of shape ``(m, d)``, on
+            the same device and with the same dtype as ``input``. Sample counts
+            may differ; feature counts must match.
+        :raises RuntimeError: If pairwise distances or potential updates reject
+            the point-cloud shapes, dtypes, or devices.
+        :return: The final mean input potential plus mean target potential,
+            wrapped as a one-element tensor of shape ``(1,)``. Empty clouds are
+            not explicitly rejected and can produce NaN instead of a loss.
         :rtype: torch.Tensor
         """
         # Extract the number of samples in input and target

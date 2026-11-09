@@ -16,7 +16,7 @@ class EnEquivariantNetworkBlock(MessagePassing):
     architecture.
 
     The message between two nodes connected by an edge is computed by applying a
-    linear transformation to the sender node features and the edge features,
+    multi-layer perceptron to sender and recipient node features and edge data,
     together with the squared euclidean distance between the sender and
     recipient node positions, followed by a non-linear activation function.
     Messages are then aggregated using an aggregation scheme (e.g., sum, mean,
@@ -27,11 +27,10 @@ class EnEquivariantNetworkBlock(MessagePassing):
     positions are updated by adding the incoming messages divided by the
     degree of the recipient node.
 
-    When velocity features are used, node velocities are passed through a small
-    MLP to compute updates, which are then combined with the aggregated position
-    messages. The node positions are updated both by the normalized position
-    messages and by the updated velocities, ensuring equivariance while
-    incorporating dynamic information.
+    When velocities are used, a scalar MLP of the incoming node features scales
+    each velocity. Position updates add this scaled velocity and the normalized
+    position messages. Degree normalization always uses ``edge_index[1]``, even
+    for reversed message flow.
 
     .. seealso::
 
@@ -72,34 +71,32 @@ class EnEquivariantNetworkBlock(MessagePassing):
         :param int edge_feature_dim: The dimension of the edge features.
         :param int pos_dim: The dimension of the position features.
         :param bool use_velocity: Whether to use velocity features in the
-            message passing. Default is False.
+            message passing. Default is ``False``.
         :param int hidden_dim: The dimension of the hidden features.
-            Default is 64.
+            Default is ``64``.
         :param int n_message_layers: The number of layers in the message
-            network. Default is 2.
+            network. Default is ``2``.
         :param int n_update_layers: The number of layers in the update network.
-            Default is 2.
-        :param torch.nn.Module activation: The activation function.
+            Default is ``2``.
+        :param type[torch.nn.Module] activation: No-argument activation class.
             Default is :class:`torch.nn.SiLU`.
         :param str aggr: The aggregation scheme to use for message passing.
-            Available options are "add", "mean", "min", "max", "mul".
+            Available options include ``"add"``, ``"mean"``, ``"min"``,
+            ``"max"``, and ``"mul"``.
             See :class:`torch_geometric.nn.MessagePassing` for more details.
-            Default is "add".
-        :param int node_dim: The axis along which to propagate. Default is -2.
+            Default is ``"add"``.
+        :param int node_dim: The propagation axis. Default is ``-2``.
         :param str flow: The direction of message passing. Available options
-            are "source_to_target" and "target_to_source".
-            The "source_to_target" flow means that messages are sent from
-            the source node to the target node, while the "target_to_source"
+            are ``"source_to_target"`` and ``"target_to_source"``.
+            The ``"source_to_target"`` flow means that messages are sent from
+            the source node to the target node, while ``"target_to_source"``
             flow means that messages are sent from the target node to the
             source node. See :class:`torch_geometric.nn.MessagePassing` for more
-            details. Default is "source_to_target".
-        :raises AssertionError: If `node_feature_dim` is not a positive integer.
-        :raises AssertionError: If `edge_feature_dim` is a negative integer.
-        :raises AssertionError: If `pos_dim` is not a positive integer.
-        :raises AssertionError: If `hidden_dim` is not a positive integer.
-        :raises AssertionError: If `n_message_layers` is not a positive integer.
-        :raises AssertionError: If `n_update_layers` is not a positive integer.
-        :raises AssertionError: If `use_velocity` is not a boolean.
+            details. Default is ``"source_to_target"``.
+        :raises AssertionError: If dimensions or layer counts are not positive
+            integers, except for edge width, which may be zero.
+        :raises ValueError: If ``use_velocity``, activation, or PyG options fail
+            validation.
         """
         super().__init__(aggr=aggr, node_dim=node_dim, flow=flow)
 
@@ -157,18 +154,22 @@ class EnEquivariantNetworkBlock(MessagePassing):
         """
         Forward pass of the block, triggering the message-passing routine.
 
-        :param x: The node features.
+        :param x: Node features shaped ``(N, node_feature_dim)``.
         :type x: torch.Tensor | LabelTensor
-        :param pos: The euclidean coordinates of the nodes.
+        :param pos: Node coordinates shaped ``(N, pos_dim)``.
         :type pos: torch.Tensor | LabelTensor
-        :param torch.Tensor edge_index: The edge indices.
-        :param edge_attr: The edge attributes. Default is None.
-        :type edge_attr: torch.Tensor | LabelTensor
-        :param vel: The velocity of the nodes. Default is None.
-        :type vel: torch.Tensor | LabelTensor
-        :return: The updated node features and node positions.
-        :rtype: tuple(torch.Tensor, torch.Tensor)
-        :raises: ValueError: If ``use_velocity`` is True and ``vel`` is None.
+        :param torch.Tensor edge_index: Integer connectivity shaped ``(2, E)``.
+        :param edge_attr: Features shaped ``(E, edge_feature_dim)``. ``None``
+            omits edge inputs and requires zero edge width. Default is ``None``.
+        :type edge_attr: torch.Tensor | LabelTensor | None
+        :param vel: Velocities shaped ``(N, pos_dim)``; required when velocity
+            updates are enabled, ignored otherwise. Default is ``None``.
+        :type vel: torch.Tensor | LabelTensor | None
+        :raises ValueError: If velocities are enabled and ``vel`` is ``None``.
+        :return: Updated features and positions, plus velocities when enabled;
+            each tensor retains its corresponding input shape.
+        :rtype: tuple[torch.Tensor, torch.Tensor] |
+            tuple[torch.Tensor, torch.Tensor, torch.Tensor]
         """
         if self.use_velocity and vel is None:
             raise ValueError(
@@ -191,10 +192,11 @@ class EnEquivariantNetworkBlock(MessagePassing):
         :type pos_i: torch.Tensor | LabelTensor
         :param pos_j: The node coordinates of the sender nodes.
         :type pos_j: torch.Tensor | LabelTensor
-        :param edge_attr: The edge attributes.
-        :type edge_attr: torch.Tensor | LabelTensor
-        :return: The message to be passed.
-        :rtype: tuple(torch.Tensor, torch.Tensor)
+        :param edge_attr: Per-edge features, or ``None`` to omit them.
+        :type edge_attr: torch.Tensor | LabelTensor | None
+        :return: Position messages and learned invariant messages, both shaped
+            ``(E, pos_dim)``.
+        :rtype: tuple[torch.Tensor, torch.Tensor]
         """
         # Compute the euclidean distance between the sender and recipient nodes
         diff = pos_i - pos_j
@@ -220,20 +222,21 @@ class EnEquivariantNetworkBlock(MessagePassing):
         to be aggregated. Both messages are aggregated separately according to
         the specified aggregation scheme.
 
-        :param tuple(torch.Tensor) inputs: Tuple containing two messages to
+        :param tuple[torch.Tensor, torch.Tensor] inputs: Two message tensors to
             aggregate.
         :param index: The indices of target nodes for each message. This tensor
             specifies which node each message is aggregated into.
         :type index: torch.Tensor | LabelTensor
         :param ptr: Optional tensor to specify the slices of messages for each
-            node (used in some aggregation strategies). Default is None.
-        :type ptr: torch.Tensor | LabelTensor
-        :param int dim_size: Optional size of the output dimension, i.e.,
-            number of nodes. Default is None.
+            node. ``None`` uses ``index`` alone. Default is ``None``.
+        :type ptr: torch.Tensor | LabelTensor | None
+        :param dim_size: Output node count. ``None`` lets PyG infer it from
+            indices. Default is ``None``.
+        :type dim_size: int | None
         :return: Tuple of aggregated tensors corresponding to (aggregated
             messages for position updates, aggregated messages for feature
             updates).
-        :rtype: tuple(torch.Tensor, torch.Tensor)
+        :rtype: tuple[torch.Tensor, torch.Tensor]
         """
         # Unpack the messages from the inputs
         message, m_ij = inputs
@@ -248,17 +251,19 @@ class EnEquivariantNetworkBlock(MessagePassing):
         """
         Update node features, positions, and optionally velocities.
 
-        :param tuple(torch.Tensor) aggregated_inputs: The messages to be passed.
+        :param tuple[torch.Tensor, torch.Tensor] aggregated_inputs: Aggregated
+            position and feature messages, respectively.
         :param x: The node features.
         :type x: torch.Tensor | LabelTensor
         :param pos: The euclidean coordinates of the nodes.
         :type pos: torch.Tensor | LabelTensor
         :param torch.Tensor edge_index: The edge indices.
         :param vel: The velocity of the nodes.
-        :type vel: torch.Tensor | LabelTensor
-        :return: The updated node features and node positions.
-        :rtype: tuple(torch.Tensor, torch.Tensor) |
-            tuple(torch.Tensor, torch.Tensor, torch.Tensor)
+        :type vel: torch.Tensor | LabelTensor | None
+        :return: Updated features and positions, plus scaled velocities when
+            enabled. Normalization uses target degrees clamped to at least one.
+        :rtype: tuple[torch.Tensor, torch.Tensor] |
+            tuple[torch.Tensor, torch.Tensor, torch.Tensor]
         """
         # aggregated_inputs is tuple (agg_message, agg_m_ij)
         agg_message, agg_m_ij = aggregated_inputs

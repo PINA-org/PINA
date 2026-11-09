@@ -9,7 +9,8 @@ class OrthogonalBlock(torch.nn.Module):
     Orthogonal Block.
 
     This block transforms an input tensor of shape :math:`[N, M]` into a tensor
-    of the same shape whose columns are orthonormal. The block performs the
+    of the same shape whose columns (``dim=-1``) or rows (``dim=0``) are
+    orthonormal for linearly independent nonzero inputs. The block performs the
     Gram Schmidt orthogonalization, see
     `here <https://en.wikipedia.org/wiki/Gram%E2%80%93Schmidt_process>` for
     details.
@@ -30,8 +31,11 @@ class OrthogonalBlock(torch.nn.Module):
         :param int dim: The dimension on which orthogonalization is performed.
             If ``-1``, the orthogonalization is performed on the last dimension.
             Default is ``-1``.
-        :param bool requires_grad: If ``True``, the gradients are computed
-            during the backward pass. Default is ``True``
+        :param bool requires_grad: Whether the initial output tensor requires
+            gradients. ``False`` does not detach inputs or disable autograd.
+            Default is ``True``.
+        :raises ValueError: If ``dim`` or ``requires_grad`` types are invalid.
+        :raises IndexError: If ``dim`` is not ``-1``, ``0``, or ``1``.
         """
         super().__init__()
         # store dim
@@ -44,10 +48,12 @@ class OrthogonalBlock(torch.nn.Module):
         """
         Forward pass.
 
-        :param torch.Tensor X: The input tensor to orthogonalize.
+        :param torch.Tensor X: Two-dimensional tensor to orthogonalize. The
+            chosen dimension must be no larger than the other dimension.
         :raises Warning: If the chosen dimension is greater than the other
             dimensions in the input.
-        :return: The orthonormal tensor.
+        :return: Same-shaped orthonormal tensor. Zero or dependent vectors can
+            produce nonfinite values; no rank or norm safeguard is applied.
         :rtype: torch.Tensor
         """
         # check dim is less than all the other dimensions
@@ -103,9 +109,9 @@ class OrthogonalBlock(torch.nn.Module):
         """
         Set the dimension along which operations are performed.
 
-        :param value: The dimension to be set. Must be either ``0``, ``1``, or
+        :param int value: The dimension to be set. Must be ``0``, ``1``, or
             ``-1``.
-        :type value: int
+        :raises ValueError: If ``value`` is not an integer.
         :raises IndexError: If the provided dimension is not ``0``, ``1``, or
             ``-1``.
         """

@@ -52,12 +52,13 @@ class RBAPhysicsInformedSingleModelSolver(
     :math:`\lambda_{\partial\Omega}^{i}` are the attention weights associated
     with the domain and boundary residuals, respectively.
 
-    At each epoch, the attention weights are updated according to the magnitude
-    of the corresponding residuals:
+    On each selected condition evaluation, including validation and testing,
+    attention weights are updated using the residual vector's rowwise norm:
 
     .. math::
 
-        \lambda_i^{k+1} = \gamma \lambda_i^k + \eta \frac{|r_i|}{\max_j |r_j|},
+        \lambda_i^{k+1} = \gamma \lambda_i^k
+            + \eta \frac{\|r_i\|_2}{\max_j \|r_j\|_2 + 10^{-12}},
 
     where :math:`r_i` is the residual at point :math:`i`, :math:`\gamma` is the
     decay rate, and :math:`\eta` is the learning rate used for the attention
@@ -67,8 +68,8 @@ class RBAPhysicsInformedSingleModelSolver(
 
         **Original reference**: Anagnostopoulos, S. J., Toscano, J. D.,
         Stergiopulos, N., & Karniadakis, G. E. (2024).
-        *Residual-based attention and connection to information bottleneck theory
-        in PINNs.*
+        *Residual-based attention and connection to information
+        bottleneck theory in PINNs.*
         Computer Methods in Applied Mechanics and Engineering, 421, 116805.
         DOI: `10.1016/j.cma.2024.116805
         <https://doi.org/10.1016/j.cma.2024.116805>`_.
@@ -76,11 +77,11 @@ class RBAPhysicsInformedSingleModelSolver(
     :Example:
 
         >>> from pina.solver import RBAPhysicsInformedSingleModelSolver
-        >>> from pina.problem import PoissonProblem
+        >>> from pina.problem.zoo import Poisson2DSquareProblem
         >>> # solver = RBAPhysicsInformedSingleModelSolver(
         >>> #     problem=problem, model=model, eta=0.001, gamma=0.999
         >>> # )
-        >>> # solver.train()
+        >>> # Discretise problem domains before constructing this solver.
     """
 
     # Accepted conditions types for this solver
@@ -108,17 +109,21 @@ class RBAPhysicsInformedSingleModelSolver(
 
         :param BaseProblem problem: The problem to be solved.
         :param torch.nn.Module model: The model used by the solver.
-        :param TorchOptimizer optimizer: The optimizer used by the solver.
+        :param optimizer: The optimizer wrapper used by the solver.
             If ``None``, the ``torch.optim.Adam`` optimizer with a learning rate
             of ``0.001`` is used. Default is ``None``.
-        :param TorchScheduler scheduler: The scheduler used by the solver.
+        :type optimizer: pina.optim.TorchOptimizer | None
+        :param scheduler: The scheduler wrapper used by the solver.
             If ``None``, the ``torch.optim.lr_scheduler.ConstantLR`` scheduler
             with a factor of ``1.0`` is used. Default is ``None``.
-        :param BaseWeighting weighting: The weighting strategy used to combine
+        :type scheduler: pina.optim.TorchScheduler | None
+        :param weighting: The weighting strategy used to combine
             condition losses. If ``None``, no weighting is applied. Default is
             ``None``.
+        :type weighting: pina.weighting.BaseWeighting | None
         :param loss: The loss function used to compute residual losses.
             If ``None``, :class:`torch.nn.MSELoss` is used. Default is ``None``.
+        :type loss: torch.nn.modules.loss._Loss | pina.loss.BaseDualLoss | None
         :param eta: The learning rate for the residual-based attention weights
             update. Default is ``0.001``.
         :type eta: float | int
@@ -127,7 +132,11 @@ class RBAPhysicsInformedSingleModelSolver(
         :param regularized_conditions: The names of the conditions that should
             receive attention regularization. If ``None``, all conditions are
             regularized. Default is ``None``.
-        :type regularized_conditions: str | list[str]
+        :type regularized_conditions: str | list[str] | tuple[str, ...] | None
+        :raises ValueError: If attention parameters, condition names, or base
+            solver components fail validation.
+        :raises KeyError: If a selected domain-equation condition lacks sampled
+            points under its condition name. Discretise before construction.
         """
         # Initialize the parent class
         SingleModelSolver.__init__(

@@ -49,7 +49,7 @@ class ContinuousConvBlock(BaseContinuousConv):
         >>> stride = {
         ...     "domain": [10, 10],
         ...     "start": [0, 0],
-        ...     "jumps": [3, 3],
+        ...     "jump": [3, 3],
         ...     "direction": [1, 1],
         ... }
         >>> conv = ContinuousConvBlock(1, 2, [3, 3], stride, MLP)
@@ -69,26 +69,32 @@ class ContinuousConvBlock(BaseContinuousConv):
         Initialization of the :class:`ContinuousConvBlock` class.
 
         :param int input_numb_field: The number of input fields.
-        :param int output_numb_field: The number of input fields.
+        :param int output_numb_field: The number of output fields.
         :param filter_dim: The shape of the filter.
-        :type filter_dim: list[int] | tuple[int]
-        :param dict stride: The stride of the filter.
-        :param torch.nn.Module model: The neural network for inner
-            parametrization. Default is ``None``.
-        :param bool optimize: If ``True``, optimization is performed on the
-            continuous filter. It should be used only when the training points
-            are fixed. If ``model`` is in ``eval`` mode, it is reset to
-            ``False``. Default is ``False``.
-        :param bool no_overlap: If ``True``, optimization is performed on the
-            transposed continuous filter. It should be used only when the filter
-            positions do not overlap for different strides.
-            Default is ``False``.
+        :type filter_dim: list[int | float] | tuple[int | float, ...]
+        :param dict[str, list[int | float]] stride: Grid specification inserted
+            in order: ``"domain"``, ``"start"``, ``"jump"``, ``"direction"``.
+            Zero jump/direction entries are mutated during construction.
+        :param model: No-argument kernel factory. ``None`` creates independent
+            default MLPs from coordinates to one scalar. One kernel is created
+            per input/output field pair. Default is ``None``.
+        :type model: Callable[[], torch.nn.Module] | None
+        :param bool optimize: Whether to track initialization calls using the
+            wrapper. It does not skip initialization. Default is ``False``.
+        :param bool no_overlap: Unsupported optimization flag. ``True`` raises
+            an error. Default is ``False``.
+        :raises ValueError: If field counts, filter/stride containers, flags,
+            or spawned kernel types fail validation.
+        :raises NotImplementedError: If ``no_overlap`` is ``True``.
 
         .. note::
-            If ``optimize=True``, the filter can be use either in ``forward``
-            or in ``transpose`` mode, not both.
+
+            Initialization recomputes masks and grids on each call, including
+            when ``optimize=True``. Both forward and transpose are available.
 
         :Example:
+            >>> import torch
+            >>> from pina.model.block import ContinuousConvBlock
             >>> class MLP(torch.nn.Module):
             ...     def __init__(self) -> None:
             ...         super().__init__()
@@ -105,33 +111,10 @@ class ContinuousConvBlock(BaseContinuousConv):
             >>> stride = {
             ...     "domain": [10, 10],
             ...     "start": [0, 0],
-            ...     "jumps": [3, 3],
+            ...     "jump": [3, 3],
             ...     "direction": [1, 1.]
             ... }
-            >>> conv = ContinuousConv2D(1, 2, dim, stride, MLP)
-            >>> conv
-                ContinuousConv2D(
-                (_net): ModuleList(
-                    (0): MLP(
-                    (model): Sequential(
-                        (0): Linear(in_features=2, out_features=8, bias=True)
-                        (1): ReLU()
-                        (2): Linear(in_features=8, out_features=8, bias=True)
-                        (3): ReLU()
-                        (4): Linear(in_features=8, out_features=1, bias=True)
-                    )
-                    )
-                    (1): MLP(
-                    (model): Sequential(
-                        (0): Linear(in_features=2, out_features=8, bias=True)
-                        (1): ReLU()
-                        (2): Linear(in_features=8, out_features=8, bias=True)
-                        (3): ReLU()
-                        (4): Linear(in_features=8, out_features=1, bias=True)
-                    )
-                    )
-                )
-                )
+            >>> conv = ContinuousConvBlock(1, 2, dim, stride, MLP)
         """
         super().__init__(
             input_numb_field=input_numb_field,
@@ -161,9 +144,10 @@ class ContinuousConvBlock(BaseContinuousConv):
         """
         Create a collection of kernels
 
-        :param torch.nn.Module model: A neural network model.
-        :raises ValueError: If the model is not a subclass of
-            ``torch.nn.Module``.
+        :param model: No-argument kernel factory; ``None`` selects DefaultKernel
+            when the retained ``net`` attribute is also ``None``.
+        :type model: Callable[[], torch.nn.Module] | None
+        :raises ValueError: If a factory result is not a module instance.
         :return: A list of models.
         :rtype: torch.nn.ModuleList
         """
@@ -194,9 +178,13 @@ class ContinuousConvBlock(BaseContinuousConv):
         """
         Extract mapped points in the filter.
 
-        :param torch.Tensor x: Input tensor of shape ``[channel, N, dim]``
-        :return: Mapped points and indeces for each channel,
-        :rtype: tuple
+        :param int batch_idx: Batch position used to select the masks.
+        :param list[torch.Tensor] index: Per-stride Boolean masks with shape
+            ``(B, channels, N)``.
+        :param torch.Tensor x: Input of shape ``(channels, N, d + 1)``.
+        :return: Per-channel concatenated mapped points and per-channel tuples
+            of point counts for each stride. The original input is unchanged.
+        :rtype: tuple[tuple[torch.Tensor, ...], tuple[tuple[int, ...], ...]]
         """
         mapped_points = []
         indeces_channels = []
@@ -323,8 +311,11 @@ class ContinuousConvBlock(BaseContinuousConv):
         """
         Forward pass.
 
-        :param torch.Tensor x: The input tensor.
-        :return: The output tensor.
+        :param torch.Tensor X: Input shaped ``(B, input_numb_field, N, d + 1)``
+            with coordinates followed by the scalar field value.
+        :return: Tensor shaped ``(B, output_numb_field, S, d + 1)``, containing
+            filter centers and unweighted kernel/field sums at ``S`` strides.
+            The input is not modified; masks and the internal grid are replaced.
         :rtype: torch.Tensor
         """
 
@@ -382,19 +373,19 @@ class ContinuousConvBlock(BaseContinuousConv):
 
     def transpose_no_overlap(self, integrals, X):
         """
-        Transpose pass in the layer for no-overlapping filters.
+        Transpose pass for non-overlapping filters.
 
-        :param torch.Tensor integrals: The weights for the transpose convolution.
-            Expected shape :math:`[B, N_{in}, N]`.
-        :param torch.Tensor X: The input data.
-            Expected shape :math:`[B, N_{in}, M,  D]`.
-        :return: Feed forward transpose convolution.
-            Expected shape: :math:`[B, N_{out}, M,  D]`.
+        :param torch.Tensor integrals: Weights of shape ``(B, input_numb_field,
+            S)`` at the stride positions.
+        :param torch.Tensor X: Target coordinates and placeholder values of
+            shape ``(B, output_numb_field, M, d + 1)``.
+        :return: Target grid with transposed values, of the same shape as ``X``.
         :rtype: torch.Tensor
 
         .. note::
-            This function is automatically called when ``.transpose()``
-            method is used and ``no_overlap=True``
+
+            This method can be called directly, but the constructor rejects
+            ``no_overlap=True`` and never selects it as ``transpose``.
         """
 
         # initialize convolution
@@ -458,16 +449,17 @@ class ContinuousConvBlock(BaseContinuousConv):
         """
         Transpose pass in the layer for overlapping filters.
 
-        :param torch.Tensor integrals: The weights for the transpose convolution.
-            Expected shape :math:`[B, N_{in}, N]`.
-        :param torch.Tensor X: The input data.
-            Expected shape :math:`[B, N_{in}, M,  D]`.
-        :return: Feed forward transpose convolution.
-            Expected shape: :math:`[B, N_{out}, M,  D]`.
+        :param torch.Tensor integrals: Weights of shape ``(B, input_numb_field,
+            S)`` at the stride positions.
+        :param torch.Tensor X: Target coordinates and placeholder values of
+            shape ``(B, output_numb_field, M, d + 1)``.
+        :return: Target grid with transposed values, of the same shape as ``X``.
+            Overlapping filter contributions are summed; input is unchanged.
         :rtype: torch.Tensor
 
-        .. note:: This function is automatically called when ``.transpose()``
-            method is used and ``no_overlap=False``
+        .. note::
+
+            This is the method selected by the ``transpose`` attribute.
         """
 
         # initialize convolution

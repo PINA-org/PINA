@@ -24,18 +24,25 @@ warnings.filterwarnings("always", category=ResourceWarning)
 
 def _load_tensor_from_url(url, labels, timeout=10):
     """
-    Downloads a tensor file from a URL and wraps it in a LabelTensor.
+    Download a serialized labeled tensor and rewrap its detached tensor data.
 
-    This function fetches a `.pth` file containing tensor data, extracts it,
-    and returns it as a LabelTensor using the specified labels. If the file
-    cannot be retrieved (e.g., no internet connection), a warning is issued
-    and None is returned.
+    Request failures emit ``ResourceWarning`` and return ``None``.
+    Deserialization and label errors are not caught. Loading uses
+    ``weights_only=False``:
+    only pass trusted URLs because pickle loading can execute arbitrary code.
 
-    :param str url: URL to the remote `.pth` tensor file.
+    :param str url: The trusted URL of a PyTorch-serialized object providing a
+        tensor-valued ``tensor`` attribute.
     :param labels: Labels for the resulting LabelTensor.
-    :type labels: list[str] | tuple[str]
-    :param int timeout: Timeout for the request in seconds. Default is ``10`` s.
-    :return: A LabelTensor object if successful, otherwise None.
+    :type labels: list[str] | tuple[str, ...]
+    :param timeout: The request timeout in seconds, forwarded to
+        :func:`requests.get`. Default is ``10``.
+    :type timeout: int | float
+    :raises AttributeError: If the loaded object has no tensor-valued ``tensor``
+        attribute supporting detachment.
+    :raises ValueError: If label validation rejects the supplied labels.
+    :return: A labeled tensor with detached data, or ``None`` after a request
+        failure. Deserialization errors propagate unchanged.
     :rtype: LabelTensor | None
     """
     # Try to download the tensor file from the given URL
@@ -61,10 +68,18 @@ def laplace_equation(input_, output_, params_):
     """
     Implementation of the laplace equation.
 
-    :param LabelTensor input_: Input data of the problem.
-    :param LabelTensor output_: Output data of the problem.
-    :param dict params_: Parameters of the problem.
-    :return: The residual of the laplace equation.
+    :param LabelTensor input_: Points of shape ``(n, 2)`` with ``"x"`` and
+        ``"y"`` labels and gradient tracking enabled.
+    :param LabelTensor output_: Predictions labeled ``"u"``, with an autograd
+        connection supporting second derivatives.
+    :param dict[str, torch.nn.Parameter] params_: Unknown parameters under
+        ``"mu1"`` and ``"mu2"``, broadcastable with coordinate columns.
+    :raises KeyError: If a required parameter name is absent.
+    :raises ValueError: If coordinate extraction rejects a missing label.
+    :raises RuntimeError: If differentiation fails or an operator label is
+        absent.
+    :raises TypeError: If an unused autograd gradient cannot be indexed.
+    :return: The spatial Laplacian minus Gaussian forcing, of shape ``(n, 1)``.
     :rtype: LabelTensor
     """
     force_term = torch.exp(
@@ -105,12 +120,13 @@ class InversePoisson2DSquareProblem(SpatialProblem, InverseProblem):
     The inverse problem aims to infer the unknown parameters :math:`\mu_1` and
     :math:`\mu_2` from solution data.
 
-    The `"data"` condition is added only if the required files are downloaded
+    The ``"data"`` condition is added only if the required files are downloaded
     successfully.
 
     :Example:
 
-        >>> problem = InversePoisson2DSquareProblem()
+        >>> from pina.problem.zoo import InversePoisson2DSquareProblem
+        >>> problem = InversePoisson2DSquareProblem(load=False)
     """
 
     output_variables = ["u"]
@@ -135,16 +151,26 @@ class InversePoisson2DSquareProblem(SpatialProblem, InverseProblem):
 
     def __init__(self, load=True, data_size=1.0):
         """
-        Initialization of the :class:`InversePoisson2DSquareProblem`.
+        Initialization of the :class:`InversePoisson2DSquareProblem` class.
 
-        :param bool load: If True, it attempts to load data from remote URLs.
-            Set to False to skip data loading (e.g., if no internet connection).
-            Default is ``True``.
+        :param bool load: Whether to download trusted tutorial input/target
+            files and add a supervised condition when both downloads succeed.
+            ``False`` skips requests but does not remove a previously installed
+            class-shared data condition. Default is ``True``.
         :param float data_size: The fraction of the total data to use for the
-            "data" condition. If set to 1.0, all available data is used.
-            If set to 0.0, no data is used. Default is ``1.0``.
-        :raises ValueError: If `data_size` is not in the range [0.0, 1.0].
-        :raises ValueError: If `data_size` is not a float.
+            ``"data"`` condition. Takes the first ``int(n * data_size)`` input
+            rows and the same target slice, without shuffling. ``1.0`` uses all
+            rows and ``0.0`` adds an empty data condition after successful
+            downloads. Validated even with ``load=False``. Default is ``1.0``.
+        :raises ValueError: If ``load`` is not boolean, ``data_size`` is not a
+            float in ``[0.0, 1.0]``, or loaded sample counts are incompatible.
+
+        .. warning::
+
+            Tutorial files are deserialized using ``weights_only=False``.
+            Request failures are warned about and skipped, while loading and
+            format errors propagate. Importing this module also replaces the
+            global warning formatter and enables ``ResourceWarning`` messages.
         """
         super().__init__()
 

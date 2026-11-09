@@ -1,4 +1,5 @@
-"""A public API for differential operators and automatic differentiation utilities.
+"""A public API for differential operators and automatic differentiation
+utilities.
 
 This module provides standard vector calculus operators (gradient, divergence,
 laplacian, advection) implemented using automatic differentiation. It includes

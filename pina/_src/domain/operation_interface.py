@@ -16,7 +16,7 @@ class OperationInterface(DomainInterface, metaclass=ABCMeta):
         The list of domains on which to perform the set operation.
 
         :return: The list of domains on which to perform the set operation.
-        :rtype: list[BaseDomain]
+        :rtype: list[BaseDomain] | tuple[BaseDomain, ...]
         """
 
     @geometries.setter
@@ -26,5 +26,5 @@ class OperationInterface(DomainInterface, metaclass=ABCMeta):
         Setter for the ``geometries`` property.
 
         :param values: The geometries to be set.
-        :type values: list[BaseDomain] | tuple[BaseDomain]
+        :type values: list[BaseDomain] | tuple[BaseDomain, ...]
         """

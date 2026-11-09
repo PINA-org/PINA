@@ -19,10 +19,15 @@ class ManualOptimizationMixin:
 
     def training_step(self, batch, batch_idx):
         """
-        Solver training step.
+        Backpropagate once and step all optimizers and schedulers per batch.
 
-        :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and a dictionary of points.
+        Zeroes every optimizer before evaluation. Each scheduler receives
+        ``step()`` without a metric or epoch, so metric-requiring schedulers and
+        closure-requiring optimizers need a different training implementation.
+
+        :param batch: The condition-name/data pairs supplied by the data module.
+        :type batch: list[tuple[str, dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data]]
         :param int batch_idx: The index of the current batch.
         :return: The loss of the training step.
         :rtype: torch.Tensor
@@ -53,11 +58,10 @@ class ManualOptimizationMixin:
         implementation.
 
         :param torch.Tensor outputs: The loss of the training step.
-        :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and a dictionary of points.
+        :param batch: The condition-name/data pairs supplied by the data module.
+        :type batch: list[tuple[str, dict[str, Any] | pina.graph.Graph |
+            torch_geometric.data.Data]]
         :param int batch_idx: The index of the current batch.
-        :return: The result returned by the parent class implementation.
-        :rtype: Any
         """
         # Sync the manual optimization progress counters in Lightning's loop
         epoch_loop = self.trainer.fit_loop.epoch_loop

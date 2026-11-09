@@ -37,18 +37,16 @@ class AutoregressiveEnsembleSolver(AutoregressiveMixin, EnsembleSolver):
     mean squared error.
 
     The solver supports adaptive weighting of autoregressive steps through the
-    ``eps`` parameter. During training, each autoregressive step can contribute
-    differently to the total loss depending on its accumulated difficulty. Steps
-    with larger running losses are assigned larger weights, so that the solver
-    focuses more on parts of the rollout where prediction errors tend to
-    accumulate.     The parameter ``eps`` controls the strength of this effect:
-    ``eps = 0`` disables adaptive weighting, while larger values increase the
-    influence of high-loss steps on the final training objective.
+    ``eps`` parameter. Weights are ``exp(-eps * cumulative_loss)`` along the
+    rollout-step axis, including the current step's running average loss.
+    Positive ``eps`` suppresses steps with larger cumulative loss; ``eps=0``
+    gives unit weights. Running statistics are shared by condition name, not
+    separately by ensemble member. No sign constraint is enforced on ``eps``.
 
     :Example:
 
         >>> from pina.solver import AutoregressiveEnsembleSolver
-        >>> from pina.problem import PoissonProblem
+        >>> from pina.condition import TimeSeriesCondition
         >>> # solver = AutoregressiveEnsembleSolver(
         >>> #     problem=problem, models=models, eps=0.1
         >>> # )
@@ -75,35 +73,48 @@ class AutoregressiveEnsembleSolver(AutoregressiveMixin, EnsembleSolver):
 
         :param BaseProblem problem: The problem to be solved.
         :param models: The model or list of models used by the solver.
-        :type models: torch.nn.Module | list[torch.nn.Module]
+        :type models: torch.nn.Module | list[torch.nn.Module] |
+            tuple[torch.nn.Module, ...]
         :param optimizers: The optimizer or list of optimizers used by the
             solver. If ``None``, the ``torch.optim.Adam`` optimizer with a
             learning rate of ``0.001`` is used for each model.
             Default is ``None``.
-        :type optimizers: TorchOptimizer | list[TorchOptimizer]
+        :type optimizers: pina.optim.TorchOptimizer |
+            list[pina.optim.TorchOptimizer] |
+            tuple[pina.optim.TorchOptimizer, ...] | None
         :param schedulers: The scheduler or list of schedulers used by the
             solver. If ``None``, the ``torch.optim.lr_scheduler.ConstantLR``
             scheduler with a factor of ``1.0`` is used for each model.
             Default is ``None``.
-        :type schedulers: TorchScheduler | list[TorchScheduler]
-        :param BaseWeighting weighting: The weighting strategy used to combine
+        :type schedulers: pina.optim.TorchScheduler |
+            list[pina.optim.TorchScheduler] |
+            tuple[pina.optim.TorchScheduler, ...] | None
+        :param weighting: The weighting strategy used to combine
             condition losses. If ``None``, no weighting is applied. Default is
             ``None``.
+        :type weighting: pina.weighting.BaseWeighting | None
         :param loss: The loss function used to compute residual losses.
             If ``None``, :class:`torch.nn.MSELoss` is used. Default is ``None``.
-        :param bool use_lt: If ``True``, the solver uses LabelTensors as input.
+        :type loss: torch.nn.modules.loss._Loss | pina.loss.BaseDualLoss | None
+        :param bool use_lt: Whether to wrap forward with labeled input selection
+            and output labeling. Requires compatible tensor labels and names.
             Default is ``False``.
         :param eps: The hyperparameter controlling the influence of the
-            cumulative loss on the adaptive weights. Higher values of eps will
-            lead to more aggressive weighting of steps with higher cumulative
-            loss. Default is ``0.0``.
+            cumulative loss on the adaptive weights. Positive values suppress
+            larger cumulative losses; zero gives unit weights.
+            Default is ``0.0``.
         :type eps: float | int
         :param bool reset_weights_at_epoch_start: Whether to reset the running
             average and step count at the start of each epoch. If ``True``, the
             adaptive weights will be recalibrated at the beginning of each epoch
             based on the new training dynamics. Default is ``True``.
-        :param dict kwargs: Additional keyword arguments for preprocessing and
-            postprocessing steps.
+        :param kwargs: Options forwarded to the preprocessing/postprocessing
+            hooks during condition rollouts. Base hooks ignore them. ``None``
+            stores an empty mapping. Prediction takes its own keyword options.
+            Default is ``None``.
+        :type kwargs: dict[str, Any] | None
+        :raises ValueError: If ``eps`` or the reset flag fails validation, or
+            base solver/component/loss/weighting validation fails.
         """
         # Initialize the parent class
         EnsembleSolver.__init__(

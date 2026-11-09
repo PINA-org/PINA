@@ -18,7 +18,7 @@ class BurgersEquation(Equation):
 
     :Example:
 
-        >>> from pina.equation import BurgersEquation
+        >>> from pina.equation.zoo import BurgersEquation
         >>> eq = BurgersEquation(nu=0.01)
         >>> # Use within a DomainEquationCondition:
         >>> # condition = DomainEquationCondition(domain=domain, equation=eq)
@@ -47,13 +47,21 @@ class BurgersEquation(Equation):
             """
             Implementation of the Burgers' equation.
 
-            :param LabelTensor input_: The input data of the problem.
-            :param LabelTensor output_: The output data of the problem.
+            :param LabelTensor input_: Points of shape ``(n, d + 1)``, with
+                gradient tracking and a time coordinate labeled ``"t"``.
+                Every other input label is treated as a spatial coordinate.
+            :param LabelTensor output_: Velocity components of shape ``(n, d)``,
+                ordered to match the non-time input labels and connected to
+                ``input_`` through a graph supporting second derivatives.
             :raises ValueError: If the number of output components does not
                 match the number of spatial dimensions.
             :raises ValueError: If the ``input_`` labels do not contain the time
-                variable 't'.
-            :return: The residual of the Burgers' equation.
+                variable ``"t"``.
+            :raises TypeError: If arguments are not labeled tensors or an
+                unused gradient cannot be indexed.
+            :raises RuntimeError: If the graph cannot support differentiation.
+            :return: Time derivative plus componentwise convection minus
+                viscous diffusion, with shape ``(n, d)``.
             :rtype: LabelTensor
             """
             # Store labels

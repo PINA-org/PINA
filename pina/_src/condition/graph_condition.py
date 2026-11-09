@@ -14,7 +14,8 @@ def _is_graph(value):
     Lists and tuples are accepted without checking their contents.
 
     :param object value: The value to check.
-    :return: Whether the value is a Graph, PyG Data, list, or tuple.
+    :return: Whether the value is a :class:`pina.graph.Graph`,
+        :class:`torch_geometric.data.Data`, list, or tuple.
     :rtype: bool
     """
     if isinstance(value, (Graph, Data)):
@@ -37,7 +38,9 @@ class GraphCondition(BaseCondition):
         """
         Initialization of the :class:`GraphCondition` class.
 
-        :param Graph graph: The graph from which subgraphs are sampled.
+        :param pina.graph.Graph graph: The graph from which subgraphs are
+            sampled. Sampling requires its ``create_subgraph`` method; a plain
+            :class:`torch_geometric.data.Data` lacks this method.
         :param str key: The name of the graph attribute containing the feature
              data. Default is ``"x"``.
         """
@@ -52,10 +55,14 @@ class GraphCondition(BaseCondition):
         node may be selected more than once. Existing stored batches are
         replaced.
 
-        :param dict kwargs: Sampling settings. ``n_subgraphs`` is the number
-            of subgraphs to generate (int, default ``10``), and ``num_hops``
-            is the number of hops around each starting node (int, default
-            ``5``). Other keyword arguments are ignored.
+        :param dict[str, Any] kwargs: Sampling settings:
+
+            * ``n_subgraphs`` (int): The number of subgraphs to generate.
+              Default is ``10``.
+            * ``num_hops`` (int): The number of hops around each starting node.
+              Default is ``5``.
+
+            Other keyword arguments, including ``batch_size``, are ignored.
         :return: The generated subgraphs, also stored in ``self.data``.
         :rtype: list[Graph]
         """
@@ -90,9 +97,9 @@ class GraphCondition(BaseCondition):
         """
         Return the number of stored graph batches.
 
+        :raises AttributeError: If :meth:`store_data` has not been called.
         :return: The number of subgraphs in ``self.data``.
         :rtype: int
-        :raises AttributeError: If :meth:`store_data` has not been called.
         """
         return len(self.data)
 
@@ -108,11 +115,11 @@ class GraphCondition(BaseCondition):
         :type id: int | torch.Tensor
         :param device: The device to move the graph to. If ``None``, no
             device transfer is performed. Default is ``None``.
-        :type device: str | torch.device | None
-        :return: The selected graph batch.
-        :rtype: Graph
+        :type device: str | torch.device | int | None
         :raises AttributeError: If :meth:`store_data` has not been called.
         :raises IndexError: If the batch index is out of range.
+        :return: The selected graph batch.
+        :rtype: Graph
         """
         batch = self.data[int(id)]
         return batch.to(device) if device is not None else batch
@@ -126,9 +133,9 @@ class GraphCondition(BaseCondition):
         :param id: The index of the graph batch. Tensor inputs must contain
             a single integer value.
         :type id: int | torch.Tensor
-        :return: The selected graph batch.
-        :rtype: Graph
         :raises AttributeError: If :meth:`store_data` has not been called.
         :raises IndexError: If the batch index is out of range.
+        :return: The selected graph batch.
+        :rtype: Graph
         """
         return self.materialize(id)

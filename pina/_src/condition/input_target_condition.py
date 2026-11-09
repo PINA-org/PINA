@@ -50,16 +50,17 @@ class InputTargetCondition(TensorCondition):
         The residual is the model prediction minus the target values.
         No reduction or loss aggregation is applied.
 
-        :param dict batch: The batch containing input samples under the
-            ``"input"`` key and target values under the ``"target"`` key.
-        :param BaseSolver solver: The solver providing the model forward
+        :param dict[str, Any] batch: The batch containing tensor input samples
+            under ``"input"`` and tensor target values under ``"target"``.
+        :param pina.solver.BaseSolver solver: The solver providing the forward
             pass.
-        :return: The difference between the model predictions and targets.
-        :rtype: torch.Tensor | LabelTensor
         :raises KeyError: If the batch lacks the ``"input"`` or ``"target"``
             key.
         :raises RuntimeError: If the prediction and target shapes are
             incompatible for subtraction.
+        :return: The difference between predictions and targets, with the shape
+            resulting from their broadcasted subtraction.
+        :rtype: torch.Tensor | LabelTensor
         """
         return solver.forward(batch["input"]) - batch["target"]
 

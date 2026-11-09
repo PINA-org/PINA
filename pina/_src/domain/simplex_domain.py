@@ -13,23 +13,27 @@ class SimplexDomain(BaseDomain):
 
     :Example:
 
-        >>> simplex_domain = SimplexDomain(
-                [
-                    LabelTensor(torch.tensor([[0, 0]]), labels=["x", "y"]),
-                    LabelTensor(torch.tensor([[1, 1]]), labels=["x", "y"]),
-                    LabelTensor(torch.tensor([[0, 1]]), labels=["x", "y"]),
-                ]
-            )
+        >>> import torch
+        >>> from pina import LabelTensor
+        >>> from pina.domain import SimplexDomain
+        >>> vertices = [
+        ...     LabelTensor(torch.tensor([v]), ["x", "y"])
+        ...     for v in [[0., 0.], [1., 1.], [0., 1.]]
+        ... ]
+        >>> simplex_domain = SimplexDomain(vertices)
     """
 
     def __init__(self, simplex_matrix, sample_surface=False):
         """
         Initialization of the :class:`SimplexDomain` class.
 
-        :param simplex_matrix: The matrix of the simplex vertices.
-        :type simplex_matrix: list[LabelTensor] | tuple[LabelTensor]
-        :param bool sample_surface: If ``True``, only the surface of the simplex
-            is considered part of the domain. Default is ``False``.
+        :param simplex_matrix: The ``d + 1`` vertices, each of shape ``(1, d)``
+            with matching ordered coordinate labels. Vertices are stacked and
+            converted to float32. Row counts and affine independence are not
+            explicitly validated.
+        :type simplex_matrix: list[LabelTensor] | tuple[LabelTensor, ...]
+        :param bool sample_surface: Whether to sample only boundary faces.
+            Does not change membership testing. Default is ``False``.
         :raises ValueError: If any element of ``simplex_matrix`` is not a
             :class:`LabelTensor`.
         :raises TypeError: If ``simplex_matrix`` is not a list or tuple.
@@ -37,6 +41,7 @@ class SimplexDomain(BaseDomain):
         :raises ValueError: If the labels of the vertices do not match.
         :raises ValueError: If the number of vertices is not equal to the
             dimension of the simplex plus one.
+        :raises IndexError: If the vertex sequence is empty.
         """
         super().__init__()
 
@@ -49,14 +54,21 @@ class SimplexDomain(BaseDomain):
         """
         Check if a point is inside the simplex.
 
-        :param LabelTensor point: The point to check.
+        :param LabelTensor point: A single point of shape ``(1, d)`` with labels
+            matching the domain variables and a dtype compatible with the
+            float32 vertex matrix.
         :param bool check_border: If ``True``, the boundary is considered inside
-            the domain. Default is ``False``.
+            the domain, with barycentric bounds extended by ``1e-6``. Otherwise
+            every coordinate must lie between ``1e-6`` and ``1 - 1e-6``.
+            Default is ``False``.
         :raises ValueError: If ``point`` is not a :class:`LabelTensor`.
         :raises ValueError: If the labels of ``point`` differ from the variables
             of the domain.
-        :return: Whether the point is inside the domain or not.
-        :rtype: bool
+        :raises RuntimeError: If the vertex system is singular, or the point's
+            shape or dtype is incompatible with the linear solve.
+        :return: A scalar boolean tensor indicating membership in the volume,
+            regardless of ``sample_surface``.
+        :rtype: torch.Tensor
         """
         # Checks on point
         check_consistency(point, LabelTensor)
@@ -93,7 +105,8 @@ class SimplexDomain(BaseDomain):
         :param SimplexDomain domain: The domain whose vertices are to be set
             into the current one.
         :raises TypeError: If the domain is not a :class:`SimplexDomain` object.
-        :return: A new domain instance with the merged labels.
+        :return: A deep copy of the receiver with replacement vertices and the
+            receiver's surface-sampling mode preserved. Inputs are unchanged.
         :rtype: SimplexDomain
         """
         # Raise an error if the domain types do not match
@@ -123,31 +136,34 @@ class SimplexDomain(BaseDomain):
         :param int n: The number of samples to generate.
         :param str mode: The sampling method. Available modes: ``random`` for
             random sampling. Default is ``random``.
-        :param variables: The list of variables to sample. If ``all``, all
-            variables are sampled. Default is ``all``.
-        :type variables: list[str] | str
+        :param variables: The nonempty coordinate selection, or ``"all"`` for
+            every variable. Duplicates are removed and columns sorted by name.
+            Selected coordinates are projections of full-simplex samples.
+            Default is ``"all"``.
+        :type variables: str | list[str] | tuple[str, ...] | set[str]
         :raises AssertionError: If ``n`` is not a positive integer.
         :raises ValueError: If the sampling mode is invalid.
         :raises ValueError: If ``variables`` is neither ``all``, a string, nor a
-            list/tuple of strings.
+            list, tuple, or set of strings.
         :raises ValueError: If any of the specified variables is unknown.
-        :return: The sampled points.
+        :raises IndexError: If the variable selection is empty.
+        :return: Points of shape ``(n, len(variables))`` after selection
+            normalization, using normalized exponential barycentric weights.
+            Surface mode selects faces uniformly by index, not by face area.
         :rtype: LabelTensor
 
         :Example:
-            >>> simplex_domain = SimplexDomain(
-                    [
-                        LabelTensor(torch.tensor([[0, 0]]), labels=["x", "y"]),
-                        LabelTensor(torch.tensor([[1, 1]]), labels=["x", "y"]),
-                        LabelTensor(torch.tensor([[0, 1]]), labels=["x", "y"]),
-                    ]
-                )
-            >>> simplex_domain.sample(n=5)
-                LabelTensor([[0.0125, 0.0439],
-                             [0.1346, 0.1950],
-                             [0.8811, 0.9939],
-                             [0.2722, 0.5535],
-                             [0.4750, 0.7433]])
+
+            >>> import torch
+            >>> from pina import LabelTensor
+            >>> from pina.domain import SimplexDomain
+            >>> vertices = [
+            ...     LabelTensor(torch.tensor([v]), ["x", "y"])
+            ...     for v in [[0., 0.], [1., 1.], [0., 1.]]
+            ... ]
+            >>> points = SimplexDomain(vertices).sample(n=5)
+            >>> tuple(points.shape), points.labels
+            ((5, 2), ['x', 'y'])
         """
         # Validate sampling settings
         variables = self._validate_sampling(n, mode, variables)
@@ -181,7 +197,8 @@ class SimplexDomain(BaseDomain):
         """
         Return the boundary of the domain as a new domain object.
 
-        :return: The boundary of the domain.
+        :return: A deep copy with surface sampling enabled. Membership tests
+            still use the volume and the caller's boundary flag.
         :rtype: SimplexDomain
         """
         boundary = deepcopy(self)
@@ -203,11 +220,11 @@ class SimplexDomain(BaseDomain):
     def domain_dict(self):
         """
         The dictionary representing the domain. For the simplex domain, the keys
-        are of the form 'v0', 'v1', ..., 'vn', where each key corresponds to a
+        are of the form ``"v0"``, ``"v1"``, ..., ``"vn"``, each identifying a
         vertex of the simplex.
 
-        :return: The dictionary representing the domain.
-        :rtype: dict
+        :return: A new mapping to vertex rows, with shape ``(d,)`` per value.
+        :rtype: dict[str, LabelTensor]
         """
         return {
             f"v{i}": self._vert_matrix[i]
@@ -220,8 +237,8 @@ class SimplexDomain(BaseDomain):
         Return an empty dictionary since the simplex domain does not have range
         variables. Implemented to comply with the :class:`BaseDomain` interface.
 
-        :return: The range variables of the domain.
-        :rtype: dict
+        :return: A new empty mapping; vertices define the geometry instead.
+        :rtype: dict[str, tuple[int | float, int | float]]
         """
         return {}
 
@@ -231,19 +248,18 @@ class SimplexDomain(BaseDomain):
         Return an empty dictionary since the simplex domain does not have fixed
         variables. Implemented to comply with the :class:`BaseDomain` interface.
 
-        :return: The fixed variables of the domain.
-        :rtype: dict
+        :return: A new empty mapping; vertices define the geometry instead.
+        :rtype: dict[str, int | float]
         """
         return {}
 
     @property
     def sample_surface(self):
         """
-        Whether only the surface of the simplex is considered part of the
-        domain.
+        Whether sampling is restricted to simplex boundary faces.
 
-        :return: ``True`` if only the surface is considered part of the domain,
-            ``False`` otherwise.
+        :return: Whether only boundary faces are sampled. Membership testing
+            ignores this setting.
         :rtype: bool
         """
         return self._sample_surface
@@ -253,7 +269,8 @@ class SimplexDomain(BaseDomain):
         """
         Setter for the sample_surface property.
 
-        :param bool value: The new value for the sample_surface property.
+        :param bool value: Whether to restrict sampling to boundary faces.
+            Membership testing is unaffected.
         :raises ValueError: If ``value`` is not a boolean.
         """
         check_consistency(value, bool)
@@ -264,7 +281,8 @@ class SimplexDomain(BaseDomain):
         """
         The vertex matrix of the simplex.
 
-        :return: The vertex matrix.
+        :return: The stored float32 matrix of shape ``(d + 1, d)``. Mutating it
+            directly changes the geometry without setter validation.
         :rtype: LabelTensor
         """
         return self._vert_matrix
@@ -274,13 +292,17 @@ class SimplexDomain(BaseDomain):
         """
         Setter for the vertex matrix.
 
-        :param LabelTensor value: The new vertex matrix.
+        :param value: The ``d + 1`` vertices, each of shape ``(1, d)``, with
+            matching ordered labels. Vertices are stacked and cast to float32;
+            row counts and affine independence are not explicitly validated.
+        :type value: list[LabelTensor] | tuple[LabelTensor, ...]
         :raises ValueError: If any element of ``value`` is not a
             :class:`LabelTensor`.
         :raises TypeError: If ``value`` is not a list or tuple.
         :raises ValueError: If the labels of the vertices do not match.
         :raises ValueError: If the number of vertices is not equal to the
             dimension of the simplex plus one.
+        :raises IndexError: If the vertex sequence is empty.
         """
         # Check consistency
         check_consistency(value, LabelTensor)

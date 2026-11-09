@@ -18,7 +18,8 @@ class WeightingInterface(metaclass=ABCMeta):
         the weights (e.g., based on training state) before performing the
         aggregation.
 
-        :param dict losses: The mapping from loss names to loss tensors.
+        :param dict[str, torch.Tensor] losses: The mapping from condition names
+            to loss tensors, normally scalar or one-element tensors.
         :return: The aggregated loss value.
         :rtype: torch.Tensor
         """
@@ -28,13 +29,14 @@ class WeightingInterface(metaclass=ABCMeta):
         """
         Update the weights based on the current losses.
 
-        This method defines how the weighting strategy adapts over time. It is
-        responsible for computing and storing updated weights that will be used
-        during aggregation.
+        Compute weights for the supplied condition subset. Aggregation is
+        responsible for merging returned weights into the saved mapping;
+        calling this method directly need not save them.
 
-        :param dict losses: The mapping from loss names to loss tensors.
+        :param dict[str, torch.Tensor] losses: The mapping from condition names
+            to loss tensors, normally scalar or one-element tensors.
         :return: The updated weights.
-        :rtype: dict
+        :rtype: dict[str, int | float | torch.Tensor]
         """
 
     @abstractmethod
@@ -43,7 +45,7 @@ class WeightingInterface(metaclass=ABCMeta):
         Get the most recently computed weights.
 
         :return: The mapping from loss names to their corresponding weights.
-        :rtype: dict
+        :rtype: dict[str, int | float | torch.Tensor]
         """
 
     @property
@@ -55,6 +57,6 @@ class WeightingInterface(metaclass=ABCMeta):
         Provides access to the solver instance that uses this weighting scheme,
         enabling strategies that depend on training state or model information.
 
-        :return: The solver instance.
-        :rtype: :class:`~pina.solver.base_solver.BaseSolver`
+        :return: The associated solver, or ``None`` before solver attachment.
+        :rtype: pina.solver.BaseSolver | None
         """

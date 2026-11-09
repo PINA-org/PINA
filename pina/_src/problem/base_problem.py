@@ -27,7 +27,13 @@ class BaseProblem(ProblemInterface):
     on which these conditions are defined.
 
     All problems must inherit from this class and implement abstract methods
-    defined in :class:`~pina.problem.problem_interface.ProblemInterface`.
+    defined in :class:`~pina.problem.ProblemInterface`.
+
+    Initialization binds existing conditions to this instance and rewrites
+    directly supplied condition domains as named entries in ``domains``.
+    Existing condition and domain dictionaries are not copied. Class-level
+    dictionaries and their condition objects can therefore be shared and
+    modified by multiple problem instances.
 
     This class is not meant to be instantiated directly.
     """
@@ -58,10 +64,14 @@ class BaseProblem(ProblemInterface):
         """
         Create a deep copy of the problem instance.
 
-        :param dict memo: The memorization dictionary used by the deepcopy
-            function.
-        :return: A deep copy of the problem instance.
-        :rtype: ProblemInterface
+        Only instance attributes are recursively copied, using the memo to
+        preserve cycles. Attributes inherited from the class are not copied.
+
+        :param dict[int, Any] memo: The object-id mapping maintained by
+            :func:`copy.deepcopy`; this copy is added before recursion.
+        :return: A new instance of the same class, without calling its
+            constructor.
+        :rtype: BaseProblem
         """
         # Create a new instance of the same class and store it in a dictionary
         result = self.__class__.__new__(self.__class__)
@@ -80,46 +90,57 @@ class BaseProblem(ProblemInterface):
         Discretise the problem's domains by sampling a specified number of
         points according to the selected sampling mode.
 
-        :param int n: The number of points to sample. This is ignored if
-            ``sample_rules`` is provided. Default is ``None``.
+        :param n: The positive sample count or per-axis resolution passed to
+            domain samplers. Ignored when ``sample_rules`` is provided. ``None``
+            is valid only with custom rules; otherwise validation fails.
+            Default is ``None``.
+        :type n: int | None
         :param str mode: The sampling method. Available modes include:
             ``"random"`` for random sampling, ``"latin"`` or ``"lh"`` for latin
             hypercube sampling, ``"chebyshev"`` for Chebyshev sampling, and
             ``"grid"`` for grid sampling. Default is ``"random"``.
         :param domains: The domains from which to sample. If ``None``, all
             domains are considered for sampling. Default is ``None``.
-        :type domains: str | list[str]
-        :param dict sample_rules: The dictionary specifying custom sampling
+        :type domains: str | list[str] | None
+        :param sample_rules: The dictionary specifying custom sampling
             rules for each input variable. When provided, it overrides the
-            global ``n`` and ``mode`` arguments. Each key in the dictionary must
-            match one of the variables defined in :meth:`input_variables`, and
+            global ``n`` and ``mode`` arguments. The dictionary keys must
+            match every name in ``input_variables``, and
             each value must be a dictionary containing two keys: ``n`` for the
             number of points to sample for that variable, and ``mode`` for the
             sampling method to use. If ``None``, the global ``n`` and ``mode``
-            parameters are used for all variables. Default is ``None``.
+            parameters are used for all variables. Each variable is sampled
+            separately and results are combined as a Cartesian product; this
+            does not preserve coupling between coordinates of curved domains.
+            Extra rule fields are ignored. Default is ``None``.
+        :type sample_rules: dict[str, dict[str, int | str]] | None
         :raises ValueError: If ``sample_rules`` is provided but it is not a
             dictionary.
         :raises ValueError: If ``sample_rules`` is provided but its keys do not
             match the input variables of the problem.
         :raises ValueError: If ``sample_rules`` is provided but any of its rules
-            is not a dictionary containing both ``n`` and ``mode`` keys, with
-            ``n`` being a positive integer and ``mode`` being a string.
-        :raises AssertionError: If ``n`` is not a positive integer.
-        :raises ValueError: If ``mode`` is not a string
-        :raises ValueError: If ``domains`` is provided by it is neither a string
+            is not a dictionary containing both ``"n"`` and ``"mode"`` keys,
+            or a rule mode is not a string.
+        :raises AssertionError: If a global or per-rule count being used is not
+            a positive integer.
+        :raises ValueError: If ``mode`` is not a string, even with custom rules.
+        :raises ValueError: If ``domains`` is provided but is neither a string
             nor a list of strings.
+        :raises ValueError: If a sampler rejects a mode or variable selection.
+        :raises KeyError: If a selected domain name is unknown.
 
         .. warning::
             ``"random"`` is the only supported ``mode`` across all geometries:
-            :class:`~pina.domain.cartesian_domain.CartesianDomain`,
-            :class:`~pina.domain.ellipsoid_domain.EllipsoidDomain`, and
-            :class:`~pina.domain.simplex_domain.SimplexDomain`.
+            :class:`~pina.domain.CartesianDomain`,
+            :class:`~pina.domain.EllipsoidDomain`, and
+            :class:`~pina.domain.SimplexDomain`.
             Sampling modes such as ``"latin"``, ``"chebyshev"``, and ``"grid"``
             are only implemented for
-            :class:`~pina.domain.cartesian_domain.CartesianDomain`.
-            When custom discretisation is specified via ``sample_rules``, the
-            domain to be discretised must be an instance of
-            :class:`~pina.domain.cartesian_domain.CartesianDomain`.
+            :class:`~pina.domain.CartesianDomain`. Custom rules are not
+            restricted by domain type, but every domain must support the
+            requested variablewise sampling. Existing sampled entries are
+            overwritten, and earlier entries can be changed before a later
+            sampling failure.
         """
         # Initialize the domains to be discretised
         if domains is None:
@@ -181,20 +202,19 @@ class BaseProblem(ProblemInterface):
         """
         Append additional points to an already discretised domain.
 
-        :param dict new_points_dict: The dictionary mapping each domain to the
-            corresponding set of new points to be added. Each key in the
-            dictionary must match one of the domains defined in :attr:`domains`,
-            and each value must be a :class:`~pina.tensor.LabelTensor`
-            containing the new points to be added to that domain. The labels of
-            the points to be added must correspond to those of the domain to
-            which they are being added.
+        :param dict[str, LabelTensor] new_points_dict: A mapping of domain names
+            to new point tensors. Each key must identify an already sampled
+            domain. Tensors must have compatible non-sample dimensions and
+            matching ordered labels for labeled vertical stacking.
         :raises ValueError: If ``new_points_dict`` is not a dictionary.
         :raises ValueError: If any of the values in ``new_points_dict`` is not
-            a :class:`~pina.tensor.LabelTensor`.
+            a :class:`~pina.LabelTensor`.
         :raises ValueError: If any of the keys in ``new_points_dict`` does not
-            match any of the domains defined in :attr:`domains`.
+            match any name in ``domains``.
         :raises ValueError: If any of the domains in ``new_points_dict`` has not
             been discretised yet.
+        :raises ValueError: If the stacked tensors' labels do not match.
+        :raises RuntimeError: If tensor shapes are incompatible for stacking.
         """
         # Check consistency
         check_consistency(new_points_dict, dict)
@@ -220,6 +240,17 @@ class BaseProblem(ProblemInterface):
         Move the sampled points from the discretised domains into their
         corresponding conditions. This ensures that the conditions are evaluated
         on the correct set of points after discretisation.
+
+        The trainer calls this method internally. It shallow-copies the
+        condition dictionary, then replaces domain-linked conditions with
+        :class:`pina.condition.InputEquationCondition` objects referencing the
+        sampled tensors. It preserves their equation, domain name, problem,
+        and condition name, but does not copy arbitrary condition attributes.
+        The sampled-domain mapping remains populated. Conditions without a
+        domain are left unchanged.
+
+        :raises ValueError: If a domain-equation condition's domain has not been
+            sampled. Earlier conditions may already have been replaced.
         """
         # Copy the conditions so class-level dictionaries are not mutated
         self.conditions = dict(self.conditions)
@@ -257,7 +288,10 @@ class BaseProblem(ProblemInterface):
         """
         The input variables of the problem.
 
-        :return: The input variables of the problem.
+        :return: Spatial, temporal, then parametric variable names concatenated
+            in that order. Scalar string declarations are converted to lists;
+            names are not globally sorted or deduplicated. Unknown inverse
+            parameters are not included.
         :rtype: list[str]
         """
         # Define a helper function to convert a string to a list if needed
@@ -278,12 +312,13 @@ class BaseProblem(ProblemInterface):
     def discretised_domains(self):
         """
         The dictionary containing the discretised domains of the problem. Each
-        key corresponds to a domain defined in :attr:`domains`, and each value
-        is a :class:`~pina.tensor.LabelTensor` containing the sampled points for
+        key corresponds to a domain name in ``domains``, and each value
+        is a :class:`~pina.LabelTensor` containing the sampled points for
         that domain.
 
-        :return: The discretised domains.
-        :rtype: dict
+        :return: The stored mapping of domain names to sampled tensors. Mutating
+            it changes the problem's discretisation directly.
+        :rtype: dict[str, LabelTensor]
         """
         return self._discretised_domains
 
@@ -292,7 +327,9 @@ class BaseProblem(ProblemInterface):
         """
         Whether all domains of the problem have been discretised.
 
-        :return: ``True`` if all domains are discretised, ``False`` otherwise.
+        :return: Whether every name in ``domains`` has a sampled mapping entry.
+            Empty domain mappings return ``True``; tensor contents are not
+            validated by this property.
         :rtype: bool
         """
         return all(d in self.discretised_domains for d in self.domains)

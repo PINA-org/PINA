@@ -9,8 +9,8 @@ class ConditionInterface(metaclass=ABCMeta):
 
     A condition binds a set of data points (inputs, targets, equations, ...)
     to a problem. The data module works with conditions through this interface
-    only: it shuffles sample ids and asks the condition to :meth:`materialize`
-    the requested ids into a batch. Storage and batching are therefore a
+    only: it shuffles stored batch ids and asks the condition to
+    :meth:`materialize` the requested batch. Storage and batching are a
     condition concern, and new data types can be added without touching the
     data module.
     """
@@ -18,21 +18,22 @@ class ConditionInterface(metaclass=ABCMeta):
     @abstractmethod
     def __len__(self):
         """
-        Return the number of data points in the condition.
+        Return the number of stored batches in the condition.
 
-        :return: The number of data points.
+        :return: The number of stored batches.
         :rtype: int
         """
 
     @abstractmethod
     def __getitem__(self, idx):
         """
-        Materialize the data points at the specified index (or indices).
+        Retrieve the stored batch at the specified index.
 
-        :param idx: The index of the data point to retrieve.
-        :type idx: int | slice | list[int] | torch.Tensor
+        :param idx: The index of the batch to retrieve. Tensor indices must
+            contain a single integer value.
+        :type idx: int | torch.Tensor
         :return: The materialized batch.
-        :rtype: dict
+        :rtype: dict[str, Any] | pina.graph.Graph
         """
 
     @abstractmethod
@@ -40,25 +41,35 @@ class ConditionInterface(metaclass=ABCMeta):
         """
         Store the data for the condition in a suitable format.
 
-        :param dict kwargs: The keyword arguments containing the data to be
-            stored.
-        :return: The stored data.
-        :rtype: Any
+        :param dict[str, Any] kwargs: Storage settings interpreted by each
+            implementation, such as ``batch_size`` for tensor conditions,
+            ``n_subgraphs`` and ``num_hops`` for graph conditions, or temporal
+            window settings for time-series conditions. Domain conditions
+            instead accept replacement ``domain`` and ``equation`` values.
+        :return: The stored batches, or ``None`` when an implementation only
+            updates its configuration, as domain conditions do.
+        :rtype: list[dict[str, Any]] | list[pina.graph.Graph] | None
         """
 
     @abstractmethod
     def materialize(self, ids, device=None, batch_fn=None):
         """
-        Build a batch from the given data point ids.
+        Retrieve a stored batch by its identifier.
 
-        :param ids: The ids of the data points to batch.
-        :type ids: int | list[int] | torch.Tensor
-        :param device: The target device for the batch. Default is ``None``.
-        :param batch_fn: Optional callable overriding the default batched
-            construction. It receives the selected raw data and the ids and
-            returns the batch. Default is ``None``.
+        :param ids: The batch identifier. Tensor identifiers must contain a
+            single integer value. Concrete implementations name this ``id``.
+        :type ids: int | torch.Tensor
+        :param device: The target device. If ``None``, leave the batch on its
+            existing device. Default is ``None``.
+        :type device: str | torch.device | int | None
+        :param batch_fn: The optional construction override reserved by this
+            interface. If supported, it receives selected raw data and ids and
+            returns a batch. ``None`` selects default construction. Current
+            tensor and graph implementations omit this argument. Default is
+            ``None``.
+        :type batch_fn: Callable | None
         :return: The materialized batch.
-        :rtype: dict
+        :rtype: dict[str, Any] | pina.graph.Graph
         """
 
     @abstractmethod
@@ -74,10 +85,11 @@ class ConditionInterface(metaclass=ABCMeta):
         The returned tensor is not reduced, preserving the per-sample residual
         values.
 
-        :param dict batch: The batch containing the data required by the
+        :param batch: The stored tensor fields or graph required by the
             condition evaluation.
-        :param BaseSolver solver: The solver used to perform the forward pass
-            and compute the residual.
+        :type batch: dict[str, Any] | pina.graph.Graph
+        :param pina.solver.BaseSolver solver: The solver used to perform the
+            forward pass and compute the residual.
         :return: The non-aggregated residual tensor.
         :rtype: torch.Tensor | LabelTensor
         """
@@ -89,7 +101,7 @@ class ConditionInterface(metaclass=ABCMeta):
         The problem associated with this condition.
 
         :return: The problem associated with this condition.
-        :rtype: BaseProblem
+        :rtype: pina.problem.ProblemInterface
         """
 
     @problem.setter
@@ -98,5 +110,6 @@ class ConditionInterface(metaclass=ABCMeta):
         """
         Set the problem associated with this condition.
 
-        :param BaseProblem value: The problem to associate with this condition.
+        :param pina.problem.ProblemInterface value: The problem to associate
+            with this condition.
         """

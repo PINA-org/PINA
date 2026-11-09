@@ -19,9 +19,11 @@ def initial_condition(input_, output_):
     """
     Definition of the initial condition of the acoustic wave problem.
 
-    :param LabelTensor input_: The input data of the problem.
-    :param LabelTensor output_: The output data of the problem.
-    :return: The residual of the initial condition.
+    :param LabelTensor input_: Points of shape ``(n, d)`` including ``"x"``.
+    :param LabelTensor output_: Predictions of shape ``(n, 1)``.
+    :raises ValueError: If the spatial label is missing.
+    :return: Predictions minus the prescribed sine-mode displacement, of shape
+        ``(n, 1)`` for scalar predictions.
     :rtype: LabelTensor
     """
     arg = torch.pi * input_["x"]
@@ -41,8 +43,8 @@ class AcousticWaveProblem(TimeDependentProblem, SpatialProblem):
         =
         c^2 \frac{\partial^2 u}{\partial x^2},
 
-    where :math:`u = u(x, t)` is the solution field and :math:`c > 0` is the
-    wave propagation speed.
+    where :math:`u = u(x, t)` is the solution field and :math:`c` is the wave
+    propagation speed. The constructor does not restrict its sign.
 
     Homogeneous Dirichlet boundary conditions are imposed at the spatial
     boundaries:
@@ -85,6 +87,7 @@ class AcousticWaveProblem(TimeDependentProblem, SpatialProblem):
 
     :Example:
 
+        >>> from pina.problem.zoo import AcousticWaveProblem
         >>> problem = AcousticWaveProblem(c=2.0)
     """
 
@@ -116,6 +119,7 @@ class AcousticWaveProblem(TimeDependentProblem, SpatialProblem):
 
         :param c: The wave propagation speed. Default is ``2.0``.
         :type c: float | int
+        :raises ValueError: If numeric validation rejects ``c``.
         """
         super().__init__()
         check_consistency(c, (float, int))
@@ -129,8 +133,10 @@ class AcousticWaveProblem(TimeDependentProblem, SpatialProblem):
         """
         Implementation of the analytical solution of the acoustic wave problem.
 
-        :param LabelTensor pts: Points where the solution is evaluated.
-        :return: The analytical solution of the acoustic wave problem.
+        :param LabelTensor pts: Points of shape ``(n, 2)`` labeled ``"x"`` and
+            ``"t"``, in either column order.
+        :raises ValueError: If a required coordinate label is missing.
+        :return: The analytical solution of shape ``(n, 1)``, labeled ``"u"``.
         :rtype: LabelTensor
         """
         arg_x = torch.pi * pts["x"]

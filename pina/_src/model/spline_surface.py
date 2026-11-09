@@ -35,7 +35,9 @@ class SplineSurface(torch.nn.Module):
 
         >>> import torch
         >>> from pina.model import SplineSurface
-        >>> model = SplineSurface(orders=[3, 3])
+        >>> model = SplineSurface(
+        ...     orders=[3, 3], control_points=torch.zeros(3, 3)
+        ... )
         >>> x = torch.tensor([[0.5, 0.3], [0.2, 0.8]])
         >>> out = model(x)
     """
@@ -44,22 +46,26 @@ class SplineSurface(torch.nn.Module):
         """
         Initialization of the :class:`SplineSurface` class.
 
-        :param list[int] orders: The orders of the spline along each parametric
+        :param orders: The two spline orders along the parametric
             direction. Each order defines the degree of the corresponding basis
             as ``degree = order - 1``.
+        :type orders: list[int] | tuple[int, int]
         :param knots_u: The knots of the spline along the first direction.
             For details on valid formats and initialization modes, see the
-            :class:`Spline` class. Default is None.
-        :type knots_u: torch.Tensor | dict
+            :class:`pina.model.Spline` class. ``None`` derives auto knots on
+            ``[0, 1]`` from the control matrix. Default is ``None``.
+        :type knots_u: torch.Tensor | dict[str, int | float | str] | None
         :param knots_v: The knots of the spline along the second direction.
             For details on valid formats and initialization modes, see the
-            :class:`Spline` class. Default is None.
-        :type knots_v: torch.Tensor | dict
-        :param torch.Tensor control_points: The control points defining the
+            :class:`pina.model.Spline` class. ``None`` derives auto knots on
+            ``[0, 1]`` from the control matrix. Default is ``None``.
+        :type knots_v: torch.Tensor | dict[str, int | float | str] | None
+        :param control_points: The floating control points defining the
             surface geometry. It must be a two-dimensional tensor of shape
             ``[len(knots_u) - orders[0], len(knots_v) - orders[1]]``.
-            If None, they are initialized as learnable parameters with zero
-            values. Default is None.
+            ``None`` initializes zero trainable controls only when both knot
+            specifications are supplied. Default is ``None``.
+        :type control_points: torch.Tensor | None
         :raises ValueError: If ``orders`` is not a list of integers.
         :raises ValueError: If ``knots_u`` is neither a torch.Tensor nor a
             dictionary, when provided.
@@ -68,8 +74,9 @@ class SplineSurface(torch.nn.Module):
         :raises ValueError: If ``control_points`` is not a torch.Tensor,
             when provided.
         :raises ValueError: If ``orders`` is not a list of two elements.
-        :raises ValueError: If ``knots_u``, ``knots_v``, and ``control_points``
-            are all None.
+        :raises ValueError: If either knot specification and the control matrix
+            are both ``None``, or the control shape disagrees with the knots.
+        :raises AssertionError: If either order is not a positive integer.
         """
         super().__init__()
 
@@ -120,9 +127,10 @@ class SplineSurface(torch.nn.Module):
         """
         Forward pass for the :class:`SplineSurface` model.
 
-        :param x: The input tensor.
+        :param x: Coordinates of shape ``(..., n, 2)``; coordinate columns are
+            interpreted positionally, regardless of labels.
         :type x: torch.Tensor | LabelTensor
-        :return: The output tensor.
+        :return: Plain spline values of shape ``(..., n, 1)``.
         :rtype: torch.Tensor
         """
         return torch.einsum(
@@ -142,9 +150,10 @@ class SplineSurface(torch.nn.Module):
             parameter direction.
         :param int degree_v: The degree of the derivative along the second
             parameter direction.
-        :raises ValueError: If ``degree_u`` is not an integer.
-        :raises ValueError: If ``degree_v`` is not an integer.
-        :return: The derivative tensor.
+        :raises AssertionError: If either degree is not a nonnegative integer.
+        :return: The mixed derivative. For plain ``(n, 2)`` input, shape is
+            ``(n,)``; labeled column extraction retains a singleton axis and
+            normally yields ``(n, 1)``.
         :rtype: torch.Tensor
         """
         # Check consistency
@@ -173,7 +182,8 @@ class SplineSurface(torch.nn.Module):
 
         :param x: The input tensor.
         :type x: torch.Tensor | LabelTensor
-        :return: The gradient tensor.
+        :return: Concatenated partial derivatives. Labeled ``(n, 2)`` inputs
+            yield ``(n, 2)``; plain inputs yield flattened shape ``(2 * n,)``.
         :rtype: torch.Tensor
         """
         # Compute partial derivatives
@@ -188,7 +198,8 @@ class SplineSurface(torch.nn.Module):
 
         :param x: The input tensor.
         :type x: torch.Tensor | LabelTensor
-        :return: The laplacian tensor.
+        :return: The sum of second partial derivatives, with the same shape
+            convention as :meth:`derivative`.
         :rtype: torch.Tensor
         """
         # Compute second partial derivatives
@@ -203,7 +214,7 @@ class SplineSurface(torch.nn.Module):
         The knots of the univariate splines defining the spline surface.
 
         :return: The knots.
-        :rtype: tuple(torch.Tensor, torch.Tensor)
+        :rtype: tuple[torch.Tensor, torch.Tensor]
         """
         return self.spline_u.knots, self.spline_v.knots
 
@@ -214,7 +225,8 @@ class SplineSurface(torch.nn.Module):
 
         :param value: A tuple (knots_u, knots_v) containing the knots for both
             parametric directions.
-        :type value: tuple(torch.Tensor | dict, torch.Tensor | dict)
+        :type value: tuple[torch.Tensor | dict[str, int | float | str],
+            torch.Tensor | dict[str, int | float | str]]
         :raises ValueError: If value is not a tuple of two elements.
         """
         # Check value is a tuple of two elements
@@ -230,8 +242,8 @@ class SplineSurface(torch.nn.Module):
         """
         The control points of the spline.
 
-        :return: The control points.
-        :rtype: torch.Tensor
+        :return: The stored trainable two-dimensional control matrix.
+        :rtype: torch.nn.Parameter
         """
         return self._control_points
 
@@ -240,10 +252,10 @@ class SplineSurface(torch.nn.Module):
         """
         Set the control points of the spline surface.
 
-        :param torch.Tensor control_points: The bidimensional control points
+        :param control_points: The bidimensional control points
             tensor, where each dimension refers to a direction in the parameter
-            space. If None, control points are initialized to learnable
-            parameters with zero initial value. Default is None.
+            space. ``None`` initializes zero trainable controls from the knots.
+        :type control_points: torch.Tensor | None
         :raises ValueError: If in any direction there are not enough knots to
             define the control points, due to the relation:
             #knots = order + #control_points.

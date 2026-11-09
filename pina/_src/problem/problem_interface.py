@@ -13,8 +13,8 @@ class ProblemInterface(metaclass=ABCMeta):
         """
         Create a deep copy of the problem instance.
 
-        :param dict memo: The memorization dictionary used by the deepcopy
-            function.
+        :param dict[int, Any] memo: The object-id mapping maintained by
+            :func:`copy.deepcopy` to preserve shared objects and cycles.
         :return: A deep copy of the problem instance.
         :rtype: ProblemInterface
         """
@@ -27,35 +27,38 @@ class ProblemInterface(metaclass=ABCMeta):
         Discretise the problem's domains by sampling a specified number of
         points according to the selected sampling mode.
 
-        :param int n: The number of points to sample. This is ignored if
-            ``sample_rules`` is provided. Default is ``None``.
+        :param n: The positive sample count or per-axis resolution passed to
+            domain samplers. Ignored when ``sample_rules`` is provided. ``None``
+            requires custom rules. Default is ``None``.
+        :type n: int | None
         :param str mode: The sampling method. Available modes include:
             ``"random"`` for random sampling, ``"latin"`` or ``"lh"`` for latin
             hypercube sampling, ``"chebyshev"`` for Chebyshev sampling, and
             ``"grid"`` for grid sampling. Default is ``"random"``.
         :param domains: The domains from which to sample. If ``None``, all
             domains are considered for sampling. Default is ``None``.
-        :type domains: str | list[str]
-        :param dict sample_rules: The dictionary specifying custom sampling
+        :type domains: str | list[str] | None
+        :param sample_rules: The dictionary specifying custom sampling
             rules for each input variable. When provided, it overrides the
-            global ``n`` and ``mode`` arguments. Each key in the dictionary must
-            match one of the variables defined in :meth:`input_variables`, and
+            global ``n`` and ``mode`` arguments. The dictionary keys must
+            match every name in ``input_variables``, and
             each value must be a dictionary containing two keys: ``n`` for the
             number of points to sample for that variable, and ``mode`` for the
             sampling method to use. If ``None``, the global ``n`` and ``mode``
-            parameters are used for all variables. Default is ``None``.
+            parameters are used for all variables. Separate variable samples
+            are combined as a Cartesian product. Default is ``None``.
+        :type sample_rules: dict[str, dict[str, int | str]] | None
 
         .. warning::
             ``"random"`` is the only supported ``mode`` across all geometries:
-            :class:`~pina.domain.cartesian_domain.CartesianDomain`,
-            :class:`~pina.domain.ellipsoid_domain.EllipsoidDomain`, and
-            :class:`~pina.domain.simplex_domain.SimplexDomain`.
+            :class:`~pina.domain.CartesianDomain`,
+            :class:`~pina.domain.EllipsoidDomain`, and
+            :class:`~pina.domain.SimplexDomain`.
             Sampling modes such as ``"latin"``, ``"chebyshev"``, and ``"grid"``
             are only implemented for
-            :class:`~pina.domain.cartesian_domain.CartesianDomain`.
-            When custom discretisation is specified via ``sample_rules``, the
-            domain to be discretised must be an instance of
-            :class:`~pina.domain.cartesian_domain.CartesianDomain`.
+            :class:`~pina.domain.CartesianDomain`. Custom rules require each
+            domain to support the requested variablewise sampling; they do not
+            preserve coordinate coupling in curved domains.
         """
 
     @abstractmethod
@@ -63,13 +66,9 @@ class ProblemInterface(metaclass=ABCMeta):
         """
         Append additional points to an already discretised domain.
 
-        :param dict new_points_dict: The dictionary mapping each domain to the
-            corresponding set of new points to be added. Each key in the
-            dictionary must match one of the domains defined in :attr:`domains`,
-            and each value must be a :class:`~pina.tensor.LabelTensor`
-            containing the new points to be added to that domain. The labels of
-            the points to be added must correspond to those of the domain to
-            which they are being added.
+        :param dict[str, LabelTensor] new_points_dict: The mapping of already
+            sampled domain names to additional points, with compatible shapes
+            and ordered labels.
         """
 
     @abstractmethod
@@ -78,6 +77,8 @@ class ProblemInterface(metaclass=ABCMeta):
         Move the sampled points from the discretised domains into their
         corresponding conditions. This ensures that the conditions are evaluated
         on the correct set of points after discretisation.
+
+        The trainer invokes this operation internally before training.
         """
 
     @property
@@ -107,7 +108,7 @@ class ProblemInterface(metaclass=ABCMeta):
         The conditions associated with the problem.
 
         :return: The conditions associated with the problem.
-        :rtype: dict
+        :rtype: dict[str, pina.condition.BaseCondition]
         """
 
     @property
@@ -115,12 +116,12 @@ class ProblemInterface(metaclass=ABCMeta):
     def discretised_domains(self):
         """
         The dictionary containing the discretised domains of the problem. Each
-        key corresponds to a domain defined in :attr:`domains`, and each value
-        is a :class:`~pina.tensor.LabelTensor` containing the sampled points for
+        key corresponds to a domain name in ``domains``, and each value
+        is a :class:`~pina.LabelTensor` containing the sampled points for
         that domain.
 
         :return: The discretised domains.
-        :rtype: dict
+        :rtype: dict[str, LabelTensor]
         """
 
     @property

@@ -11,7 +11,7 @@ class FixedValue(Equation):
 
     :Example:
 
-        >>> from pina.equation import FixedValue
+        >>> from pina.equation.zoo import FixedValue
         >>> eq = FixedValue(value=0.0)
         >>> # Use within a DomainEquationCondition:
         >>> # condition = DomainEquationCondition(domain=domain, equation=eq)
@@ -27,10 +27,11 @@ class FixedValue(Equation):
             value condition is applied. It should be a subset of the output
             labels. If ``None``, all output variables are considered. Default is
             ``None``.
-        :type components: str | list[str]
+        :type components: str | list[str] | tuple[str, ...] | None
         :raises ValueError: If ``value`` is neither a float nor an integer.
         :raises ValueError: If, when provided, ``components`` is neither a
-            string nor a list of strings.
+            string nor a list, tuple, or set of strings. Sets pass constructor
+            validation but cannot be extracted when evaluating the residual.
         """
         # Check consistency
         check_consistency(value, (float, int))
@@ -41,11 +42,14 @@ class FixedValue(Equation):
             """
             Definition of the equation to enforce a fixed value.
 
-            :param LabelTensor input_: The input points where the residual is
-                computed.
+            :param LabelTensor _: The unused input points.
             :param LabelTensor output_: The output tensor, potentially produced
                 by a :class:`torch.nn.Module` instance.
-            :return: The residual values of the equation.
+            :raises ValueError: If selected output labels are unknown, repeated,
+                or in an unsupported selection format.
+            :raises IndexError: If the selected component sequence is empty.
+            :return: Selected outputs minus the fixed value, with shape
+                ``(n, n_selected)`` and the selected output labels retained.
             :rtype: LabelTensor
             """
             if components is None:

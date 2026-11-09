@@ -61,6 +61,7 @@ class HelmholtzProblem(SpatialProblem):
 
     :Example:
 
+        >>> from pina.problem.zoo import HelmholtzProblem
         >>> problem = HelmholtzProblem()
     """
 
@@ -86,6 +87,8 @@ class HelmholtzProblem(SpatialProblem):
         :type k: float | int
         :param int alpha_x: The frequency in the x-direction. Default is ``1``.
         :param int alpha_y: The frequency in the y-direction. Default is ``4``.
+        :raises ValueError: If numeric validation rejects ``k`` or either
+            frequency is not an integer.
         """
         super().__init__()
         check_consistency(k, (int, float))
@@ -98,6 +101,13 @@ class HelmholtzProblem(SpatialProblem):
         def forcing_term(input_):
             """
             Implementation of the forcing term.
+
+            :param LabelTensor input_: Points of shape ``(n, 2)`` including
+                ``"x"`` and ``"y"`` coordinate labels.
+            :raises ValueError: If a required coordinate label is missing.
+            :return: The forcing matching the sine-product solution, with shape
+                ``(n, 1)``.
+            :rtype: LabelTensor
             """
             x, y, pi = input_["x"], input_["y"], torch.pi
             factor = (self.alpha_x**2 + self.alpha_y**2) * pi**2
@@ -116,8 +126,10 @@ class HelmholtzProblem(SpatialProblem):
         """
         Implementation of the analytical solution of the Helmholtz problem.
 
-        :param LabelTensor pts: Points where the solution is evaluated.
-        :return: The analytical solution of the Helmholtz problem.
+        :param LabelTensor pts: Points of shape ``(n, 2)`` labeled ``"x"`` and
+            ``"y"``, in either column order.
+        :raises ValueError: If a required coordinate label is missing.
+        :return: The sine-product solution of shape ``(n, 1)``, labeled ``"u"``.
         :rtype: LabelTensor
         """
         x, y, pi = pts["x"], pts["y"], torch.pi

@@ -20,6 +20,7 @@ class SpatialProblem(BaseProblem):
         >>> from pina.problem import SpatialProblem
         >>> from pina.domain import CartesianDomain
         >>> class MySpatialProblem(SpatialProblem):
+        ...     output_variables = ["u"]
         ...     @property
         ...     def spatial_domain(self):
         ...         return CartesianDomain({"x": [0, 1], "y": [0, 1]})
@@ -35,6 +36,9 @@ class SpatialProblem(BaseProblem):
     def spatial_domain(self):
         """
         The domain of spatial variables of the problem.
+
+        :return: The geometry providing the spatial coordinate names.
+        :rtype: pina.domain.DomainInterface
         """
 
     @property

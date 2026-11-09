@@ -17,7 +17,7 @@ class AllenCahnEquation(Equation):
 
     :Example:
 
-        >>> from pina.equation import AllenCahnEquation
+        >>> from pina.equation.zoo import AllenCahnEquation
         >>> eq = AllenCahnEquation(alpha=1.0, beta=1.0)
         >>> # Use within a DomainEquationCondition:
         >>> # condition = DomainEquationCondition(domain=domain, equation=eq)
@@ -31,6 +31,7 @@ class AllenCahnEquation(Equation):
         :type alpha: float | int
         :param beta: The reaction coefficient.
         :type beta: float | int
+        :raises ValueError: If numeric validation fails for either coefficient.
         """
         check_consistency(alpha, (float, int))
         check_consistency(beta, (float, int))
@@ -41,12 +42,19 @@ class AllenCahnEquation(Equation):
             """
             Implementation of the Allen-Cahn equation.
 
-            :param LabelTensor input_: The input data of the problem.
-            :param LabelTensor output_: The output data of the problem.
-            :return: The residual of the Allen-Cahn equation.
-            :rtype: LabelTensor
+            :param LabelTensor input_: Points of shape ``(n, d + 1)`` with
+                gradient tracking and time label ``"t"``. Every other label
+                is treated as a spatial coordinate.
+            :param LabelTensor output_: Predictions of shape ``(n, m)``, with
+                an autograd connection supporting second derivatives.
             :raises ValueError: If the ``input_`` labels do not contain the time
-                variable 't'.
+                variable ``"t"``.
+            :raises TypeError: If arguments are not labeled tensors or an
+                unused gradient cannot be indexed.
+            :raises RuntimeError: If the graph cannot support differentiation.
+            :return: Time derivative minus diffusion plus the cubic reaction
+                term, with shape ``(n, m)``.
+            :rtype: LabelTensor
             """
             # Ensure time is passed as input
             if "t" not in input_.labels:

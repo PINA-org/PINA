@@ -13,9 +13,11 @@ class AdaptiveFunctionInterface(metaclass=ABCMeta):
         """
         Compute the transformation of the adaptive function on the input.
 
-        :param x: The input tensor to evaluate the adaptive function.
+        :param x: The input tensor to evaluate the adaptive function. Its shape
+            must be compatible with the underlying activation.
         :type x: torch.Tensor | LabelTensor
-        :return: The output of the adaptive function.
+        :return: The scaled activation of the scaled and shifted input. For
+            the built-in adaptive activations, the output has the input shape.
         :rtype: torch.Tensor | LabelTensor
         """
 

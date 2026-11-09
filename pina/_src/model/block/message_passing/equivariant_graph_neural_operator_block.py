@@ -57,28 +57,33 @@ class EquivariantGraphNeuralOperatorBlock(torch.nn.Module):
         :param int edge_feature_dim: The dimension of the edge features.
         :param int pos_dim: The dimension of the position features.
         :param int modes: The number of Fourier modes to use in the temporal
-            convolution.
+            convolution, clipped to ``time_steps // 2 + 1`` during each call.
         :param int hidden_dim: The dimension of the hidden features.
-            Default is 64.
+            Default is ``64``.
         :param int n_message_layers: The number of layers in the message
-            network. Default is 2.
+            network. Default is ``2``.
         :param int n_update_layers: The number of layers in the update network.
-            Default is 2.
-        :param torch.nn.Module activation: The activation function.
+            Default is ``2``.
+        :param type[torch.nn.Module] activation: No-argument activation class.
             Default is :class:`torch.nn.SiLU`.
         :param str aggr: The aggregation scheme to use for message passing.
-            Available options are "add", "mean", "min", "max", "mul".
+            Available options include ``"add"``, ``"mean"``, ``"min"``,
+            ``"max"``, and ``"mul"``.
             See :class:`torch_geometric.nn.MessagePassing` for more details.
-            Default is "add".
-        :param int node_dim: The axis along which to propagate. Default is -2.
+            Default is ``"add"``.
+        :param int node_dim: The propagation axis. Default is ``-2``.
         :param str flow: The direction of message passing. Available options
-            are "source_to_target" and "target_to_source".
-            The "source_to_target" flow means that messages are sent from
-            the source node to the target node, while the "target_to_source"
+            are ``"source_to_target"`` and ``"target_to_source"``.
+            The ``"source_to_target"`` flow means that messages are sent from
+            the source node to the target node, while ``"target_to_source"``
             flow means that messages are sent from the target node to the
             source node. See :class:`torch_geometric.nn.MessagePassing` for more
-            details. Default is "source_to_target".
+            details. Default is ``"source_to_target"``.
         :raises AssertionError: If ``modes`` is not a positive integer.
+        :raises AssertionError: If EGNN dimensions or layer counts fail positive
+            integer validation; edge width may be zero.
+        :raises ValueError: If activation or PyG propagation options are
+            invalid.
         """
         super().__init__()
 
@@ -126,11 +131,14 @@ class EquivariantGraphNeuralOperatorBlock(torch.nn.Module):
         :param vel: The node velocity tensor of shape
             ``[time_steps, num_nodes, pos_dim]``.
         :type vel: torch.Tensor | LabelTensor
-        :param edge_index: The edge connectivity of shape ``[2, num_edges]``.
-        :type edge_index: torch.Tensor
+        :param torch.Tensor edge_index: Connectivity shaped
+            ``(2, time_steps * num_edges)``
+            on the flattened time/node axis. Each temporal copy's indices must
+            be offset by ``time_index * num_nodes``.
         :param edge_attr: The edge feature tensor of shape
-            ``[time_steps, num_edges, edge_feature_dim]``. Default is None.
-        :type edge_attr: torch.Tensor | LabelTensor, optional
+            ``[time_steps, num_edges, edge_feature_dim]``. ``None`` omits edge
+            inputs and requires zero edge width. Default is ``None``.
+        :type edge_attr: torch.Tensor | LabelTensor | None
         :return: The updated node features, positions, and velocities, each with
             the same shape as the inputs.
         :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]

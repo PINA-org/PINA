@@ -8,9 +8,8 @@ class AutoregressiveMixin:
     """
     Mixin that enables the autoregressive rollout loss logic by maintaining a
     running average of step losses and computing adaptive weights for each step
-    based on the cumulative loss. This allows the solver to focus more on steps
-    that are currently underperforming, which can help improve training
-    stability and convergence.
+    based on the cumulative loss. Positive ``eps`` suppresses steps whose
+    cumulative running loss is larger, including the current step.
 
     Designed to be used in combination with any solver inheriting from
     :class:`~pina._src.solver.base_solver.BaseSolver`.
@@ -23,16 +22,17 @@ class AutoregressiveMixin:
         Initialize the components related to the autoregressive rollout loss.
 
         :param eps: The hyperparameter controlling the influence of the
-            cumulative loss on the adaptive weights. Higher values of eps will
-            lead to more aggressive weighting of steps with higher cumulative
-            loss.
+            cumulative loss on adaptive weights. Positive values suppress
+            larger cumulative losses. No sign constraint is enforced.
         :type eps: float | int
         :param bool reset_weights_at_epoch_start: Whether to reset the running
             average and step count at the start of each epoch. If ``True``, the
             adaptive weights will be recalibrated at the beginning of each epoch
             based on the new training dynamics.
-        :param dict kwargs: Additional keyword arguments for preprocessing and
-            postprocessing steps.
+        :param kwargs: Options forwarded to rollout preprocessing/postprocessing
+            hooks by time-series conditions. Base hooks ignore all options.
+            ``None`` stores an empty mapping.
+        :type kwargs: dict[str, Any] | None
         :raises ValueError: If ``eps`` is not a float or int.
         :raises ValueError: If ``reset_weights_at_epoch_start`` is not a bool.
         """
@@ -51,8 +51,11 @@ class AutoregressiveMixin:
         """
         Compute the tensor loss from the residual tensor.
 
-        :param str condition_name: The name of the condition.
-        :return: The tensor loss computed from the residual tensor.
+        :param condition_name: The statistics key. ``None`` or an empty name
+            uses ``"default"``. Default is ``None``.
+        :type condition_name: str | None
+        :return: Residual-versus-zero losses multiplied by detached temporal
+            weights. Running statistics update even outside training.
         :rtype: torch.Tensor | LabelTensor
         """
         # Compute the step losses from the residual tensor
@@ -71,10 +74,16 @@ class AutoregressiveMixin:
         Get temporal adaptive weights for each step based on the running average
         of step losses.
 
-        :param str condition_name: The name of the condition.
-        :param step_loss: The tensor of step losses for the current condition.
+        :param str condition_name: The statistics key; an empty name selects
+            ``"default"``.
+        :param step_loss: Losses with rollout steps on the first axis. All later
+            axes are averaged before updating the per-condition running mean.
         :type step_loss: torch.Tensor | LabelTensor
-        :return: The tensor of adaptive weights for each step.
+        :raises RuntimeError: If stored and current step-loss shapes cannot
+            broadcast during the running-average update.
+        :return: Weights broadcastable to the loss tensor, normally of shape
+            ``(n_steps, 1, ..., 1)``. Stored means are detached; each call
+            increments the condition's count, including ensemble member calls.
         :rtype: torch.Tensor | LabelTensor
         """
         # Use the condition name for tracking the running average and step count
@@ -97,9 +106,11 @@ class AutoregressiveMixin:
         """
         Compute the adaptive weights for each step based on the cumulative loss.
 
-        :param step_loss: The tensor of step losses for the current condition.
+        :param step_loss: Running average losses, with rollout steps on axis
+            zero.
         :type step_loss: torch.Tensor | LabelTensor
-        :return: The tensor of adaptive weights for each step.
+        :return: ``exp(-eps * cumsum(step_loss, dim=0))`` of the same shape,
+            including the current step. This helper does not detach its input.
         :rtype: torch.Tensor | LabelTensor
         """
         cumulative_loss = -self.eps * torch.cumsum(step_loss, dim=0)
@@ -120,21 +131,23 @@ class AutoregressiveMixin:
 
         :param current_state: The current state tensor.
         :type current_state: torch.Tensor | LabelTensor
-        :param dict kwargs: Additional keyword arguments for preprocessing.
-        :return: The preprocessed state tensor.
+        :param dict[str, Any] kwargs: Options for subclass hooks, ignored here.
+        :return: The same state tensor, unchanged.
         :rtype: torch.Tensor | LabelTensor
         """
         return current_state
 
     def postprocess_step(self, predicted_state, **kwargs):
         """
-        Postprocess the predicted state after each step. If multiple models are
-        used, average the predictions across the model dimension.
+        Return the predicted state without modification.
+
+        Ensemble outputs are not averaged here. Override this hook when rollout
+        feedback must combine the leading model axis into a single state.
 
         :param predicted_state: The predicted state tensor.
         :type predicted_state: torch.Tensor | LabelTensor
-        :param dict kwargs: Additional keyword arguments for postprocessing.
-        :return: The postprocessed state tensor.
+        :param dict[str, Any] kwargs: Options for subclass hooks, ignored here.
+        :return: The same prediction tensor, unchanged.
         :rtype: torch.Tensor | LabelTensor
         """
         return predicted_state
@@ -146,14 +159,27 @@ class AutoregressiveMixin:
         :param initial_state: The initial state from which to start prediction.
             The initial state must be of shape ``[trajectories, 1, *features]``.
         :type initial_state: torch.Tensor | LabelTensor
-        :param int n_steps: The number of autoregressive steps to predict.
-        :param dict kwargs: Additional keyword arguments.
+        :param int n_steps: The number of autoregressive updates. Zero or
+            negative values perform no updates and return the initial data.
+        :param dict[str, Any] kwargs: Options passed to preprocessing and
+            postprocessing on every prediction step. Not merged with the
+            constructor's stored rollout options; base hooks ignore all keys.
         :raises ValueError: If the provided initial_state tensor has less than 3
             dimensions.
+        :raises TypeError: If ``n_steps`` cannot be used by :func:`range`.
+        :raises RuntimeError: If predicted states cannot be concatenated with
+            the initial state on axis one, such as uncombined ensemble outputs.
         :return: The predicted trajectory, including the initial state. It has
             shape ``[trajectories, n_steps + 1, *features]``, where the first
             step corresponds to the initial state.
         :rtype: torch.Tensor | LabelTensor
+
+        .. note::
+
+            Leaves the solver in evaluation mode, including after invalid-input
+            errors. Does not restore its prior mode. Forward updates run with
+            gradients disabled; the initial state's second-axis length is not
+            explicitly checked to be one.
         """
         # Set model to evaluation mode for prediction
         self.eval()

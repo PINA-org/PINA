@@ -10,7 +10,7 @@ class AVNOBlock(nn.Module):
     The inner block of the Averaging Neural Operator.
 
     The operator layer performs an affine transformation where the convolution
-    is approximated with a local average. Given the input function
+    is approximated with the arithmetic mean over axis one. Given the input
     :math:`v(x)\in\mathbb{R}^{\rm{emb}}` the layer computes the operator update
     :math:`K(v)` as:
 
@@ -47,9 +47,10 @@ class AVNOBlock(nn.Module):
         Initialization of the :class:`AVNOBlock` class.
 
         :param int hidden_size: The size of the hidden layer.
-            Defaults is ``100``.
-        :param func: The activation function.
+            Default is ``100``.
+        :param type[torch.nn.Module] func: The no-argument activation class.
             Default is :class:`torch.nn.GELU`.
+        :raises ValueError: If hidden width or activation types are invalid.
         """
         super().__init__()
 
@@ -65,8 +66,9 @@ class AVNOBlock(nn.Module):
         Forward pass of the block. It performs a sum of local average and an
         affine transformation of the field.
 
-        :param torch.Tensor x: The input tensor for performing the computation.
-        :return: The output tensor.
+        :param torch.Tensor x: Features shaped
+            ``(batch, n_points, hidden_size)``.
+        :return: Same-shaped activated affine update plus mean over points.
         :rtype: torch.Tensor
         """
         return self._func(self._nn(x) + torch.mean(x, dim=1, keepdim=True))

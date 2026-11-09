@@ -26,14 +26,15 @@ class AveragingNeuralOperator(KernelNeuralOperator):
     :Example:
 
         >>> import torch
+        >>> from pina import LabelTensor
         >>> from pina.model import AveragingNeuralOperator, FeedForward
         >>> lifting_net = FeedForward(input_dimensions=4, output_dimensions=20)
-        >>> projecting_net = FeedForward(input_dimensions=22, output_dimensions=1)
+        >>> projecting_net = FeedForward(23, 1)
         >>> model = AveragingNeuralOperator(
         ...     lifting_net, projecting_net,
         ...     field_indices=["f"], coordinates_indices=["x", "y", "z"]
         ... )
-        >>> x = torch.randn(10, 5, 4)
+        >>> x = LabelTensor(torch.randn(10, 5, 4), ["f", "x", "y", "z"])
         >>> out = model(x)
     """
 
@@ -61,12 +62,18 @@ class AveragingNeuralOperator(KernelNeuralOperator):
         :param list[str] coordinates_indices: The labels of the coordinates in
             the input tensor.
         :param int n_layers: The number of hidden layers. Default is ``4``.
-        :param torch.nn.Module func: The activation function to use.
+        :param type[torch.nn.Module] func: The activation class to instantiate.
             Default is :class:`torch.nn.GELU`.
         :raises ValueError: If the input dimension does not match with the
             labels of the fields and coordinates.
         :raises ValueError: If the input dimension of the projecting network
             does not match with the hidden dimension of the lifting network.
+
+        .. note::
+
+            Network widths are inferred from their first parameters and a
+            random CPU lifting call in training mode. Both networks must have
+            parameters; the probe can update the lifting network's state.
         """
 
         # check consistency
@@ -113,7 +120,7 @@ class AveragingNeuralOperator(KernelNeuralOperator):
 
         The ``lifting_net`` maps the input to the hidden dimension.
         Then, several layers of
-        :class:`~pina.model.block.average_neural_operator_block.AVNOBlock` are
+        :class:`~pina.model.block.AVNOBlock` are
         applied. Finally, the ``projection_net`` maps the hidden representation
         to the output function.
 
@@ -122,8 +129,9 @@ class AveragingNeuralOperator(KernelNeuralOperator):
             the batch_size, :math:`N` the number of points in the mesh,
             :math:`D` the dimension of the problem, i.e. the sum
             of ``len(coordinates_indices)`` and ``len(field_indices)``.
-        :return: The output tensor.
-        :rtype: torch.Tensor
+        :return: Predictions with shape ``(B, N, output_width)``. Lifting input
+            is reordered to fields followed by coordinates.
+        :rtype: torch.Tensor | LabelTensor
         """
         points_tmp = x.extract(self.coordinates_indices)
         new_batch = x.extract(self.field_indices)

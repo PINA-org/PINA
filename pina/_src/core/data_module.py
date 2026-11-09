@@ -11,9 +11,9 @@ class DataModule(LightningDataModule):
     """
     Lightning data module for PINA conditions.
 
-    Each dataset row is ``[condition_id, batch_id]``. The condition batch is
-    materialized in :meth:`transfer_batch_to_device`, so the dataloaders yield
-    one condition batch per step.
+    Each dataset row is ``[condition_id, batch_id]``. Dataloaders yield one
+    identifier row per step. :meth:`transfer_batch_to_device` resolves the row
+    into its condition batch, so condition data is not loaded by the workers.
     """
 
     def __init__(
@@ -34,17 +34,15 @@ class DataModule(LightningDataModule):
         """
         Initialization of the :class:`DataModule` class.
 
-        Dataset creation and condition batch storage are deferred until
-        :meth:`setup`.
-
-        :param ProblemInterface problem: The problem containing the
+        :param pina.problem.ProblemInterface problem: The problem containing the
             conditions to batch and split.
         :param problem_setting: Per-condition keyword arguments passed to
             each condition's ``store_data`` method. Keys are condition
             names and values are dictionaries of settings. These settings
             override the global ``batch_size`` for the corresponding
-            condition. If ``None``, an empty dictionary is used.
-        :type problem_setting: dict | None
+            condition. If ``None``, an empty dictionary is used. Default is
+            ``None``.
+        :type problem_setting: dict[str, dict[str, Any]] | None
         :param float train_size: Fraction of each condition's batches
             allocated to training, rounded down with a minimum of one
             batch when positive and batches are available. Default is
@@ -58,8 +56,9 @@ class DataModule(LightningDataModule):
             training and validation allocation become test batches.
             Default is ``0.0``.
         :param batch_size: Default batch size passed to each condition's
-            ``store_data`` method. Interpretation of ``None`` depends on
-            the condition. Default is ``None``.
+            ``store_data`` method. ``None`` keeps all tensor samples in one
+            batch; graph conditions ignore this option and use their sampling
+            settings instead. Default is ``None``.
         :type batch_size: int | None
         :param str batching_mode: Batching mode identifier. Stored but not
             used by the current implementation. Default is
@@ -76,11 +75,17 @@ class DataModule(LightningDataModule):
             mapping of classes. Stored but not used: the current
             implementation always constructs a standard DataLoader.
             Default is ``None``.
-        :type dataloader_cls: type | dict | None
+        :type dataloader_cls: type | dict[str, type | None] | None
         :param collate_fn: Custom collation function or per-condition
             mapping of functions. Stored but not used: the current
             implementation uses default collation. Default is ``None``.
-        :type collate_fn: Callable | dict | None
+        :type collate_fn: Callable | dict[str, Callable | None] | None
+
+        .. note::
+
+            Dataset creation and condition batch storage are deferred until
+            :meth:`setup`. This constructor stores settings without validating
+            split fractions, their sum, or the problem's type.
         """
         super().__init__()
         self.problem = problem
@@ -135,8 +140,6 @@ class DataModule(LightningDataModule):
         Conditions must have stored their batches, and
         :meth:`enumerate_condition` must have been called.
 
-        :return: None.
-        :rtype: None
         :raises AttributeError: If condition batch storage or the condition
             identifier mapping has not been initialized.
         :raises KeyError: If a condition is absent from the identifier
@@ -198,12 +201,17 @@ class DataModule(LightningDataModule):
         again rebuilds condition batches and dataset splits.
 
         :param stage: The Lightning setup stage. Accepted values are
-            ``"fit"``, ``"test"``, and ``None``. Default is ``None``.
+            ``"fit"``, ``"test"``, and ``None``. ``None`` runs the same full
+            setup as the named stages. Default is ``None``.
         :type stage: str | None
-        :return: None.
-        :rtype: None
         :raises ValueError: If the stage is not ``"fit"``, ``"test"``,
             or ``None``.
+        :raises ValueError: If a domain-equation condition refers to a domain
+            that has not been discretised, or a condition rejects its supplied
+            storage settings.
+        :raises AssertionError: If a time-series condition rejects nonpositive
+            window counts or unroll lengths.
+        :raises TypeError: If a condition receives unsupported storage keywords.
         """
         if stage not in ("fit", "test", None):
             raise ValueError(
@@ -231,9 +239,11 @@ class DataModule(LightningDataModule):
 
         :param torch.Tensor dataset: The identifier dataset with shape
             ``[n_batches, 2]``.
+        :raises ValueError: If the dataset is nonempty and ``num_workers`` is
+            negative.
         :return: A dataloader over the identifier rows, or an empty list
             if the dataset is empty.
-        :rtype: DataLoader | list
+        :rtype: torch.utils.data.DataLoader[torch.Tensor] | list[torch.Tensor]
         """
         if len(dataset) == 0:
             return []
@@ -248,11 +258,13 @@ class DataModule(LightningDataModule):
         """
         Return the dataloader for training batch identifiers.
 
-        :return: The training dataloader, or an empty list if the training
-            dataset is empty.
-        :rtype: DataLoader | list
         :raises AttributeError: If the training dataset has not been
             created.
+        :raises ValueError: If the dataset is nonempty and ``num_workers`` is
+            negative.
+        :return: The training dataloader over identifier tensors of shape
+            ``[1, 2]``, or an empty list if the training dataset is empty.
+        :rtype: torch.utils.data.DataLoader[torch.Tensor] | list[torch.Tensor]
         """
         return self._dataloader(self.train_dataset)
 
@@ -260,11 +272,13 @@ class DataModule(LightningDataModule):
         """
         Return the dataloader for validation batch identifiers.
 
-        :return: The validation dataloader, or an empty list if the
-            validation dataset is empty.
-        :rtype: DataLoader | list
         :raises AttributeError: If the validation dataset has not been
             created.
+        :raises ValueError: If the dataset is nonempty and ``num_workers`` is
+            negative.
+        :return: The validation dataloader over identifier tensors of shape
+            ``[1, 2]``, or an empty list if the validation dataset is empty.
+        :rtype: torch.utils.data.DataLoader[torch.Tensor] | list[torch.Tensor]
         """
         return self._dataloader(self.val_dataset)
 
@@ -272,10 +286,12 @@ class DataModule(LightningDataModule):
         """
         Return the dataloader for test batch identifiers.
 
-        :return: The test dataloader, or an empty list if the test dataset
-            is empty.
-        :rtype: DataLoader | list
         :raises AttributeError: If the test dataset has not been created.
+        :raises ValueError: If the dataset is nonempty and ``num_workers`` is
+            negative.
+        :return: The test dataloader over identifier tensors of shape
+            ``[1, 2]``, or an empty list if the test dataset is empty.
+        :rtype: torch.utils.data.DataLoader[torch.Tensor] | list[torch.Tensor]
         """
         return self._dataloader(self.test_dataset)
 
@@ -293,17 +309,19 @@ class DataModule(LightningDataModule):
         :param device: The device on which condition batches are
             materialized. If ``None``, device handling is delegated to
             each condition without a target device.
-        :type device: str | torch.device | None
+        :type device: str | torch.device | int | None
         :param int _: The Lightning dataloader index. Unused.
-        :return: Pairs containing the condition name and its materialized
-            batch. The batch type depends on the condition.
-        :rtype: list[tuple[str, Any]]
         :raises AttributeError: If the condition identifier mapping has
             not been initialized.
         :raises KeyError: If a condition identifier is unknown or its
             condition is absent from the problem.
         :raises IndexError: If a batch identifier is out of range for
             its condition.
+        :return: Pairs containing the condition name and its materialized
+            batch, in identifier-row order. Tensor conditions return field
+            dictionaries, graph conditions return subgraphs, and custom
+            conditions may define other batch types.
+        :rtype: list[tuple[str, Any]]
         """
         result = []
         for condition_id, batch_id in batch:

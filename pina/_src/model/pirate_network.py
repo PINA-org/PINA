@@ -15,8 +15,9 @@ class PirateNet(torch.nn.Module):
     dense layers with dual gating mechanism and an adaptive residual connection,
     whose contribution is controlled by a trainable parameter ``alpha``.
 
-    The PirateNet, augmented with random weight factorization, is designed to
-    mitigate spectral bias in deep networks.
+    Dense outputs have learned exponential scales; this implementation does not
+    factorize the linear weight matrices. The default Fourier embedding uses
+    scaled uniform random frequencies.
 
     .. seealso::
 
@@ -53,14 +54,19 @@ class PirateNet(torch.nn.Module):
         :param int input_dimension: The number of input features.
         :param int inner_size: The number of hidden units in the dense layers.
         :param int output_dimension: The number of output features.
-        :param torch.nn.Module embedding: The embedding module used to transform
+        :param embedding: The embedding module used to transform
             the input into a higher-dimensional feature space. If ``None``, a
             default :class:`~pina.model.block.FourierFeatureEmbedding` with
             scaling factor of 2 is used. Default is ``None``.
+        :type embedding: torch.nn.Module | None
         :param int n_layers: The number of PirateNet blocks in the model.
-            Default is 3.
-        :param torch.nn.Module activation: The activation function to be used in
+            Default is ``3``.
+        :param type[torch.nn.Module] activation: The activation class used in
             the blocks. Default is :class:`torch.nn.Tanh`.
+        :raises AssertionError: If dimensions or block count are not positive
+            integers.
+        :raises ValueError: If ``activation`` is not a module subclass.
+        :raises RuntimeError: If the default embedding width is odd.
         """
         super().__init__()
 
@@ -100,9 +106,10 @@ class PirateNet(torch.nn.Module):
         input through each block in the network. Finally, it applies the output
         layer to produce the final output.
 
-        :param input_: The input tensor for the model.
+        :param input_: Input of shape ``(n, input_dimension)`` for the default
+            embedding. A custom embedding must return ``(..., inner_size)``.
         :type input_: torch.Tensor | LabelTensor
-        :return: The output tensor of the model.
+        :return: Predictions of shape ``(..., output_dimension)``.
         :rtype: torch.Tensor | LabelTensor
         """
         # Apply the Fourier feature embedding
@@ -124,6 +131,6 @@ class PirateNet(torch.nn.Module):
         Return the alpha values of all PirateNetBlock layers.
 
         :return: A list of alpha values from each block.
-        :rtype: list
+        :rtype: list[float]
         """
         return [block.alpha.item() for block in self.blocks]

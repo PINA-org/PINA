@@ -26,6 +26,7 @@ class Exclusion(BaseOperation):
 
     :Example:
 
+        >>> from pina.domain import CartesianDomain, Exclusion
         >>> cartesian1 = CartesianDomain({'x': [0, 1], 'y': [0, 1]})
         >>> cartesian2 = CartesianDomain({'x': [0, 1], 'y': [0.5, 1.5]})
         >>> exclusion = Exclusion([cartesian1, cartesian2])
@@ -35,14 +36,16 @@ class Exclusion(BaseOperation):
         """
         Check if a point is inside the exclusion of the domains.
 
-        :param LabelTensor point: The point to check.
-        :param bool check_border: If ``True``, the boundary is considered inside
-            the domain. Default is ``False``.
+        :param LabelTensor point: A single point with shape ``(1, n_variables)``
+            and labels matching the constituent domains.
+        :param bool check_border: The boundary flag passed to every constituent;
+            each applies its own membership rules. Default is ``False``.
         :raises ValueError: If ``point`` is not a :class:`LabelTensor`.
         :raises ValueError: If the labels of ``point`` differ from the variables
             of the domain.
-        :return: Whether the point is inside the domain or not.
-        :rtype: bool
+        :return: Whether exactly one constituent contains the point. The result
+            can be a scalar boolean tensor when constituent tests use tensors.
+        :rtype: bool | torch.Tensor
         """
         # Checks on point
         check_consistency(point, LabelTensor)
@@ -61,28 +64,37 @@ class Exclusion(BaseOperation):
 
     def sample(self, n, mode="random", variables="all"):
         """
-        The sampling routine.
+        Reject proposed points unless exactly one constituent contains them.
 
-        .. note::
-
-            This sampling method relies on rejection sampling. Points are drawn
-            from the individual geometries, and only those that lie exclusively
-            within one geometry are kept. When the exclusion domain is small
-            relative to the combined area of the input domains, the method may
-            become highly inefficient.
+        Quotas are nearly equal across geometries shuffled with Python's
+        :mod:`random`. Proposals use full coordinates and default
+        boundary-excluding membership checks. Requested columns are selected
+        only after acceptance. Quotas are not volume-weighted.
 
         :param int n: The number of samples to generate.
-        :param str mode: The sampling method. Default is ``random``.
-        :param variables: The list of variables to sample. If ``all``, all
-            variables are sampled. Default is ``all``.
-        :type variables: list[str] | str
+        :param str mode: A method supported by every constituent. Available
+            modes are listed in ``sample_modes``. Default is ``"random"``.
+        :param variables: The nonempty coordinate selection, or ``"all"`` for
+            every variable. Duplicate names are removed and columns sorted.
+            Default is ``"all"``.
+        :type variables: str | list[str] | tuple[str, ...] | set[str]
         :raises AssertionError: If ``n`` is not a positive integer.
         :raises ValueError: If the sampling mode is invalid.
         :raises ValueError: If ``variables`` is neither ``all``, a string, nor a
-            list/tuple of strings.
+            list, tuple, or set of strings.
         :raises ValueError: If any of the specified variables is unknown.
-        :return: The sampled points.
+        :raises TypeError: If there are no constituent geometries.
+        :raises IndexError: If the variable selection is empty.
+        :return: Accepted points of shape ``(n, len(variables))`` after
+            selection normalization. Repeated points are not removed.
         :rtype: LabelTensor
+
+        .. warning::
+
+            There is no iteration limit. Any geometry assigned a positive quota
+            must be able to propose points in its exclusive region. Otherwise,
+            sampling can loop indefinitely even if other geometries have
+            nonempty exclusive regions.
         """
         # Validate sampling settings
         variables = self._validate_sampling(n, mode, variables)

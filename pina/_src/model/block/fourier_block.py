@@ -52,11 +52,11 @@ class FourierBlock1D(nn.Module):
 
         :param int input_numb_fields: The number of channels for the input.
         :param int output_numb_fields: The number of channels for the output.
-        :param n_modes: The number of modes to select for each dimension.
-            It must be at most equal to :math:`\floor(Nx/2)+1`.
-        :type n_modes: list[int] | tuple[int]
-        :param torch.nn.Module activation: The activation function.
+        :param int n_modes: The number of modes to select for each dimension.
+            It must not exceed ``Nx // 2 + 1``.
+        :param type[torch.nn.Module] activation: No-argument activation class.
             Default is :class:`torch.nn.Tanh`.
+        :raises ValueError: If channel types or activation results are invalid.
         """
 
         super().__init__()
@@ -78,8 +78,10 @@ class FourierBlock1D(nn.Module):
         Forward pass of the block. It performs a spectral convolution and a
         linear transformation of the input. Then, it sums the results.
 
-        :param torch.Tensor x: The input tensor for performing the computation.
-        :return: The output tensor.
+        :param torch.Tensor x: Real input shaped
+            ``(batch, input_channels, Nx)``.
+        :return: Activated spectral plus pointwise convolution, shaped
+            ``(batch, output_channels, Nx)``.
         :rtype: torch.Tensor
         """
         return self._activation(self._spectral_conv(x) + self._linear(x))
@@ -127,11 +129,13 @@ class FourierBlock2D(nn.Module):
         :param int input_numb_fields: The number of channels for the input.
         :param int output_numb_fields: The number of channels for the output.
         :param n_modes: The number of modes to select for each dimension.
-            It must be at most equal to :math:`\floor(Nx/2)+1`,
-            :math:`\floor(Ny/2)+1`.
-        :type n_modes: list[int] | tuple[int]
-        :param torch.nn.Module activation: The activation function.
+            A scalar is repeated over both axes. Counts must fit ``Nx`` and
+            ``Ny // 2 + 1``; to avoid overlapping signed bands use
+            ``2 * n_modes[0] <= Nx``.
+        :type n_modes: int | list[int] | tuple[int, int]
+        :param type[torch.nn.Module] activation: No-argument activation class.
             Default is :class:`torch.nn.Tanh`.
+        :raises ValueError: If types or the mode-list length are invalid.
         """
         super().__init__()
 
@@ -152,8 +156,10 @@ class FourierBlock2D(nn.Module):
         Forward pass of the block. It performs a spectral convolution and a
         linear transformation of the input. Then, it sums the results.
 
-        :param torch.Tensor x: The input tensor for performing the computation.
-        :return: The output tensor.
+        :param torch.Tensor x: Real input shaped
+            ``(batch, input_channels, Nx, Ny)``.
+        :return: Activated spectral plus pointwise convolution, shaped
+            ``(batch, output_channels, Nx, Ny)``.
         :rtype: torch.Tensor
         """
         return self._activation(self._spectral_conv(x) + self._linear(x))
@@ -201,11 +207,13 @@ class FourierBlock3D(nn.Module):
         :param int input_numb_fields: The number of channels for the input.
         :param int output_numb_fields: The number of channels for the output.
         :param n_modes: The number of modes to select for each dimension.
-            It must be at most equal to :math:`\floor(Nx/2)+1`,
-            :math:`\floor(Ny/2)+1`, :math:`\floor(Nz/2)+1`.
-        :type n_modes: list[int] | tuple[int]
-        :param torch.nn.Module activation: The activation function.
+            A scalar is repeated over all three axes. Counts must fit ``Nx``,
+            ``Ny``, and ``Nz // 2 + 1``. To avoid overlapping signed bands, use
+            at most half the extent on each of the first two axes.
+        :type n_modes: int | list[int] | tuple[int, int, int]
+        :param type[torch.nn.Module] activation: No-argument activation class.
             Default is :class:`torch.nn.Tanh`.
+        :raises ValueError: If types or the mode-list length are invalid.
         """
         super().__init__()
 
@@ -226,8 +234,10 @@ class FourierBlock3D(nn.Module):
         Forward pass of the block. It performs a spectral convolution and a
         linear transformation of the input. Then, it sums the results.
 
-        :param torch.Tensor x: The input tensor for performing the computation.
-        :return: The output tensor.
+        :param torch.Tensor x: Real input shaped
+            ``(batch, input_channels, Nx, Ny, Nz)``.
+        :return: Activated spectral plus pointwise convolution, shaped
+            ``(batch, output_channels, Nx, Ny, Nz)``.
         :rtype: torch.Tensor
         """
         return self._activation(self._spectral_conv(x) + self._linear(x))

@@ -19,7 +19,8 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
     Autoregressive time-series condition on graph data.
 
     Each stored batch is one subgraph carrying unrolled temporal windows with
-    shape ``[n_windows, unroll_length, n_nodes, *features]``.
+    shape ``[n_windows, unroll_length, n_nodes, features]``. Temporal windows
+    are generated during :meth:`store_data`, not during construction.
     """
 
     _avail_input_cls = (Data, Graph)
@@ -45,7 +46,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         ``[n_windows, unroll_length, n_nodes, features]``. LabelTensor
         features retain their labels. Existing stored batches are replaced.
 
-        :param dict kwargs: Sampling and temporal window settings:
+        :param dict[str, Any] kwargs: Sampling and temporal window settings:
 
             * ``n_subgraphs`` (int): Number of subgraphs to generate.
               Default is ``10``.
@@ -59,10 +60,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
               window starting indices before selecting windows. Default
               is ``False``.
 
-            Other keyword arguments are ignored.
-        :return: The subgraphs containing temporal windows, also stored
-            in ``self.data``.
-        :rtype: list[Graph]
+            Other keyword arguments, including ``batch_size``, are ignored.
         :raises AttributeError: If the graph does not contain the feature
             attribute specified by ``key``.
         :raises AssertionError: If ``n_windows`` or ``unroll_length`` is
@@ -73,6 +71,9 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
             than ``n_windows`` valid windows are available.
         :raises RuntimeError: If the temporal windows do not have the
             four dimensions required by the permutation.
+        :return: The subgraphs containing temporal windows, also stored
+            in ``self.data``.
+        :rtype: list[Graph]
         """
         unroll_length = kwargs.get("unroll_length", 10)
         n_windows = kwargs.get("n_windows", 4)
@@ -121,12 +122,9 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         :param batch: The graph batch containing temporal windows under
             the attribute specified by ``key``, with shape
             ``[n_windows, unroll_length, n_nodes, features]``.
-        :type batch: Graph | Data
-        :param BaseSolver solver: The solver providing the model forward
+        :type batch: pina.graph.Graph | torch_geometric.data.Data
+        :param pina.solver.BaseSolver solver: The solver providing the forward
             pass. Predictions must be compatible with the stored states.
-        :return: The prediction-minus-target residuals with shape
-            ``[unroll_length - 1, n_windows, n_nodes, features]``.
-        :rtype: torch.Tensor
         :raises KeyError: If the batch lacks the feature attribute
             specified by ``key``.
         :raises ValueError: If the temporal feature tensor has fewer than
@@ -134,6 +132,14 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         :raises RuntimeError: If prediction and target shapes are
             incompatible for subtraction, or no prediction steps are
             available to stack.
+        :return: The prediction-minus-target residuals as a plain tensor with
+            shape ``[unroll_length - 1, n_windows, n_nodes, features]``.
+        :rtype: torch.Tensor
+
+        .. warning::
+
+            The feature attribute is not restored if a forward pass or
+            subtraction raises during the rollout.
         """
         series = batch[self.key]
         if series.dim() < 4:

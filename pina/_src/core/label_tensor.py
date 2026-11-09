@@ -1,4 +1,4 @@
-"""Module for LabelTensor"""
+"""Tensors with dimension names and component-label metadata."""
 
 from copy import copy, deepcopy
 import torch
@@ -7,22 +7,42 @@ from torch import Tensor
 
 class LabelTensor(torch.Tensor):
     """
-    Extension of the :class:`torch.Tensor` class that includes labels for
-    each dimension.
+    Extend :class:`torch.Tensor` with optional labels on selected dimensions.
+
+    Metadata maps dimension indices to records containing ``"name"`` and
+    ``"dof"`` entries. A simple label list describes the last dimension.
+    Component labels implement :class:`collections.abc.Hashable`, abbreviated
+    as ``Hashable`` in the type fields below.
+    Metadata-aware methods support label extraction, indexing, and selected
+    tensor transformations.
+
+    .. warning::
+
+        Arbitrary PyTorch operations may return this subclass without its label
+        metadata. Only the behavior of the metadata-aware methods documented
+        here is guaranteed; generic reshaping does not reconstruct labels.
     """
 
     @staticmethod
     def __new__(cls, x, labels, *args, **kwargs):
         """
-        Create a new instance of the :class:`~pina.label_tensor.LabelTensor`
-        class.
+        Allocate a labeled tensor or reuse an existing labeled tensor.
 
-        :param torch.Tensor x: :class:`torch.tensor` instance to be casted as a
-            :class:`~pina.label_tensor.LabelTensor`.
-        :param labels: Labels to assign to the tensor.
-        :type labels: str | list[str] | dict
-        :return: The instance of the :class:`~pina.label_tensor.LabelTensor`
-            class.
+        Metadata is assigned by :meth:`__init__`, not by this allocator.
+
+        :param torch.Tensor x: The tensor to wrap. If it is already a
+            :class:`LabelTensor`, return it unchanged without allocating.
+        :param labels: The metadata passed to initialization; unused here.
+        :type labels: str | list[Hashable] | builtins.range |
+            dict[int, dict[str, Any]] | None
+        :param tuple[Any, ...] args: Additional arguments forwarded to the
+            PyTorch allocator only when ``x`` is not already labeled. The normal
+            two-argument constructor does not support extra allocation options.
+        :param dict[str, Any] kwargs: Additional PyTorch allocator options,
+            subject to the same restriction as ``args``. Ignored when reusing
+            an existing labeled tensor.
+        :return: The allocated tensor, sharing the supplied tensor's storage, or
+            ``x`` itself when it is already labeled.
         :rtype: LabelTensor
         """
 
@@ -36,7 +56,8 @@ class LabelTensor(torch.Tensor):
         Returns the tensor part of the :class:`~pina.label_tensor.LabelTensor`
         object.
 
-        :return: Tensor part of the :class:`~pina.label_tensor.LabelTensor`.
+        :return: A plain tensor view sharing data storage and the autograd
+            connection with this instance, without label-aware behavior.
         :rtype: torch.Tensor
         """
 
@@ -44,35 +65,40 @@ class LabelTensor(torch.Tensor):
 
     def __init__(self, x, labels):
         """
-        Initialize the :class:`~pina.label_tensor.LabelTensor` instance, by
-        checking the consistency of the labels and the tensor. Specifically, the
-        labels must match the following conditions:
+        Initialization of the :class:`LabelTensor` class.
 
-        - At each dimension, the number of labels must match the size of the \
-            dimension.
-        - At each dimension, the labels must be unique.
-
-        The labels can be passed in the following formats:
+        :param torch.Tensor x: The tensor supplied to allocation; unused during
+            metadata initialization. Passing an existing labeled tensor reuses
+            that object and applies the supplied metadata to it.
+        :param labels: The component labels. A string denotes one label; a list
+            or range labels the last dimension. A dictionary maps dimension
+            indices to records containing ``"name"`` and ``"dof"``. Missing
+            names default to the dimension index and missing degrees of freedom
+            default to a positional range. ``None`` clears stored metadata.
+            Label counts must match their dimension sizes and labels within a
+            dimension must be unique and hashable. Dictionary records and
+            label lists are stored by reference; missing record fields are
+            inserted into the caller's dictionary.
+        :type labels: str | list[Hashable] | builtins.range |
+            dict[int, dict[str, Any]] | None
+        :raises ValueError: If the label format is unsupported, a dimension
+            record is not a dictionary, labels repeat, or their count differs
+            from the dimension size.
+        :raises TypeError: If a component label is unhashable or a dimension
+            index cannot index the tensor shape.
+        :raises IndexError: If a dimension index is outside the tensor shape.
 
         :Example:
-            >>> from pina import LabelTensor
-            >>> tensor = LabelTensor(
-            >>>     torch.rand((2000, 3)),
-            ...     {1: {"name": "space", "dof": ['a', 'b', 'c']}})
-            >>> tensor = LabelTensor(
-            >>>     torch.rand((2000, 3)),
-            ...     ["a", "b", "c"])
-        
-        The keys of the dictionary are the dimension indices, and the values are
-        dictionaries containing the labels and the name of the dimension. If 
-        the labels are passed as a list, these are assigned to the last 
-        dimension.
 
-        :param torch.Tensor x: The tensor to be casted as a
-            :class:`~pina.label_tensor.LabelTensor`.
-        :param labels: Labels to assign to the tensor.
-        :type labels: str | list[str] | dict
-        :raises ValueError: If the labels are not consistent with the tensor.
+            >>> import torch
+            >>> from pina import LabelTensor
+            >>> tensor = LabelTensor(torch.ones(2, 3), ["a", "b", "c"])
+            >>> named = LabelTensor(
+            ...     torch.ones(2, 3),
+            ...     {1: {"name": "space", "dof": ["a", "b", "c"]}},
+            ... )
+            >>> named.extract({"space": ["a", "c"]}).shape
+            torch.Size([2, 2])
         """
         super().__init__()
         if labels is not None:
@@ -86,8 +112,11 @@ class LabelTensor(torch.Tensor):
         Returns the full labels of the tensor, even for the dimensions that are
         not labelled.
 
-        :return: The full labels of the tensor
-        :rtype: dict
+        :return: A new outer dictionary covering every nonnegative dimension
+            index. Existing records are shared with stored metadata; unlabeled
+            dimensions receive a fresh record with a positional ``range`` and
+            the dimension index as its name.
+        :rtype: dict[int, dict[str, Any]]
         """
         to_return_dict = {}
         shape_tensor = self.shape
@@ -103,8 +132,9 @@ class LabelTensor(torch.Tensor):
         """
         Returns the labels stored inside the instance.
 
-        :return: The labels stored inside the instance.
-        :rtype: dict
+        :return: The mutable internal mapping from dimension indices to metadata
+            records. Both the mapping and its records are returned by reference.
+        :rtype: dict[int, dict[str, Any]]
         """
         return self._labels
 
@@ -113,8 +143,11 @@ class LabelTensor(torch.Tensor):
         """
         Returns the labels of the last dimension of the instance.
 
-        :return: labels of last dimension
-        :rtype: list
+        :return: The stored ``"dof"`` entry for the last dimension, or ``None``
+            if that dimension has no record. Typically a list of labels or a
+            range; dictionary-based initialization can also store a scalar
+            hashable label. The value is returned by reference.
+        :rtype: list[Hashable] | builtins.range | Hashable | None
         """
         if self.ndim - 1 in self._labels:
             return self._labels[self.ndim - 1]["dof"]
@@ -123,16 +156,22 @@ class LabelTensor(torch.Tensor):
     @labels.setter
     def labels(self, labels):
         """
-        Set labels stored insider the instance by checking the type of the
-        input labels and handling it accordingly. The following types are
-        accepted:
+        Update stored dimension labels after validating their counts.
 
-        - **list**: The list of labels is assigned to the last dimension.
-        - **dict**: The dictionary of labels is assigned to the tensor.
-        - **str**: The string is assigned to the last dimension.
+        Dictionary updates merge into existing metadata; other accepted formats
+        replace only the last dimension's record. Input records and lists are
+        retained by reference. Missing record fields are filled in place.
 
-        :param labels: Labels to assign to the class variable _labels.
-        :type labels: str | list[str] | dict
+        :param labels: A string, list, or range for the last dimension, or a
+            dictionary of dimension records containing ``"name"`` and ``"dof"``.
+            Unlike initialization, this setter does not accept ``None``.
+        :type labels: str | list[Hashable] | builtins.range |
+            dict[int, dict[str, Any]]
+        :raises ValueError: If the format is unsupported, records are not
+            dictionaries, or component labels repeat or have the wrong count.
+        :raises TypeError: If labels are unhashable or a dimension index cannot
+            index the tensor shape.
+        :raises IndexError: If a dimension index is outside the tensor shape.
         """
 
         if not hasattr(self, "_labels"):
@@ -152,15 +191,31 @@ class LabelTensor(torch.Tensor):
         Store the internal label representation according to the values
         passed as input.
 
-        :param dict labels: The label(s) to update.
-        :raises ValueError: If the dof list contains duplicates or the number of
-                            dof does not match the tensor shape.
+        Missing ``"name"`` and ``"dof"`` fields are inserted into the supplied
+        records. Records are then stored by reference without clearing unrelated
+        dimensions. Scalar degrees of freedom are wrapped only for validation,
+        not in the stored record. Dimension indices are not normalized.
+
+        :param dict[int, dict[str, Any]] labels: The dimension records to merge.
+        :raises ValueError: If a record is not a dictionary, component labels
+            repeat, or their count differs from the dimension size.
+        :raises TypeError: If a component label is unhashable or a dimension
+            index cannot index the tensor shape.
+        :raises IndexError: If a dimension index is outside the tensor shape.
         """
 
         tensor_shape = self.shape
 
         def validate_dof(dof_list, dim_size):
-            """Validate the 'dof' list for uniqueness and size."""
+            """
+            Validate component-label uniqueness and count.
+
+            :param dof_list: The labels to validate.
+            :type dof_list: list[Hashable] | builtins.range
+            :param int dim_size: The required number of component labels.
+            :raises ValueError: If labels repeat or their count is incorrect.
+            :raises TypeError: If a label is unhashable.
+            """
             if len(dof_list) != len(set(dof_list)):
                 raise ValueError("dof must be unique")
             if len(dof_list) != dim_size:
@@ -203,8 +258,14 @@ class LabelTensor(torch.Tensor):
         Given a list of dof, this method update the internal label
         representation by assigning the dof to the last dimension.
 
-        :param labels: The label(s) to update.
-        :type labels: list
+        The supplied sequence is stored by reference in the last dimension's
+        record; other dimension records are unchanged.
+
+        :param labels: The component labels for the last dimension.
+        :type labels: list[Hashable] | builtins.range
+        :raises ValueError: If labels repeat or their count differs from the
+            last dimension's size.
+        :raises TypeError: If a component label is unhashable.
         """
 
         # Create a dict with labels
@@ -215,36 +276,56 @@ class LabelTensor(torch.Tensor):
 
     def extract(self, labels_to_extract):
         """
-        Extract the subset of the original tensor by returning all the positions
-        corresponding to the passed ``label_to_extract``. If
-        ``label_to_extract`` is a dictionary, the keys are the dimension names
-        and the values are the labels to extract. If a single label or a list
-        of labels is passed, the last dimension is considered.
+        Extract components by label while preserving the tensor's rank.
 
-        :Example:
-            >>> from pina import LabelTensor
-            >>> labels = {1: {'dof': ["a", "b", "c"], 'name': 'space'}}
-            >>> tensor = LabelTensor(torch.rand((2000, 3)), labels)
-            >>> tensor.extract("a")
-            >>> tensor.extract(["a", "b"])
-            >>> tensor.extract({"space": ["a", "b"]})
+        Scalar, list, and tuple requests address the last physical dimension.
+        Dictionary keys instead address stored dimension names. Selections are
+        applied dimension by dimension, preserving the requested label order.
+        Single-label selection uses a slice and may share data storage; multiple
+        labels use advanced indexing. Untouched metadata records are shared.
 
-        :param labels_to_extract: The label(s) to extract.
-        :type labels_to_extract: str | list[str] | tuple[str] | dict
-        :return: The extracted tensor with the updated labels.
+        :param labels_to_extract: The requested component labels. A dictionary
+            maps dimension names to scalar string/integer labels, label lists,
+            or ranges. Each selection must be nonempty and unique. Sequences
+            address the last physical dimension, which must have stored labels.
+        :type labels_to_extract: str | int | list[Hashable] |
+            tuple[Hashable, ...] |
+            dict[Hashable, str | int | list[Hashable] | builtins.range]
+        :raises ValueError: If the request format is unsupported, a dimension
+            name or label is unknown, or selected labels repeat or do not match
+            the extracted dimension size.
+        :raises KeyError: If a last-dimension request has no corresponding
+            stored metadata.
+        :raises IndexError: If a dimension selection is empty.
+        :raises AttributeError: If stored degrees of freedom do not provide an
+            ``index`` method, as with a scalar integer label record.
+        :return: The selected tensor with singleton dimensions retained and
+            updated metadata for the extracted dimensions.
         :rtype: LabelTensor
 
-        :raises TypeError: Labels are not ``str``, ``list[str]`` or ``dict``
-            properly setted.
-        :raises ValueError: Label to extract is not in the labels ``list``.
+        :Example:
+
+            >>> import torch
+            >>> from pina import LabelTensor
+            >>> labels = {1: {"dof": ["a", "b", "c"], "name": "space"}}
+            >>> tensor = LabelTensor(torch.ones(2, 3), labels)
+            >>> tensor.extract("a").shape
+            torch.Size([2, 1])
+            >>> tensor.extract({"space": ["c", "a"]}).labels
+            ['c', 'a']
         """
 
         def get_label_indices(dim_labels, labels_te):
             """Get the indices of the specified labels in the dimension labels.
 
-            :param list dim_labels: The list of dimension labels.
+            :param dim_labels: The stored component labels with an ``index``
+                method.
+            :type dim_labels: list[Hashable] | tuple[Hashable, ...] |
+                builtins.range | str
             :param labels_te: The label(s) to find indices for.
-            :type labels_te: str | list[str]
+            :type labels_te: str | int | list[Hashable] | builtins.range
+            :raises ValueError: If a requested label is absent.
+            :raises IndexError: If the requested sequence is empty.
             :return: The indices or slice for the label(s).
             :rtype: list[int] | slice
             """
@@ -338,18 +419,32 @@ class LabelTensor(torch.Tensor):
     @staticmethod
     def cat(tensors, dim=0):
         """
-        Concatenate a list of tensors along a specified dimension. For more
-        details, see :meth:`torch.cat`.
+        Concatenate tensors along an existing dimension using :func:`torch.cat`.
 
-        :param list[LabelTensor] tensors:
-            :class:`~pina.label_tensor.LabelTensor` instances to concatenate
-        :param int dim: Dimensions on which you want to perform the operation
-            (default is 0)
-        :return: A new :class:`LabelTensor` instance obtained by concatenating
-            the input instances.
+        For multiple inputs, check label consistency on the first tensor's
+        stored dimensions other than ``dim``. Degrees of freedom along a labeled
+        concatenation dimension are joined without uniqueness validation.
 
-        :rtype: LabelTensor
-        :raises ValueError: either number dof or dimensions names differ.
+        :param tensors: The tensors to concatenate. Shapes must agree outside
+            the concatenation dimension. Component labels on that dimension
+            must be stored as lists if it is labeled.
+        :type tensors: list[LabelTensor] | tuple[LabelTensor, ...]
+        :param int dim: The concatenation dimension. Use a nonnegative index:
+            negative indices are passed to PyTorch but are not normalized for
+            label handling. Default is ``0``.
+        :raises RuntimeError: If tensor shapes are incompatible or checked
+            metadata records differ outside the concatenation dimension.
+        :raises KeyError: If an input lacks a stored dimension checked from
+            the first tensor, or lacks labeled concatenation metadata.
+        :raises TypeError: If labeled concatenation tries to join non-list
+            degrees of freedom, such as ranges.
+        :raises IndexError: If ``dim`` is out of range for multiple inputs.
+        :return: The concatenated tensor. An empty input returns an empty list;
+            a single input is returned unchanged, without checking ``dim``.
+            For multiple inputs concatenated on an unlabeled dimension, the
+            first tensor's entire metadata mapping is reused. Otherwise records
+            are shallow-copied and the concatenated label list is new.
+        :rtype: LabelTensor | list[LabelTensor]
         """
 
         if not tensors:
@@ -392,15 +487,24 @@ class LabelTensor(torch.Tensor):
     @staticmethod
     def stack(tensors, dim=0):
         """
-        Stacks a list of tensors along a new dimension. For more details, see
-        :meth:`torch.stack`.
+        Stack multiple tensors along a new dimension using :func:`torch.stack`.
 
-        :param list[LabelTensor] tensors: A list of tensors to stack.
-            All tensors must have the same shape.
-        :param int dim: Dimension along which to stack the tensors. Default is 0.
-        :return: A new :class:`~pina.label_tensor.LabelTensor` instance obtained
-            by stacking the input tensors.
-        :rtype: LabelTensor
+        Shift stored dimension indices at or after the insertion point, sharing
+        their metadata records with the first input. The new axis is unlabeled.
+        Only dimensions stored on the first tensor are checked for matching
+        records on the remaining tensors.
+
+        :param tensors: The tensors to stack, all with the same shape and
+            matching metadata on checked dimensions.
+        :type tensors: list[LabelTensor] | tuple[LabelTensor, ...]
+        :param int dim: The insertion dimension. Negative indices are normalized
+            relative to the output rank. Default is ``0``.
+        :raises IndexError: If ``dim`` is out of range for multiple inputs.
+        :raises RuntimeError: If shapes or checked label records differ.
+        :return: The stacked tensor for multiple inputs, an empty list for no
+            inputs, or the original tensor for a single input. The single-input
+            case does not add an axis or check ``dim``.
+        :rtype: LabelTensor | list[LabelTensor]
         """
         if not tensors:
             return []
@@ -446,8 +550,10 @@ class LabelTensor(torch.Tensor):
         For more details, see :meth:`~torch.Tensor.requires_grad_`.
 
         :param bool mode: A boolean value indicating whether the tensor should
-            track gradients.If `True`, the tensor will track gradients;
-            if `False`, it will not.
+            track gradients. Default is ``True``.
+        :raises RuntimeError: If PyTorch rejects the change, for example when
+            enabling gradients on an integer tensor or changing a non-leaf's
+            gradient flag.
         :return: The :class:`~pina.label_tensor.LabelTensor` itself with the
             updated ``requires_grad`` state and retained labels.
         :rtype: LabelTensor
@@ -460,8 +566,7 @@ class LabelTensor(torch.Tensor):
     @property
     def dtype(self):
         """
-        Give the ``dtype`` of the tensor. For more details, see
-        :meth:`torch.dtype`.
+        Return the tensor's :class:`torch.dtype`.
 
         :return: The data type of the tensor.
         :rtype: torch.dtype
@@ -471,11 +576,32 @@ class LabelTensor(torch.Tensor):
 
     def to(self, *args, **kwargs):
         """
-        Performs Tensor dtype and/or device conversion. For more details, see
-        :meth:`torch.Tensor.to`.
+        Convert the tensor's dtype or device while sharing its label mapping.
 
-        :return: A new :class:`~pina.label_tensor.LabelTensor` instance with the
-            updated dtype and/or device and retained labels.
+        :param tuple[Any, ...] args: Positional options accepted by
+            :meth:`torch.Tensor.to`: a dtype, a device and optional dtype, or
+            another tensor whose dtype and device should be matched. PyTorch's
+            positional ``non_blocking`` and ``copy`` forms are also forwarded.
+        :param dict[str, Any] kwargs: Conversion options accepted by PyTorch:
+
+            * ``device`` (str | torch.device | int | None): The destination.
+              ``None`` keeps the current device. Default is ``None``.
+            * ``dtype`` (torch.dtype | None): The destination type. ``None``
+              keeps the current dtype. Default is ``None``.
+            * ``non_blocking`` (bool): Whether to attempt asynchronous transfer.
+              Default is ``False``.
+            * ``copy`` (bool): Whether to force a copy without a conversion.
+              Default is ``False``.
+            * ``memory_format`` (torch.memory_format): The requested layout.
+              Default is ``torch.preserve_format``.
+
+            These options follow the selected PyTorch overload; not all can be
+            combined with every positional form.
+        :raises TypeError: If PyTorch rejects the arguments or their
+            combination.
+        :return: The converted tensor, or ``self`` when PyTorch needs no
+            conversion and ``copy`` is ``False``. The metadata dictionary is
+            shared with this instance in either case.
         :rtype: LabelTensor
         """
 
@@ -485,11 +611,16 @@ class LabelTensor(torch.Tensor):
 
     def clone(self, *args, **kwargs):
         """
-        Clone the :class:`~pina.label_tensor.LabelTensor`. For more details, see
-        :meth:`torch.Tensor.clone`.
+        Clone the tensor's data and deep-copy its label metadata.
 
-        :return: A new :class:`~pina.label_tensor.LabelTensor` instance with the
-            same data and labels but allocated in a different memory location.
+        :param tuple[Any, ...] args: Positional arguments forwarded to
+            :meth:`torch.Tensor.clone`, which accepts no positional options.
+        :param dict[str, torch.memory_format] kwargs: The ``memory_format``
+            layout option passed to PyTorch. Default is
+            ``torch.preserve_format``.
+        :raises TypeError: If positional options or unsupported keywords are
+            supplied to PyTorch.
+        :return: A differentiable data copy with independently copied metadata.
         :rtype: LabelTensor
         """
 
@@ -500,23 +631,24 @@ class LabelTensor(torch.Tensor):
 
     def append(self, tensor, mode="std"):
         """
-        Appends a given tensor to the current tensor along the last dimension.
-        This method supports two types of appending operations:
+        Append component columns, optionally forming a Cartesian row product.
 
-        1. **Standard append** ("std"): Concatenates the input tensor with the \
-            current tensor along the last dimension.
-        2. **Cross append** ("cross"): Creates a cross-product of the current \
-            tensor and the input tensor.
-
-        :param tensor: The tensor to append to the current tensor.
-        :type tensor: LabelTensor
-        :param mode: The append mode to use. Defaults to ``st``.
-        :type mode: str, optional
-        :return: A new :class:`LabelTensor` instance obtained by appending the 
-            input tensor.
+        :param LabelTensor tensor: The tensor to append. In standard mode,
+            shapes must match outside the last dimension. Cross mode expects
+            two-dimensional tensors of shapes ``(n1, f1)`` and ``(n2, f2)``.
+        :param str mode: The append operation, either ``"std"`` for last-axis
+            concatenation or ``"cross"`` for pairing every row with every other
+            row. Cross mode repeats this tensor's rows for each appended row
+            and retains only last-dimension labels. Default is ``"std"``.
+        :raises ValueError: If ``mode`` is neither ``"std"`` nor ``"cross"``.
+        :raises RuntimeError: If shapes or checked non-concatenated label
+            records are incompatible, or cross-mode repetition fails.
+        :raises KeyError: If an input lacks metadata needed by concatenation.
+        :raises TypeError: If concatenation encounters non-list component
+            labels.
+        :return: The concatenated tensor, with shape ``(n1 * n2, f1 + f2)`` in
+            cross mode. Standard mode follows :meth:`cat` metadata sharing.
         :rtype: LabelTensor
-
-        :raises ValueError: If the mode is not "std" or "cross".
         """
 
         if mode == "std":
@@ -544,14 +676,22 @@ class LabelTensor(torch.Tensor):
     @staticmethod
     def vstack(tensors):
         """
-        Stack tensors vertically. For more details, see :meth:`torch.vstack`.
+        Concatenate tensors along dimension zero using :meth:`cat`.
 
-        :param list of LabelTensor label_tensors: The
-            :class:`~pina.label_tensor.LabelTensor` instances to stack. They
-            need to have equal labels.
-        :return: A new :class:`~pina.label_tensor.LabelTensor` instance obtained
-            by stacking the input tensors vertically.
-        :rtype: LabelTensor
+        Unlike :func:`torch.vstack`, this method does not promote
+        one-dimensional tensors to matrices.
+
+        :param tensors: The tensors to concatenate, with compatible shapes and
+            matching metadata on dimensions other than zero.
+        :type tensors: list[LabelTensor] | tuple[LabelTensor, ...]
+        :raises RuntimeError: If shapes or checked label records are
+            incompatible.
+        :raises KeyError: If an input lacks metadata checked from the first.
+        :raises TypeError: If labeled dimension-zero concatenation encounters
+            non-list component labels.
+        :return: The concatenated tensor, an empty list for no inputs, or the
+            original tensor for one input. Metadata sharing follows :meth:`cat`.
+        :rtype: LabelTensor | list[LabelTensor]
         """
 
         return LabelTensor.cat(tensors, dim=0)
@@ -561,12 +701,19 @@ class LabelTensor(torch.Tensor):
         """
         Update the labels of the tensor based on the index (or list of indices).
 
-        :param index: Index of dof to retain.
-        :type index: int | slice | list[int] | tuple[int] | torch.Tensor
-        :param int dim: Dimension of the indexes in the original tensor.
-        :return: The updated labels for the specified dimension.
-        :rtype: list[int]
-        :raises: ValueError: If the index type is not supported.
+        :param index: The positional selection within the labeled dimension.
+        :type index: int | slice | list[int] | torch.Tensor
+        :param int dim: The dimension index in the original metadata.
+        :raises NotImplementedError: If the index type is unsupported.
+        :raises KeyError: If ``dim`` has no stored metadata.
+        :raises IndexError: If a positional label index is out of range.
+        :raises TypeError: If a tensor index cannot be iterated, including a
+            boolean mask with exactly one selected position after squeezing.
+        :return: The selected component labels. For list-backed labels,
+            positional lists and tensors select entries. For other stored
+            sequences, those indices themselves are returned. Slice selections
+            preserve the stored sequence's slicing result.
+        :rtype: list[Hashable] | builtins.range | Hashable | torch.Tensor
         """
         old_dof = self._labels[dim]["dof"]
         # Handle slicing
@@ -594,20 +741,32 @@ class LabelTensor(torch.Tensor):
 
     def __getitem__(self, index):
         """
-        Override the __getitem__ method to handle the labels of the
-        :class:`~pina.label_tensor.LabelTensor` instance. It first performs
-        __getitem__ operation on the :class:`torch.Tensor` part of the instance,
-        then updates the labels based on the index.
+        Select tensor entries and update supported label metadata.
 
-        :param index: The index used to access the item
-        :type index: int | str | tuple of int  | list ot int | torch.Tensor
-        :return: A new :class:`~pina.label_tensor.LabelTensor` instance obtained
-            `__getitem__` operation on :class:`torch.Tensor` part of the
-            instance, with the updated labels.
+        A string or an all-string list/tuple delegates to :meth:`extract`.
+        Other selections first use PyTorch indexing. Integer indices retain
+        singleton axes on labeled dimensions but remove unlabeled dimensions.
+        Untouched metadata records remain shared with the source.
+
+        :param index: The label selection or PyTorch-style positional selection.
+            Tuples combine indices for successive dimensions. Metadata updates
+            support integers, slices, lists, and tensor indices, not every
+            advanced indexing form accepted by PyTorch.
+        :type index: int | str | slice | list[int] | list[str] | torch.Tensor |
+            tuple[Any, ...]
+        :raises ValueError: If a requested component label is unknown or label
+            extraction rejects the selection.
+        :raises KeyError: If label extraction needs missing metadata.
+        :raises IndexError: If a numeric index is invalid or label extraction
+            requests an empty selection.
+        :raises NotImplementedError: If an indexed labeled dimension uses an
+            unsupported metadata index type, such as an ellipsis.
+        :raises TypeError: If metadata processing cannot iterate a tensor index,
+            including a boolean mask selecting exactly one labeled component.
+        :return: The selected tensor. Basic slices can share data storage;
+            advanced selections follow PyTorch's copying rules. If this tensor
+            has no metadata, no labels are attached to the result.
         :rtype: LabelTensor
-
-        :raises KeyError: If an invalid label index is provided.
-        :raises IndexError: If an invalid index is accessed in the tensor.
         """
 
         # Handle string index
@@ -663,19 +822,28 @@ class LabelTensor(torch.Tensor):
 
     def sort_labels(self, dim=None):
         """
-        Sort the labels along the specified dimension and apply. It applies the
-        same sorting to the tensor part of the instance.
+        Sort component labels and reorder the corresponding tensor dimension.
 
-        :param int dim: The dimension along which to sort the labels.
-            If ``None``, the last dimension is used.
-        :return: A new tensor with sorted labels along the specified dimension.
+        :param dim: The stored dimension index to sort. ``None`` selects the
+            last dimension. Explicit negative indices are not normalized for
+            metadata lookup. Default is ``None``.
+        :type dim: int | None
+        :raises KeyError: If the selected dimension has no stored metadata and
+            its size is not one.
+        :raises IndexError: If the dimension index is outside the tensor shape.
+        :raises TypeError: If the component labels cannot be compared for
+            sorting.
+        :return: The reordered tensor. If the dimension's size is one, return
+            ``self`` unchanged, without looking up its metadata.
         :rtype: LabelTensor
         """
 
         def arg_sort(lst):
             """Return the indices that would sort the list.
 
-            :param list lst: The list to sort.
+            :param lst: The component labels, which must be mutually orderable.
+            :type lst: list[Hashable] | builtins.range | str
+            :raises TypeError: If the labels cannot be compared.
             :return: The indices that sort the list.
             :rtype: list[int]
             """
@@ -695,12 +863,14 @@ class LabelTensor(torch.Tensor):
 
     def __deepcopy__(self, memo):
         """
-        Creates a deep copy of the object. For more details, see
-        :meth:`copy.deepcopy`.
+        Deep-copy the plain tensor data and stored label metadata.
 
-        :param memo: LabelTensor object to be copied.
-        :type memo: LabelTensor
-        :return: A deep copy of the original LabelTensor object.
+        :param dict[int, Any] memo: The copy protocol's object-id mapping;
+            unused. Nested copying does not receive this mapping.
+        :raises RuntimeError: If PyTorch cannot deep-copy the underlying tensor,
+            for example because it is not a leaf tensor.
+        :return: A new instance of the same class with independently copied data
+            and label metadata.
         :rtype: LabelTensor
         """
 
@@ -710,12 +880,21 @@ class LabelTensor(torch.Tensor):
 
     def permute(self, *dims):
         """
-        Permutes the dimensions of the tensor and the associated labels
-        accordingly. For more details, see :meth:`torch.Tensor.permute`.
+        Permute tensor dimensions and remap stored label indices.
 
-        :param dims: The dimensions to permute the tensor to.
-        :type dims: tuple[int] | list[int]
-        :return: A new object with permuted dimensions and reordered labels.
+        :param tuple[list[int] | tuple[int, ...]] dims: The permutation, passed
+            as one list or tuple, such as ``tensor.permute((1, 0))``. Use
+            nonnegative dimension indices. Unlike PyTorch's method, separate
+            positional integers are not supported by this metadata handling.
+        :raises TypeError: If dimensions are passed as separate positional
+            arguments or PyTorch rejects the argument types.
+        :raises RuntimeError: If the permutation has the wrong length or repeats
+            dimensions.
+        :raises IndexError: If a dimension index is out of range.
+        :raises ValueError: If a stored dimension index is absent from the
+            permutation, including a negative alias for that index.
+        :return: A data view with remapped dimension indices. Metadata records
+            and dimension names are shared with the original tensor.
         :rtype: LabelTensor
         """
         # Call the base class permute method
@@ -735,7 +914,8 @@ class LabelTensor(torch.Tensor):
         Detaches the tensor from the computation graph and retains the stored
         labels. For more details, see :meth:`torch.Tensor.detach`.
 
-        :return: A new tensor detached from the computation graph.
+        :return: A tensor detached from the computation graph that shares data
+            storage and, when present, the metadata mapping with this instance.
         :rtype: LabelTensor
         """
 
@@ -749,19 +929,28 @@ class LabelTensor(torch.Tensor):
     @staticmethod
     def summation(tensors):
         """
-        Computes the summation of a list of
-        :class:`~pina.label_tensor.LabelTensor` instances.
+        Sum tensor data and join positional component names with ``"+"``.
 
+        Label equality is not checked. For multiple inputs, accumulate data
+        in place into a zero tensor shaped and typed like the first input.
+        Broadcasting is allowed when it fits that accumulator. Label lists are
+        combined positionally using :func:`zip`, not aligned by label name.
 
-        :param list[LabelTensor] tensors: A list of tensors to sum. All
-            tensors must have the same shape and labels.
-        :return: A new `LabelTensor` containing the element-wise sum of the
-                 input tensors.
+        :param tensors: The tensors to sum. Multiple inputs require iterable
+            string labels on the last dimension. Shapes and dtypes must support
+            accumulation into the first tensor's shape and dtype.
+        :type tensors: list[LabelTensor] | tuple[LabelTensor, ...]
+        :raises ValueError: If there are no inputs, or the combined component
+            labels fail the output constructor's uniqueness or size validation.
+        :raises RuntimeError: If shapes or dtypes do not support accumulation.
+        :raises TypeError: If last-dimension labels are missing, not iterable,
+            or contain non-string values.
+        :return: The elementwise sum with newly joined last-dimension labels.
+            Other dimension records are shallow-copied from the first tensor.
+            The last dimension's name is set to the first tensor's PyTorch
+            ``name`` attribute, usually ``None``, not its stored dimension name.
+            With one input, return that tensor unchanged.
         :rtype: LabelTensor
-
-        :raises ValueError: If the input `tensors` list is empty.
-        :raises RuntimeError: If the tensors have different shapes and/or
-                              mismatched labels.
         """
 
         if not tensors:
@@ -793,13 +982,27 @@ class LabelTensor(torch.Tensor):
 
     def reshape(self, *shape):
         """
-        Override the reshape method to update the labels of the tensor.
-        For more details, see :meth:`torch.Tensor.reshape`.
+        Reshape tensor data with limited last-dimension label propagation.
 
-        :param tuple of int shape: The new shape of the tensor.
-        :return: A new :class:`~pina.label_tensor.LabelTensor` instance with the
-            updated shape and labels.
+        :param shape: The new shape accepted by :meth:`torch.Tensor.reshape`,
+            supplied as positional integers or one list/tuple. One dimension
+            may be ``-1`` for size inference.
+        :type shape: tuple[int, ...] | tuple[list[int] | tuple[int, ...]]
+        :raises RuntimeError: If PyTorch cannot reshape to the requested size.
+        :raises ValueError: If the special propagation path encounters missing
+            last-dimension labels or a label count incompatible with the output.
+        :return: The reshaped tensor, sharing storage when PyTorch can use a
+            view. Metadata is assigned only for the exact positional shape
+            ``(-1, *self.shape[2:])`` when source metadata exists. That path
+            attaches only the last-dimension labels; all other forms return
+            without reconstructing metadata.
         :rtype: LabelTensor
+
+        .. warning::
+
+            Generic reshape results can be label-tensor instances without a
+            stored label mapping. Rewrap them explicitly with valid metadata
+            before using label-dependent methods.
         """
 
         # As for now the reshape method is used only in the context of the

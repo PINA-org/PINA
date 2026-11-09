@@ -15,20 +15,22 @@ class DomainEquationCondition(BaseCondition):
     points where the ``equation`` residual is evaluated and minimized during
     training.
 
+    This condition stores no batches. During data-module setup, the problem
+    replaces it with an :class:`pina.condition.InputEquationCondition` using
+    points previously sampled by
+    :meth:`pina.problem.BaseProblem.discretise_domain`.
+
     :Example:
 
-    >>> from pina.domain import CartesianDomain
-    >>> from pina.equation import Equation
-    >>> from pina.condition import DomainEquationCondition
-
-    >>> # Equation to be satisfied over the domain: # x^2 + y^2 - 1 = 0
-    >>> def dummy_equation(pts):
-    ...     return pts["x"]**2 + pts["y"]**2 - 1
-
-    >>> domain = CartesianDomain({"x": [0, 1], "y": [0, 1]})
-    >>> condition = DomainEquationCondition(
-    ...     domain=domain, equation=Equation(dummy_equation)
-    ... )
+        >>> from pina.domain import CartesianDomain
+        >>> from pina.equation import Equation
+        >>> from pina.condition import DomainEquationCondition
+        >>> def dummy_equation(input_, output_):
+        ...     return output_.extract("u") - input_.extract("x") ** 2
+        >>> domain = CartesianDomain({"x": [0.0, 1.0]})
+        >>> condition = DomainEquationCondition(
+        ...     domain=domain, equation=Equation(dummy_equation)
+        ... )
     """
 
     # Available fields, domain and equation data types
@@ -40,10 +42,13 @@ class DomainEquationCondition(BaseCondition):
         """
         Initialization of the :class:`DomainEquationCondition` class.
 
-        :param DomainInterface | str domain: The domain over which the
-            equation is defined.
-        :param BaseEquation equation: The equation to be satisfied over the
-            specified domain.
+        :param domain: The sampling domain, or its name in the problem's domain
+            mapping. A problem registers domain objects under condition names.
+        :type domain: pina.domain.DomainInterface | str
+        :param pina.equation.BaseEquation equation: The equation to be satisfied
+            over the specified domain.
+        :raises ValueError: If ``domain`` or ``equation`` fails its setter's
+            type validation.
         """
         self.domain = domain
         self.equation = equation
@@ -64,8 +69,9 @@ class DomainEquationCondition(BaseCondition):
 
     def __getitem__(self, idx):
         """
-        Return the data point at the specified index.
+        Reject indexing because this condition stores no batches.
 
+        :param Any idx: The requested index; unused.
         :raises NotImplementedError: Always raised since the data points are not
             stored in a list-like structure and cannot be accessed by index.
         """
@@ -78,12 +84,20 @@ class DomainEquationCondition(BaseCondition):
 
     def store_data(self, **kwargs):
         """
-        Store the domain and the equation for the condition. It sets the
-        attributes ``domain`` and ``equation`` of the condition instance based
-        on the provided keyword arguments.
+        Update the domain and equation from the supplied keyword arguments.
 
-        :param dict kwargs: The keyword arguments containing the data to be
-            stored.
+        Omitted fields remain unchanged. No batches are created.
+
+        :param dict[str, Any] kwargs: Optional replacement fields:
+
+            * ``domain`` (pina.domain.DomainInterface | str): The sampling
+              domain or its registered name.
+            * ``equation`` (pina.equation.BaseEquation): The residual equation.
+
+            Other keywords are ignored. Neither field has a default replacement
+            value; its existing value is retained when omitted.
+        :raises ValueError: If a supplied field fails its setter's type
+            validation.
         """
         # Store only the provided fields as attributes of the condition
         for field in self.__fields__:
@@ -92,11 +106,17 @@ class DomainEquationCondition(BaseCondition):
 
     def materialize(self, ids, device=None, batch_fn=None):
         """
-        Materialize the data points at the given ids.
+        Reject materialization because this condition stores no batches.
 
+        :param Any ids: The requested identifiers; unused.
+        :param device: The requested device; unused. Default is ``None``.
+        :type device: str | torch.device | int | None
+        :param batch_fn: The requested construction override; unused. Default
+            is ``None``.
+        :type batch_fn: Callable | None
         :raises NotImplementedError: Always raised since the data points are
-            not stored in a list-like structure and are sampled from the
-            domain at training time.
+            not stored here. The problem replaces this condition with an
+            input-equation condition after domain discretisation.
         """
         raise NotImplementedError(
             "Data points in a DomainEquationCondition are not stored and are "
@@ -106,22 +126,10 @@ class DomainEquationCondition(BaseCondition):
 
     def evaluate(self, batch, solver):
         """
-        Evaluate the residual of the condition on the given batch using the
-        solver.
+        Reject direct evaluation of a domain-equation condition.
 
-        This method computes the non-aggregated, element-wise residual of the
-        condition. A forward pass of the solver's model is performed on the
-        input samples, and the condition residual is evaluated accordingly.
-
-        The returned tensor is not reduced, preserving the per-sample residual
-        values.
-
-        :param dict batch: The batch containing the data required by the
-            condition evaluation.
-        :param BaseSolver solver: The solver used to perform the forward pass
-            and compute the residual. The solver provides access to the model
-            and its parameters, which may be necessary for evaluating the
-            condition residual.
+        :param Any batch: The supplied batch; unused.
+        :param pina.solver.BaseSolver solver: The supplied solver; unused.
         :raises NotImplementedError: Always raised since any domain-equation
             condition is transformed into an input-equation condition before
             evaluation, and the residual is computed using the input-equation
@@ -140,7 +148,7 @@ class DomainEquationCondition(BaseCondition):
         The equation associated with the condition.
 
         :return: The equation.
-        :rtype: BaseEquation
+        :rtype: pina.equation.BaseEquation
         """
         return self._equation
 
@@ -149,9 +157,10 @@ class DomainEquationCondition(BaseCondition):
         """
         Set the equation associated with this condition.
 
-        :param BaseEquation value: The equation to associate with the condition.
+        :param pina.equation.BaseEquation value: The equation to associate with
+            the condition.
         :raises ValueError: If ``value`` is not an instance of
-            :class:`~pina.equation.base_equation.BaseEquation`.
+            :class:`pina.equation.BaseEquation`.
         """
         # Check consistency
         check_consistency(value, self._avail_equation_cls)
@@ -162,8 +171,8 @@ class DomainEquationCondition(BaseCondition):
         """
         The domain associated with the condition.
 
-        :return: The domain.
-        :rtype: DomainInterface
+        :return: The sampling domain object or its registered name.
+        :rtype: pina.domain.DomainInterface | str
         """
         return self._domain
 
@@ -172,10 +181,10 @@ class DomainEquationCondition(BaseCondition):
         """
         Set the domain associated with this condition.
 
-        :param DomainInterface value: The domain to associate with the
-            condition.
+        :param value: The sampling domain object or its registered name.
+        :type value: pina.domain.DomainInterface | str
         :raises ValueError: If ``value`` is neither a string nor an instance of
-            :class:`~pina.domain.domain_interface.DomainInterface`.
+            :class:`pina.domain.DomainInterface`.
         """
         # Check consistency
         check_consistency(value, self._avail_domain_cls)

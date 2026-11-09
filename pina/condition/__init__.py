@@ -44,6 +44,15 @@ from pina._src.condition.time_series_condition import TimeSeriesCondition
 
 
 def __getattr__(name):
+    """
+    Resolve the deprecated condition factory import.
+
+    :param str name: The requested attribute name. ``"Condition"`` resolves to
+        the legacy factory and emits a :class:`DeprecationWarning`.
+    :raises AttributeError: If ``name`` is not ``"Condition"``.
+    :return: The deprecated condition factory class.
+    :rtype: type[pina._src.condition.condition.Condition]
+    """
     if name == "Condition":
         warnings.warn(
             "Importing 'Condition' from 'pina.condition' is deprecated; use "

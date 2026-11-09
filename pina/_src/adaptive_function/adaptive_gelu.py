@@ -25,11 +25,12 @@ class AdaptiveGELU(BaseAdaptiveFunction):
     parameters controlling output scaling, input scaling, and input shifting,
     respectively.
 
-    The GELU function is defined elementwise as:
+    The GELU function uses the exact, non-approximate PyTorch default and is
+    defined elementwise as:
 
     .. math::
-        \text{GELU}(x)=0.5*x*(1+\text{Tanh}(\sqrt{2 / \pi}*(x+0.044715*x^3)))
-
+        \text{GELU}(x) = \frac{x}{2}
+        \left(1 + \operatorname{erf}\left(\frac{x}{\sqrt{2}}\right)\right)
 
     .. seealso::
 
@@ -64,25 +65,23 @@ class AdaptiveGELU(BaseAdaptiveFunction):
 
         :param alpha: The output scaling parameter of the adaptive function.
             If ``None``, it is initialized to ``1``. Default is ``None``.
-        :type alpha: int | float
+        :type alpha: int | float | None
         :param beta: The input scaling parameter of the adaptive function.
             If ``None``, it is initialized to ``1``. Default is ``None``.
-        :type beta: int | float
+        :type beta: int | float | None
         :param gamma: The input shifting parameter of the adaptive function.
             If ``None``, it is initialized to ``0``. Default is ``None``.
-        :type gamma: int | float
+        :type gamma: int | float | None
         :param fixed: The names of parameters to keep fixed during training.
             These parameters will not be optimized and will have
             ``requires_grad=False``. Available options are ``"alpha"``,
             ``"beta"``, and ``"gamma"``. If ``None``, all parameters are
             trainable. Default is ``None``.
-        :type fixed: str | list[str]
-        :raises ValueError: If alpha, when provided, is not a number.
-        :raises ValueError: If beta, when provided, is not a number.
-        :raises ValueError: If gamma, when provided, is not a number.
-        :raises ValueError: If fixed, when provided, is neither a string nor a
-            list of strings.
-        :raises ValueError: If fixed contains invalid parameter names.
+        :type fixed: str | list[str] | tuple[str, ...] | set[str] | None
+        :raises ValueError: If ``alpha``, ``beta``, or ``gamma`` fails numeric
+            type validation.
+        :raises ValueError: If ``fixed`` is not a string or a list, tuple, or
+            set of strings, or contains invalid parameter names.
         """
         super().__init__(alpha, beta, gamma, fixed)
         self._func = torch.nn.GELU()

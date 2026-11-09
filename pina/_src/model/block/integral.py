@@ -9,20 +9,22 @@ class Integral:
 
     :Example:
 
-        >>> from pina.model.block import Integral
+        >>> import torch
+        >>> from pina._src.model.block.integral import Integral
         >>> integral = Integral("discrete")
         >>> x = torch.tensor([1.0, 2.0, 3.0])
         >>> y = torch.tensor([4.0, 5.0, 6.0])
         >>> idx = [2, 1]
         >>> integral(x, y, idx)
+        tensor([14., 18.])
     """
 
     def __init__(self, param):
         """
-        Initializzation of the :class:`Integral` class.
+        Initialization of the :class:`Integral` class.
 
-        :param param: The type of continuous convolution.
-        :type param: string
+        :param str param: Integration mode, ``"discrete"`` or
+            ``"continuous"``. The continuous routine is not implemented.
         :raises TypeError: If the parameter is neither ``discrete``
             nor ``continuous``.
         """
@@ -37,10 +39,12 @@ class Integral:
         """
         Call the integral function
 
-        :param list args: Arguments for the integral function.
-        :param dict kwds: Keyword arguments for the integral function.
+        :param tuple[Any, ...] args: Positional ``x``, ``y``, and ``idx`` for
+            selected integration routine.
+        :param dict[str, Any] kwds: Named ``x``, ``y``, and ``idx`` arguments.
+        :raises NotImplementedError: If the selected mode is continuous.
         :return: The integral of the input.
-        :rtype: torch.tensor
+        :rtype: torch.Tensor
         """
         return self.make_integral(*args, **kwds)
 
@@ -60,8 +64,11 @@ class Integral:
 
         :param torch.Tensor x: The first input tensor.
         :param torch.Tensor y: The second input tensor.
-        :param list[int] idx: The indices for different strides.
-        :return: The discrete integral.
+        :param idx: Point counts for contiguous stride segments, not indices.
+            Their sum must equal the number of flattened products.
+        :type idx: list[int] | tuple[int, ...]
+        :return: Sum of flattened ``x * y`` in each segment, with shape
+            ``(len(idx),)``. No mesh spacing or quadrature weights are applied.
         :rtype: torch.Tensor
         """
         cs_idxes = self._prepend_zero(torch.cumsum(torch.tensor(idx), 0))
@@ -74,7 +81,8 @@ class Integral:
 
         :param torch.Tensor x: The first input tensor.
         :param torch.Tensor y: The second input tensor.
-        :param list[int] idx: The indices for different strides.
+        :param idx: Point counts for each stride segment.
+        :type idx: list[int] | tuple[int, ...]
         :raises NotImplementedError: The method is not implemented.
         """
         raise NotImplementedError

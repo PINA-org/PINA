@@ -11,12 +11,12 @@ class OptimizerInterface(metaclass=ABCMeta):
     @abstractmethod
     def hook(self, parameters):
         """
-        Execute custom logic associated with the optimizer instance.
+        Initialize the optimizer for the supplied model parameters.
 
-        This method is intended to encapsulate any additional behavior that
-        should be triggered during the optimization process.
-
-        :param dict parameters: The parameters of the model to be optimized.
+        :param parameters: The parameters to optimize, such as the iterator
+            returned by :meth:`torch.nn.Module.parameters`, or parameter-group
+            dictionaries accepted by the concrete backend.
+        :type parameters: Iterable[torch.Tensor] | Iterable[dict[str, Any]]
         """
 
     @property
@@ -25,6 +25,7 @@ class OptimizerInterface(metaclass=ABCMeta):
         """
         The underlying optimizer object.
 
-        :return: The optimizer instance.
+        :return: The backend optimizer, or ``None`` before initialization when
+            the implementation uses deferred construction.
         :rtype: object
         """

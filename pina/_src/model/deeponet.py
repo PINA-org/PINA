@@ -33,7 +33,8 @@ class MIONet(torch.nn.Module):
         """
         Initialization of the :class:`MIONet` class.
 
-        :param dict networks: The neural networks to use as models. The ``dict``
+        :param dict[torch.nn.Module, list[int] | list[str]] networks: The models
+            and nonempty column selections. The ``dict``
             takes as key a neural network, and as value the list of indeces to
             extract from the input variable in the forward pass of the neural
             network. If a ``list[int]`` is passed, the corresponding columns of
@@ -48,19 +49,25 @@ class MIONet(torch.nn.Module):
             partial results from the modules in ``networks``. Available
             aggregators include: sum: ``+``, product: ``*``, mean: ``mean``,
             min: ``min``, max: ``max``. Default is ``*``.
-        :type aggregator: str or Callable
+        :type aggregator: str | Callable
         :param reduction: The reduction to be used to reduce the aggregated
             result of the modules in ``networks`` to the desired output
             dimension. Available reductions include: sum: ``+``, product: ``*``,
             mean: ``mean``, min: ``min``, max: ``max``, identity: "id".
             Default is ``+``.
-        :type reduction: str or Callable
+        :type reduction: str | Callable
         :param bool scale: If ``True``, the final output is scaled before being
             returned in the forward pass. Default is ``True``.
         :param bool translation: If ``True``, the final output is translated
             before being returned in the forward pass.  Default is ``True``.
-        :raises ValueError: If the passed networks have not the same output
-            dimension.
+        :raises ValueError: If argument types, aggregation, or reduction names
+            are unsupported. Output dimensions are not checked at construction.
+
+        .. note::
+
+            Both the scale and translation start at one, including when their
+            training flags are false. False flags create plain tensors rather
+            than registered buffers; they are not moved by ``model.to``.
 
         .. warning::
             No checks are performed in the forward pass to verify if the input
@@ -72,49 +79,11 @@ class MIONet(torch.nn.Module):
             ``list[int]`` can be passed as ``networks`` dict values.
 
         :Example:
-            >>> branch_net1 = FeedForward(input_dimensons=1,
-            ... output_dimensions=10)
-            >>> branch_net2 = FeedForward(input_dimensons=2,
-            ... output_dimensions=10)
-            >>> trunk_net = FeedForward(input_dimensons=1, output_dimensions=10)
-            >>> networks = {branch_net1 : ['x'],
-                            branch_net2 : ['x', 'y'],
-            ...             trunk_net : ['z']}
-            >>> model = MIONet(networks=networks,
-            ...                reduction='+',
-            ...                aggregator='*')
-            >>> model
-            MIONet(
-            (models): ModuleList(
-                (0): FeedForward(
-                (model): Sequential(
-                    (0): Linear(in_features=1, out_features=20, bias=True)
-                    (1): Tanh()
-                    (2): Linear(in_features=20, out_features=20, bias=True)
-                    (3): Tanh()
-                    (4): Linear(in_features=20, out_features=10, bias=True)
-                )
-                )
-                (1): FeedForward(
-                (model): Sequential(
-                    (0): Linear(in_features=2, out_features=20, bias=True)
-                    (1): Tanh()
-                    (2): Linear(in_features=20, out_features=20, bias=True)
-                    (3): Tanh()
-                    (4): Linear(in_features=20, out_features=10, bias=True)
-                )
-                )
-                (2): FeedForward(
-                (model): Sequential(
-                    (0): Linear(in_features=1, out_features=20, bias=True)
-                    (1): Tanh()
-                    (2): Linear(in_features=20, out_features=20, bias=True)
-                    (3): Tanh()
-                    (4): Linear(in_features=20, out_features=10, bias=True)
-                )
-                )
-            )
-            )
+
+            >>> from pina.model import FeedForward, MIONet
+            >>> branch = FeedForward(1, 10)
+            >>> trunk = FeedForward(1, 10)
+            >>> model = MIONet({branch: [0], trunk: [1]})
         """
         super().__init__()
 
@@ -152,9 +121,10 @@ class MIONet(torch.nn.Module):
         Return a dictionary of functions that can be used as aggregators or
         reductions.
 
-        :param dict kwargs: Additional parameters.
-        :return: A dictionary of functions.
-        :rtype: dict
+        :param dict[str, Any] kwargs: Options forwarded to PyTorch reductions,
+            normally ``dim=-1``. Identity ignores them; min/max select values.
+        :return: Symbols mapped to reduction callables, including ``"id"``.
+        :rtype: dict[str, Callable]
         """
         return {
             "+": partial(torch.sum, **kwargs),
@@ -170,7 +140,7 @@ class MIONet(torch.nn.Module):
         Initialize the aggregator.
 
         :param aggregator: The aggregator to be used to aggregate.
-        :type aggregator: str or Callable
+        :type aggregator: str | Callable
         :raises ValueError: If the aggregator is not supported.
         """
         aggregator_funcs = self._symbol_functions(dim=-1)
@@ -189,7 +159,7 @@ class MIONet(torch.nn.Module):
         Initialize the reduction.
 
         :param reduction: The reduction to be used.
-        :type reduction: str or Callable
+        :type reduction: str | Callable
         :raises ValueError: If the reduction is not supported.
         """
         reduction_funcs = self._symbol_functions(dim=-1)
@@ -209,10 +179,13 @@ class MIONet(torch.nn.Module):
 
         :param x: The input tensor.
         :type x: LabelTensor | torch.Tensor
-        :param indeces: The indeces to extract.
+        :param indeces: The nonempty column indices or labels to extract.
         :type indeces: list[int] | list[str]
         :raises RuntimeError: If failing to extract the variables.
         :raises RuntimeError: If failing to extract the right indeces.
+        :raises IndexError: If the selection is empty or an index is out of
+            range.
+        :raises ValueError: If label extraction rejects unknown labels.
         :return: The extracted variables.
         :rtype: LabelTensor | torch.Tensor
         """
@@ -238,9 +211,13 @@ class MIONet(torch.nn.Module):
         """
         Forward pass for the :class:`MIONet` model.
 
-        :param x: The input tensor.
+        :param x: Input of shape ``(n, d)``. String selections require labels;
+            each inner model must return compatible ``(n, width)`` outputs.
         :type x: LabelTensor | torch.Tensor
-        :return: The output tensor.
+        :raises RuntimeError: If network outputs cannot be depth-stacked.
+        :return: Aggregated, reduced, scaled, and translated values. Default
+            operations yield ``(n, 1)``. Symbol reductions append a singleton
+            axis, even for ``"id"``; callable results are not reshaped.
         :rtype: LabelTensor | torch.Tensor
         """
 
@@ -266,7 +243,7 @@ class MIONet(torch.nn.Module):
         The aggregator function.
 
         :return: The aggregator function.
-        :rtype: str or Callable
+        :rtype: Callable
         """
         return self._aggregator
 
@@ -276,7 +253,7 @@ class MIONet(torch.nn.Module):
         The reduction function.
 
         :return: The reduction function.
-        :rtype: str or Callable
+        :rtype: Callable
         """
         return self._reduction
 
@@ -285,8 +262,9 @@ class MIONet(torch.nn.Module):
         """
         The scale factor.
 
-        :return: The scale factor.
-        :rtype: torch.Tensor
+        :return: The one-element scale, initialized to one; a parameter when
+            enabled and an ordinary tensor otherwise.
+        :rtype: torch.Tensor | torch.nn.Parameter
         """
         return self._scale
 
@@ -295,28 +273,30 @@ class MIONet(torch.nn.Module):
         """
         The translation factor.
 
-        :return: The translation factor.
-        :rtype: torch.Tensor
+        :return: The one-element translation, initialized to one even when its
+            training flag is false.
+        :rtype: torch.Tensor | torch.nn.Parameter
         """
         return self._trasl
 
     @property
     def indeces_variables_extracted(self):
         """
-        The input indeces for each model in form of list.
+        The live dictionary-values view of input selections.
 
-        :return: The indeces for each model.
-        :rtype: list
+        :return: Selections in original dictionary order, not a copied list.
+        :rtype: ValuesView[list[int] | list[str]]
         """
         return self._indeces
 
     @property
     def model(self):
         """
-        The models in form of list.
+        Return the stored input selections, despite the property's name.
 
-        :return: The models.
-        :rtype: list[torch.nn.Module]
+        :return: The same selection view as ``indeces_variables_extracted``.
+            Actual networks are registered in ``models`` instead.
+        :rtype: ValuesView[list[int] | list[str]]
         """
         return self._indeces
 
@@ -380,12 +360,12 @@ class DeepONet(MIONet):
             partial results from the modules in ``networks``. Available
             aggregators include: sum: ``+``, product: ``*``, mean: ``mean``,
             min: ``min``, max: ``max``. Default is ``*``.
-        :type aggregator: str or Callable
+        :type aggregator: str | Callable
         :param reduction: The reduction to be used to reduce the aggregated
             result of the modules in ``networks`` to the desired output
             dimension. Available reductions include: sum: ``+``, product: ``*``,
             mean: ``mean``, min: ``min``, max: ``max``. Default is ``+``.
-        :type reduction: str or Callable
+        :type reduction: str | Callable
         :param bool scale: If ``True``, the final output is scaled before being
             returned in the forward pass. Default is ``True``.
         :param bool translation: If ``True``, the final output is translated
@@ -411,36 +391,11 @@ class DeepONet(MIONet):
             :class:`torch.Tensor`, only a ``list[int]`` can be passed.
 
         :Example:
-            >>> branch_net = FeedForward(input_dimensons=1,
-            ... output_dimensions=10)
-            >>> trunk_net = FeedForward(input_dimensons=1, output_dimensions=10)
-            >>> model = DeepONet(branch_net=branch_net,
-            ...                  trunk_net=trunk_net,
-            ...                  input_indeces_branch_net=['x'],
-            ...                  input_indeces_trunk_net=['t'],
-            ...                  reduction='+',
-            ...                  aggregator='*')
-            >>> model
-            DeepONet(
-            (trunk_net): FeedForward(
-                (model): Sequential(
-                (0): Linear(in_features=1, out_features=20, bias=True)
-                (1): Tanh()
-                (2): Linear(in_features=20, out_features=20, bias=True)
-                (3): Tanh()
-                (4): Linear(in_features=20, out_features=10, bias=True)
-                )
-            )
-            (branch_net): FeedForward(
-                (model): Sequential(
-                (0): Linear(in_features=1, out_features=20, bias=True)
-                (1): Tanh()
-                (2): Linear(in_features=20, out_features=20, bias=True)
-                (3): Tanh()
-                (4): Linear(in_features=20, out_features=10, bias=True)
-                )
-            )
-            )
+
+            >>> from pina.model import DeepONet, FeedForward
+            >>> model = DeepONet(
+            ...     FeedForward(1, 10), FeedForward(1, 10), [0], [1]
+            ... )
         """
         networks = {
             branch_net: input_indeces_branch_net,
@@ -458,9 +413,10 @@ class DeepONet(MIONet):
         """
         Forward pass for the :class:`DeepONet` model.
 
-        :param x: The input tensor.
+        :param x: Input of shape ``(n, d)`` with columns selected by the branch
+            and trunk specifications. Label selections require labeled input.
         :type x: LabelTensor | torch.Tensor
-        :return: The output tensor.
+        :return: The MIONet aggregation/reduction result, normally ``(n, 1)``.
         :rtype: LabelTensor | torch.Tensor
         """
         return super().forward(x)

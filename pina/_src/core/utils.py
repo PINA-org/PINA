@@ -12,16 +12,22 @@ def custom_warning_format(
     message, category, filename, lineno, file=None, line=None
 ):
     """
-    Custom warning formatting function.
+    Format a warning using its filename, category name, and message.
 
-    :param str message: The warning message.
-    :param Warning category: The warning category.
-    :param str filename: The filename where the warning is raised.
-    :param int lineno: The line number where the warning is raised.
-    :param str file: The file object where the warning is raised.
-        Default is None.
-    :param int line: The line where the warning is raised.
-    :return: The formatted warning message.
+    :param message: The warning message or warning instance.
+    :type message: str | Warning
+    :param type[Warning] category: The warning category class.
+    :param str filename: The filename included in the formatted warning.
+    :param int lineno: The source line number; unused.
+    :param file: The optional output stream; unused. ``None`` does not select
+        any output stream because this function only formats text. Default is
+        ``None``.
+    :type file: TextIO | None
+    :param line: The optional source text; unused, including when ``None``.
+        Default is ``None``.
+    :type line: str | None
+    :return: The string ``"filename: CategoryName: message\\n"``. No line number
+        or source text is included, and no output is written here.
     :rtype: str
     """
     return f"{filename}: {category.__name__}: {message}\n"
@@ -35,17 +41,29 @@ def check_consistency(object_, object_instance, subclass=False):
     class or, if ``subclass=True``, whether it is a subclass of the specified
     class.
 
-    :param object: The object to check.
-    :type object: Iterable | Object
-    :param Object object_instance: The expected parent class.
-    :param bool subclass: If True, checks whether ``object_`` is a subclass
+    Lists, sets, and tuples are checked element by element at one level. Other
+    objects, including other iterables, are checked as single values. Empty
+    supported collections pass without checking any elements. Instance mode
+    rejects class objects even when the expected type would otherwise allow
+    them.
+
+    :param Any object_: The value, class, or supported collection to check.
+    :param object_instance: The expected class, tuple of accepted classes, or
+        PEP 604 union supported by Python's instance/subclass checks.
+    :type object_instance: type | tuple[type | types.UnionType, ...] |
+        types.UnionType
+    :param bool subclass: If ``True``, check whether each value is a subclass
         of ``object_instance`` instead of an instance. Default is ``False``.
-    :raises ValueError: If ``object_`` does not inherit from ``object_instance``
-        as expected.
+    :raises ValueError: If a checked value has the wrong instance/subclass type,
+        an instance is supplied in subclass mode, or a class is supplied in
+        instance mode.
+    :raises TypeError: If the expected class specification is invalid for
+        :func:`isinstance` or :func:`issubclass` when those checks are reached.
 
     :Example:
 
         >>> from pina import LabelTensor
+        >>> from pina.utils import check_consistency
         >>> import torch
         >>> tensor = LabelTensor(torch.randn(3, 2), labels=["x", "y"])
         >>> check_consistency(tensor, LabelTensor)
@@ -95,14 +113,19 @@ def check_consistency(object_, object_instance, subclass=False):
 
 def labelize_forward(forward, input_variables, output_variables):
     """
-    Decorator to enable or disable the use of
-    :class:`~pina.label_tensor.LabelTensor` during the forward pass.
+    Wrap a forward callable with label-based input and output handling.
+
+    Inputs are always extracted in the requested variable order; this wrapper
+    does not toggle label handling off. The forward result is cast to
+    :class:`pina.LabelTensor` and its last-dimension labels are assigned. The
+    wrapper does not preserve the original function's metadata or signature.
 
     :param Callable forward: The forward function of a :class:`torch.nn.Module`.
-    :param list[str] input_variables: The names of the input variables of a
-        :class:`~pina.problem.base_problem.BaseProblem`.
-    :param list[str] output_variables: The names of the output variables of a
-        :class:`~pina.problem.base_problem.BaseProblem`.
+    :param list[str] input_variables: The input column names, in the order
+        expected by the forward callable. Nonempty names select those columns;
+        an empty list fails during extraction.
+    :param list[str] output_variables: The unique output column names. Their
+        count must match the last dimension of the forward result.
     :return: The decorated forward function.
     :rtype: Callable
     """
@@ -111,14 +134,19 @@ def labelize_forward(forward, input_variables, output_variables):
         """
         Decorated forward function.
 
-        :param LabelTensor x: The labelized input of the forward pass of an
-            instance of :class:`torch.nn.Module`.
-        :param Iterable args: Additional positional arguments passed to
-            ``forward`` method.
-        :param dict kwargs: Additional keyword arguments passed to
-            ``forward`` method.
-        :return: The labelized output of the forward pass of an instance of
-            :class:`torch.nn.Module`.
+        :param LabelTensor x: The labeled input providing the selected columns.
+        :param tuple[Any, ...] args: Additional positional arguments forwarded
+            unchanged to the wrapped callable.
+        :param dict[str, Any] kwargs: Additional keyword arguments forwarded
+            unchanged to the wrapped callable; their meaning depends on it.
+        :raises AttributeError: If the input has no ``extract`` method or the
+            forward result has no tensor ``as_subclass`` method.
+        :raises ValueError: If selected labels are unknown or output labels
+            repeat or have an incompatible count.
+        :raises KeyError: If input selection needs missing label metadata.
+        :raises IndexError: If the input selection is empty.
+        :return: The forward result cast to a labeled tensor, with the requested
+            last-dimension labels and its autograd connection retained.
         :rtype: LabelTensor
         """
         x = x.extract(input_variables)
@@ -138,14 +166,23 @@ def merge_tensors(tensors):
     single :class:`~pina.label_tensor.LabelTensor` tensor, by applying
     iteratively the cartesian product.
 
-    :param list[LabelTensor] tensors: The list of tensors to merge.
+    :param tensors: The nonempty sequence of two-dimensional tensors to merge.
+        For shapes ``(Ni, Fi)``, the result has ``product(Ni)`` rows and
+        ``sum(Fi)`` columns. Only last-dimension labels are propagated by the
+        pairwise merges.
+    :type tensors: list[LabelTensor] | tuple[LabelTensor, ...]
     :raises ValueError: If the list of tensors is empty.
-    :return: The merged tensor.
+    :raises RuntimeError: If tensors cannot be repeated or concatenated with the
+        required shapes.
+    :raises TypeError: If concatenation cannot combine their component labels.
+    :return: The Cartesian-product tensor, with columns in input sequence order.
+        A single input is returned unchanged.
     :rtype: LabelTensor
 
     :Example:
 
         >>> from pina import LabelTensor
+        >>> from pina.utils import merge_tensors
         >>> import torch
         >>> t1 = LabelTensor(torch.tensor([[1.0], [2.0]]), labels=["x"])
         >>> t2 = LabelTensor(torch.tensor([[3.0], [4.0]]), labels=["y"])
@@ -164,9 +201,13 @@ def merge_two_tensors(tensor1, tensor2):
     :class:`~pina.label_tensor.LabelTensor` tensor, by applying the cartesian
     product.
 
-    :param LabelTensor tensor1: The first tensor to merge.
-    :param LabelTensor tensor2: The second tensor to merge.
-    :return: The merged tensor.
+    :param LabelTensor tensor1: The first tensor, with shape ``(n1, f1)``.
+    :param LabelTensor tensor2: The second tensor, with shape ``(n2, f2)``.
+    :raises RuntimeError: If repetition or concatenation rejects the shapes.
+    :raises TypeError: If concatenation cannot combine the component labels.
+    :return: The merged tensor with shape ``(n1 * n2, f1 + f2)``. Rows of the
+        first tensor repeat for each row of the second. Only their last-axis
+        labels are carried into the result.
     :rtype: LabelTensor
     """
     n1 = tensor1.shape[0]
@@ -181,17 +222,24 @@ def merge_two_tensors(tensor1, tensor2):
 
 def torch_lhs(n, dim):
     """
-    The Latin Hypercube Sampling torch routine, sampling in :math:`[0, 1)`$.
+    Sample a Latin hypercube in :math:`(0, 1]` using PyTorch randomness.
 
-    :param int n: The number of points to sample.
-    :param int dim: The number of dimensions of the sampling space.
-    :raises TypeError: If `n` or `dim` are not integers.
-    :raises ValueError: If `dim` is less than 1.
-    :return: The sampled points.
-    :rtype: torch.tensor
+    Each coordinate dimension independently permutes the ``n`` equal strata and
+    subtracts uniform random offsets from their upper endpoints. Allocations use
+    PyTorch's default device and floating dtype.
+
+    :param int n: The number of points to sample. Zero returns an empty tensor.
+    :param int dim: The number of coordinate dimensions, at least one.
+    :raises TypeError: If ``n`` or ``dim`` is not an integer.
+    :raises ValueError: If ``dim`` is less than one.
+    :raises RuntimeError: If ``n`` is negative and tensor allocation rejects it.
+    :return: The sampled coordinates with shape ``(n, dim)``. Upper stratum
+        endpoints can be included; lower endpoints are excluded by the formula.
+    :rtype: torch.Tensor
 
     :Example:
 
+        >>> from pina._src.core.utils import torch_lhs
         >>> samples = torch_lhs(10, 2)
         >>> samples.shape
         torch.Size([10, 2])
@@ -223,10 +271,11 @@ def torch_lhs(n, dim):
 
 def is_function(f):
     """
-    Check if the given object is a function or a lambda.
+    Check whether an object is callable.
 
-    :param Object f: The object to be checked.
-    :return: ``True`` if ``f`` is a function, ``False`` otherwise.
+    :param Any f: The object to check, including functions, classes, or objects
+        implementing ``__call__``.
+    :return: The result of :func:`callable`.
     :rtype: bool
     """
     return callable(f)
@@ -234,14 +283,19 @@ def is_function(f):
 
 def chebyshev_roots(n):
     """
-    Compute the roots of the Chebyshev polynomial of degree ``n``.
+    Compute sorted roots of the first-kind Chebyshev polynomial of degree ``n``.
 
-    :param int n: The number of roots to return.
-    :return: The roots of the Chebyshev polynomials.
+    :param int n: The number of roots. Zero produces an empty tensor.
+        Integrality is assumed rather than explicitly validated.
+    :raises RuntimeError: If a negative ``n`` makes :func:`torch.arange` fail.
+    :return: The roots in ascending order, with shape ``(n,)`` for integral
+        ``n``. Values lie inside ``(-1, 1)`` up to floating-point rounding and
+        use PyTorch's default floating dtype and allocation device.
     :rtype: torch.Tensor
 
     :Example:
 
+        >>> from pina._src.core.utils import chebyshev_roots
         >>> roots = chebyshev_roots(5)
         >>> roots.shape
         torch.Size([5])
@@ -257,9 +311,15 @@ def check_positive_integer(value, strict=True):
     Check if the value is a positive integer.
 
     :param int value: The value to check.
-    :param bool strict: If True, the value must be strictly positive.
-        Default is True.
-    :raises AssertionError: If the value is not a positive integer.
+    :param bool strict: Whether to require ``value > 0``. If ``False``, zero is
+        also allowed. Default is ``True``.
+    :raises AssertionError: If ``value`` is not an integer, is negative, or is
+        zero while ``strict`` is true.
+
+    .. note::
+
+        The check uses :func:`isinstance` with ``int``, so booleans count as
+        integers. Assertions are disabled when Python runs with optimization.
     """
     if strict:
         assert (
@@ -275,17 +335,22 @@ def in_range(value, range_vals, strict=True):
     """
     Check if a value is within a specified range.
 
-    :param int value: The integer value to check.
-    :param list[int] range_vals: A list of two integers representing the range
-        limits. The first element specifies the lower bound, and the second
-        specifies the upper bound.
-    :param bool strict: If True, the value must be strictly positive.
-        Default is True.
-    :return: True if the value satisfies the range condition, False otherwise.
+    :param value: The numeric value to compare with the bounds.
+    :type value: int | float
+    :param list[int | float] range_vals: Exactly two numeric bounds, lower then
+        upper. Bound ordering is not validated.
+    :param bool strict: Whether both comparisons exclude the endpoints. If
+        ``False``, both endpoints are included. Default is ``True``.
+    :raises ValueError: If numeric type validation fails for the value or
+        bounds.
+    :raises AssertionError: If ``range_vals`` is not a list of length two.
+    :return: Whether the value is strictly between the bounds, or within the
+        closed interval when ``strict`` is ``False``.
     :rtype: bool
 
     :Example:
 
+        >>> from pina._src.core.utils import in_range
         >>> in_range(5, [0, 10])
         True
         >>> in_range(10, [0, 10], strict=False)

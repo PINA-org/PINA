@@ -23,6 +23,14 @@ _DEPRECATED_IMPORTS = {"AbstractProblem": "BaseProblem"}
 
 
 def __getattr__(name):
+    """
+    Resolve the deprecated abstract-problem name.
+
+    :param str name: The requested attribute name.
+    :return: :class:`BaseProblem` for ``"AbstractProblem"``, emitting
+        ``DeprecationWarning``. Unrecognized names return ``None``.
+    :rtype: type | None
+    """
     if name in _DEPRECATED_IMPORTS:
 
         warnings.warn(

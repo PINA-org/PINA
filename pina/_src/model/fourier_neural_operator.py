@@ -31,13 +31,14 @@ class FourierIntegralKernel(torch.nn.Module):
     :Example:
 
         >>> import torch
-        >>> from pina.model._src.model.fourier_neural_operator import (
+        >>> from pina.model import (
         ...     FourierIntegralKernel
         ... )
         >>> model = FourierIntegralKernel(
-        ...     input_numb_fields=2, output_numb_fields=2, n_modes=16
+        ...     input_numb_fields=2, output_numb_fields=2, n_modes=16,
+        ...     dimensions=1
         ... )
-        >>> x = torch.randn(10, 2, 50)
+        >>> x = torch.randn(10, 50, 2)
         >>> out = model(x)
     """
 
@@ -58,28 +59,44 @@ class FourierIntegralKernel(torch.nn.Module):
         Initialization of the :class:`FourierIntegralKernel` class.
 
         :param int input_numb_fields: The number of input fields.
-        :param int output_numb_fields: The number of output fields.
-        :param n_modes: The number of modes.
-        :type n_modes: int | list[int]
+        :param int output_numb_fields: Requested output width. The current
+            construction does not use it: the final width is ``layers[-1]``.
+        :param n_modes: Retained modes per spatial axis, as a scalar, an
+            axis-wise list, or a list of axis-wise lists per block. Counts must
+            fit the padded Fourier grid. Tuples are not normalized like lists.
+        :type n_modes: int | list[int] | list[list[int]] | tuple[int, ...]
         :param int dimensions: The number of dimensions. It can be set to ``1``,
             ``2``, or ``3``. Default is ``3``.
-        :param int padding: The padding size. Default is ``8``.
-        :param str padding_type: The padding strategy. Default is ``constant``.
+        :param padding: Right-side padding per axis, in PyTorch's reversed
+            spatial-axis order. Default is ``8``.
+        :type padding: int | list[int] | tuple[int, ...]
+        :param str padding_type: PyTorch padding mode, such as ``"constant"``,
+            ``"reflect"``, ``"replicate"``, or ``"circular"``.
+            Default is ``"constant"``.
         :param int inner_size: The inner size. Default is ``20``.
         :param int n_layers: The number of layers. Default is ``2``.
-        :param func: The activation function. If a list is passed, it must have
-            the same length as ``n_layers``. If a single function is passed, it
-            is used for all layers, except for the last one.
+        :param func: No-argument activation classes. A list must match the
+            number of block widths and is mutated by appending Identity; its
+            original entries activate all blocks. A single class activates all
+            except the final block, which uses Identity.
             Default is :class:`torch.nn.Tanh`.
-        :type func: torch.nn.Module | list[torch.nn.Module]
-        :param list[int] layers: The list of the dimension of inner layers.
+        :type func: type[torch.nn.Module] | list[type[torch.nn.Module]]
+        :param layers: The output widths of successive Fourier blocks.
             If ``None``, ``n_layers`` of dimension ``inner_size`` are used.
             Otherwise, it overrides the values passed to ``n_layers`` and
             ``inner_size``. Default is ``None``.
+        :type layers: list[int] | tuple[int, ...] | None
         :raises RuntimeError: If the number of layers and functions are
             inconsistent.
-        :raises RunTimeError: If the number of layers and modes are
+        :raises RuntimeError: If the number of layers and modes are
             inconsistent.
+        :raises ValueError: If argument types fail validation.
+        :raises NotImplementedError: If dimensions are not one, two, or three.
+
+        .. note::
+
+            Although tuples pass width validation, construction concatenates
+            ``layers`` with lists and therefore requires a list in practice.
         """
         super().__init__()
 
@@ -159,13 +176,18 @@ class FourierIntegralKernel(torch.nn.Module):
         :param x: The input tensor for performing the computation. Depending
             on the ``dimensions`` in the initialization, it expects a tensor
             with the following shapes:
+
             * 1D tensors: ``[batch, X, channels]``
             * 2D tensors: ``[batch, X, Y, channels]``
             * 3D tensors: ``[batch, X, Y, Z, channels]``
         :type x: torch.Tensor | LabelTensor
-        :raises Warning: If a LabelTensor is passed as input.
-        :return: The output tensor.
+        :return: Plain tensor with the input spatial extents and final channel
+            width ``layers[-1]`` (or ``inner_size`` with default widths).
         :rtype: torch.Tensor
+
+        .. warning::
+
+            Labeled input emits a warning and is cast to a plain tensor.
         """
         if isinstance(x, LabelTensor):
             warnings.warn(
@@ -209,15 +231,17 @@ class FourierIntegralKernel(torch.nn.Module):
 
 
         :param int dimensions: The number of dimensions.
-        :param int padding: The padding size.
+        :param padding: The padding size or axis-wise sizes.
+        :type padding: int | list[int] | tuple[int, ...]
         :param str padding_type: The padding strategy.
         :param int inner_size: The inner size.
         :param int n_layers: The number of layers.
-        :param func: The activation function.
-        :type func: torch.nn.Module | list[torch.nn.Module]
-        :param list[int] layers: The list of the dimension of inner layers.
+        :param func: The activation classes.
+        :type func: type[torch.nn.Module] | list[type[torch.nn.Module]]
+        :param layers: Explicit block widths, or ``None`` for inferred widths.
+        :type layers: list[int] | tuple[int, ...] | None
         :param n_modes: The number of modes.
-        :type n_modes: int | list[int]
+        :type n_modes: int | list[int] | list[list[int]] | tuple[int, ...]
         :raises ValueError: If the input is not consistent.
         """
         check_consistency(dimensions, int)
@@ -247,7 +271,8 @@ class FourierIntegralKernel(torch.nn.Module):
         :raises NotImplementedError: If the number of dimensions is not 1, 2,
             or 3.
         :return: The Fourier Block class.
-        :rtype: FourierBlock1D | FourierBlock2D | FourierBlock3D
+        :rtype: type[FourierBlock1D] | type[FourierBlock2D] |
+            type[FourierBlock3D]
         """
         if dimensions == 1:
             return FourierBlock1D
@@ -280,10 +305,10 @@ class FNO(KernelNeuralOperator):
         >>> import torch
         >>> from pina.model import FNO, FeedForward
         >>> lifting_net = FeedForward(input_dimensions=3, output_dimensions=20)
-        >>> projecting_net = FeedForward(input_dimensions=20, output_dimensions=1)
+        >>> projecting_net = FeedForward(20, 1)
         >>> model = FNO(
         ...     lifting_net=lifting_net, projecting_net=projecting_net,
-        ...     n_modes=16, dimensions=2
+        ...     n_modes=4, dimensions=2
         ... )
         >>> x = torch.randn(10, 2, 50, 3)
         >>> out = model(x)
@@ -303,27 +328,45 @@ class FNO(KernelNeuralOperator):
         layers=None,
     ):
         """
+        Initialization of the :class:`FNO` class.
+
         :param torch.nn.Module lifting_net: The lifting neural network mapping
-            the input to its hidden dimension.
+            the input to its hidden dimension. It must have parameters; a
+            random CPU tensor shaped like its first parameter probes its output
+            width during construction, without disabling training or autograd.
         :param torch.nn.Module projecting_net: The projection neural network
             mapping the hidden representation to the output function.
-        :param n_modes: The number of modes.
-        :type n_modes: int | list[int]
+        :param n_modes: Scalar, axis-wise, or per-block axis-wise mode counts,
+            as for :class:`FourierIntegralKernel`.
+        :type n_modes: int | list[int] | list[list[int]] | tuple[int, ...]
         :param int dimensions: The number of dimensions. It can be set to ``1``,
             ``2``, or ``3``. Default is ``3``.
-        :param int padding: The padding size. Default is ``8``.
-        :param str padding_type: The padding strategy. Default is ``constant``.
+        :param padding: Right-side padding in reversed spatial-axis order.
+            Default is ``8``.
+        :type padding: int | list[int] | tuple[int, ...]
+        :param str padding_type: PyTorch padding mode.
+            Default is ``"constant"``.
         :param int inner_size: The inner size. Default is ``20``.
         :param int n_layers: The number of layers. Default is ``2``.
-        :param func: The activation function. If a list is passed, it must have
-            the same length as ``n_layers``. If a single function is passed, it
-            is used for all layers, except for the last one.
+        :param func: Activation classes for the Fourier blocks. A list must
+            match the block count and is mutated by appending Identity. A
+            single class uses Identity in the last block instead.
             Default is :class:`torch.nn.Tanh`.
-        :type func: torch.nn.Module | list[torch.nn.Module]
-        :param list[int] layers: The list of the dimension of inner layers.
+        :type func: type[torch.nn.Module] | list[type[torch.nn.Module]]
+        :param layers: The output widths of successive Fourier blocks.
             If ``None``, ``n_layers`` of dimension ``inner_size`` are used.
             Otherwise, it overrides the values passed to ``n_layers`` and
             ``inner_size``. Default is ``None``.
+        :type layers: list[int] | None
+        :raises ValueError: If kernel argument types fail validation.
+        :raises RuntimeError: If activation or mode counts mismatch block
+            widths.
+        :raises NotImplementedError: If dimensions are not one, two, or three.
+
+        .. note::
+
+            The projection must accept the final block width. Its parameter
+            shape does not set the kernel's output width.
         """
         lifting_operator_out = lifting_net(
             torch.rand(size=next(lifting_net.parameters()).size())
@@ -347,7 +390,7 @@ class FNO(KernelNeuralOperator):
 
     def forward(self, x):
         """
-        Forward pass for the :class:`FourierNeuralOperator` model.
+        Forward pass for the :class:`FNO` model.
 
         The ``lifting_net`` maps the input to the hidden dimension.
         Then, several layers of Fourier blocks are applied. Finally, the
@@ -363,7 +406,8 @@ class FNO(KernelNeuralOperator):
             * 3D tensors: ``[batch, X, Y, Z, channels]``
 
         :type x: torch.Tensor | LabelTensor
-        :return: The output tensor.
+        :return: Plain tensor with input spatial extents and output channels
+            determined by the projection network. Input labels are discarded.
         :rtype: torch.Tensor
         """
 

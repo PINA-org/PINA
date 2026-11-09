@@ -66,11 +66,11 @@ class CompetitivePhysicsInformedSolver(PhysicsInformedMixin, MultiModelSolver):
     :Example:
 
         >>> from pina.solver import CompetitivePhysicsInformedSolver
-        >>> from pina.problem import PoissonProblem
+        >>> from pina.problem.zoo import Poisson2DSquareProblem
         >>> # solver = CompetitivePhysicsInformedSolver(
         >>> #     problem=problem, model=model
         >>> # )
-        >>> # solver.train()
+        >>> # Train with pina.Trainer(solver=solver, ...).train().
     """
 
     # Accepted conditions types for this solver
@@ -97,29 +97,43 @@ class CompetitivePhysicsInformedSolver(PhysicsInformedMixin, MultiModelSolver):
 
         :param BaseProblem problem: The problem to be solved.
         :param torch.nn.Module model: The model used by the solver.
-        :param torch.nn.Module discriminator: The discriminator used by the
+        :param discriminator: The discriminator used by the
             solver. If ``None``, a deep copy of the model is used as
             discriminator. Default is ``None``.
-        :param TorchOptimizer optimizer_model: The optimizer of the main model.
+        :type discriminator: torch.nn.Module | None
+        :param optimizer_model: The optimizer of the main model.
             If ``None``, the ``torch.optim.Adam`` optimizer with a learning rate
             of ``0.001`` is used. Default is ``None``.
-        :param TorchOptimizer optimizer_discriminator: The optimizer of the
+        :type optimizer_model: pina.optim.TorchOptimizer | None
+        :param optimizer_discriminator: The optimizer of the
             discriminator. If ``None``, the ``torch.optim.Adam`` optimizer with
             a learning rate of ``0.001`` is used. Default is ``None``.
-        :param TorchScheduler scheduler_model: The scheduler of the main model.
+        :type optimizer_discriminator: pina.optim.TorchOptimizer | None
+        :param scheduler_model: The scheduler of the main model.
             If ``None``, the ``torch.optim.lr_scheduler.ConstantLR`` scheduler
             with a factor of ``1.0`` is used. Default is ``None``.
-        :param TorchScheduler scheduler_discriminator: The scheduler of the
+        :type scheduler_model: pina.optim.TorchScheduler | None
+        :param scheduler_discriminator: The scheduler of the
             discriminator.
             If ``None``, the ``torch.optim.lr_scheduler.ConstantLR`` scheduler
             with a factor of ``1.0`` is used. Default is ``None``.
-        :param BaseWeighting weighting: The weighting strategy used to combine
+        :type scheduler_discriminator: pina.optim.TorchScheduler | None
+        :param weighting: The weighting strategy used to combine
             condition losses. If ``None``, no weighting is applied. Default is
             ``None``.
+        :type weighting: pina.weighting.BaseWeighting | None
         :param loss: The loss function used to compute residual losses.
             If ``None``, :class:`torch.nn.MSELoss` is used. Default is ``None``.
-        :raises ValueError: If ``weight_function`` is not a ``torch.nn.Module``.
-        :raises ValueError: If not all domains have been discretised.
+        :type loss: torch.nn.modules.loss._Loss | pina.loss.BaseDualLoss | None
+        :raises ValueError: If the model/discriminator or any base solver
+            component fails validation, including incomplete wrapper pairs.
+
+        .. note::
+
+            Default optimizers are created only if both optimizer arguments
+            are ``None``; otherwise both wrappers must be supplied. The same
+            rule applies independently to the scheduler pair. Domains need not
+            be discretised until trainer setup.
         """
         # Initialize the discriminator if not provided
         if discriminator is None:
@@ -159,10 +173,12 @@ class CompetitivePhysicsInformedSolver(PhysicsInformedMixin, MultiModelSolver):
 
     def training_step(self, batch, batch_idx):
         """
-        Solver training step.
+        Minimize model loss, then maximize discriminator loss on the same batch.
 
-        :param list[tuple[str, dict]] batch: A batch of data. Each element is a
-            tuple containing a condition name and a dictionary of points.
+        Recomputes residuals after the model step and steps each scheduler per
+        batch. Model and discriminator gradients are not explicitly isolated.
+
+        :param list[tuple[str, dict[str, Any]]] batch: Condition/data pairs.
         :param int batch_idx: The index of the current batch.
         :return: The loss of the training step.
         :rtype: torch.Tensor
@@ -200,9 +216,10 @@ class CompetitivePhysicsInformedSolver(PhysicsInformedMixin, MultiModelSolver):
         Forward pass through the model.
 
         :param x: The input data.
-        :type x: torch.Tensor | LabelTensor | Data | Graph
+        :type x: torch.Tensor | LabelTensor | torch_geometric.data.Data |
+            pina.graph.Graph
         :return: The output of the model.
-        :rtype: torch.Tensor | LabelTensor | Data | Graph
+        :rtype: torch.Tensor | LabelTensor
         """
         return self.model(x)
 
@@ -210,11 +227,13 @@ class CompetitivePhysicsInformedSolver(PhysicsInformedMixin, MultiModelSolver):
         """
         Compute the scalar loss for a given condition and its data.
 
-        :param BaseCondition condition: The condition for which to compute the
+        :param pina.condition.BaseCondition condition: The condition computing
             loss.
-        :param dict data: The data corresponding to the condition.
+        :param dict[str, Any] data: The condition payload, with labeled input
+            points. The input is cloned before condition evaluation.
         :param int batch_idx: The index of the current batch.
-        :return: The scalar loss for the condition.
+        :return: The loss after multiplying residuals by discriminator outputs,
+            applying regularization, and using the saved reduction.
         :rtype: torch.Tensor
         """
         # Clone the input tensor if it exists to avoid in-place modifications

@@ -14,6 +14,7 @@ class CartesianDomain(BaseDomain):
 
     :Example:
 
+        >>> from pina.domain import CartesianDomain
         >>> cartesian_domain = CartesianDomain({'x': [0, 1], 'y': [0, 1]})
         >>> cartesian_domain = CartesianDomain({'x': [0, 1], 'y': 1.0})
     """
@@ -22,12 +23,16 @@ class CartesianDomain(BaseDomain):
         """
         Initialization of the :class:`CartesianDomain` class.
 
-        :param dict cartesian_dict: A dictionary where the keys are the variable
+        :param cartesian_dict: A dictionary where the keys are the variable
             names and the values are the domain extrema. The domain extrema can
             be either a list or tuple with two elements or a single number. If
             the domain extrema is a single number, the variable is fixed to that
-            value.
+            value. ``None`` initializes a domain without variables. Floating
+            fixed values are recommended for gradient-compatible sampling.
+        :type cartesian_dict: dict[str, int | float | list[int | float] |
+            tuple[int | float, int | float]] | None
         :raises TypeError: If the cartesian dictionary is not a dictionary.
+        :raises ValueError: If the cartesian dictionary is empty.
         :raises ValueError: If the cartesian dictionary contains variables with
             invalid ranges.
         :raises ValueError: If the cartesian dictionary contains values that are
@@ -41,13 +46,15 @@ class CartesianDomain(BaseDomain):
         """
         Check if a point is inside the domain.
 
-        :param LabelTensor point: The point to check.
+        :param LabelTensor point: One or more points with shape
+            ``(..., n_variables)`` and labels matching the domain variables.
         :param bool check_border: If ``True``, the boundary is considered inside
             the domain. Default is ``False``.
         :raises ValueError: If ``point`` is not a :class:`LabelTensor`.
         :raises ValueError: If the labels of ``point`` differ from the variables
             of the domain.
-        :return: Whether the point is inside the domain or not.
+        :return: Whether every supplied point satisfies all fixed values exactly
+            and all interval bounds with the requested boundary inclusion.
         :rtype: bool
         """
         # Checks on point
@@ -89,20 +96,27 @@ class CartesianDomain(BaseDomain):
         """
         The sampling routine.
 
-        :param int n: The number of samples to generate. See Note for reference.
+        :param int n: The positive count for random modes, or resolution per
+            selected ranged axis for grid and Chebyshev modes.
         :param str mode: The sampling method. Available modes: ``random`` for
             random sampling; ``latin`` or ``lh`` for latin hypercube sampling;
             ``chebyshev`` for chebyshev sampling; ``grid`` for grid sampling.
             Default is ``random``.
-        :param variables: The list of variables to sample. If ``all``, all
-            variables are sampled. Default is ``all``.
-        :type variables: list[str] | str
+        :param variables: The nonempty coordinate selection, or ``"all"`` for
+            every variable. Duplicates are removed and columns sorted by name.
+            Default is ``"all"``.
+        :type variables: str | list[str] | tuple[str, ...] | set[str]
         :raises AssertionError: If ``n`` is not a positive integer.
         :raises ValueError: If the sampling mode is invalid.
         :raises ValueError: If ``variables`` is neither ``all``, a string, nor a
-            list/tuple of strings.
+            list, tuple, or set of strings.
         :raises ValueError: If any of the specified variables is unknown.
-        :return: The sampled points.
+        :raises ValueError: If the variable selection is empty.
+        :return: The sampled points with shape ``(count, len(variables))`` after
+            selection normalization. Random modes return ``n`` rows. Grid and
+            Chebyshev modes return ``n ** r`` rows for ``r`` selected ranged
+            variables, or ``n`` rows when only fixed variables are selected.
+            Fixed-only integer values can produce an integer tensor.
         :rtype: LabelTensor
 
         .. note::
@@ -111,31 +125,26 @@ class CartesianDomain(BaseDomain):
             If ``mode`` is ``grid`` or ``chebyshev``, points are sampled
             independently for each variable and then combined, resulting in a
             total number of points equal to ``n`` raised to the power of the
-            number of variables. If ``mode`` is ``random``, ``lh`` or ``latin``,
+            number of selected ranged variables. Fixed-only sampling returns
+            ``n`` rows. If ``mode`` is ``random``, ``lh`` or ``latin``,
             all variables are sampled together, and the total number of points
             remains ``n``.
 
         .. warning::
-            The extrema of CartesianDomain are only sampled when using the
-            ``grid`` mode.
+            Grid sampling includes both interval endpoints when ``n > 1``.
+            Random sampling can include lower endpoints, Latin hypercube
+            sampling can include upper endpoints, and floating-point rounding
+            can affect endpoint inclusion in other modes.
 
         :Example:
 
-            >>> cartesian_domain = CartesianDomain({'x': [0, 1], 'y': [0, 1]})
-            >>> cartesian_domain.sample(n=3, mode='random')
-                LabelTensor([[0.0108, 0.7643],
-                             [0.4477, 0.8015],
-                             [0.8735, 0.6349]])
-            >>> cartesian_domain.sample(n=3, mode='grid')
-                LabelTensor([[0.0000, 0.0000],
-                             [0.5000, 0.0000],
-                             [1.0000, 0.0000],
-                             [0.0000, 0.5000],
-                             [0.5000, 0.5000],
-                             [1.0000, 0.5000],
-                             [0.0000, 1.0000],
-                             [0.5000, 1.0000],
-                             [1.0000, 1.0000]])
+            >>> from pina.domain import CartesianDomain
+            >>> domain = CartesianDomain({'x': [0, 1], 'y': [0, 1]})
+            >>> tuple(domain.sample(n=3).shape)
+            (3, 2)
+            >>> points = domain.sample(n=3, mode='grid')
+            >>> tuple(points.shape), points.labels
+            ((9, 2), ['x', 'y'])
         """
         # Validate sampling settings
         variables = self._validate_sampling(n, mode, variables)
@@ -191,9 +200,13 @@ class CartesianDomain(BaseDomain):
         Sample points and rescale to fit within the specified bounds.
 
         :param int n: The number of points to sample.
-        :param str mode: The sampling method. Default is ``random``.
-        :param torch.Tensor bounds: The bounds of the domain.
-        :return: The rescaled sample points.
+        :param str mode: One of ``"random"``, ``"grid"``, ``"chebyshev"``,
+            ``"lh"``, or ``"latin"``. No default is supplied by this helper.
+        :param torch.Tensor bounds: Lower/upper bounds of shape ``(r, 2)``.
+            Grid and Chebyshev calls normally supply one axis at a time.
+        :raises KeyError: If ``mode`` is not a supported sampler name.
+        :return: Rescaled coordinates of shape ``(n, r)``. Grid and Chebyshev
+            coordinates are broadcast across bounds if multiple axes are given.
         :rtype: torch.Tensor
         """
         # Define a dictionary of sampling methods
@@ -217,7 +230,8 @@ class CartesianDomain(BaseDomain):
         """
         Return the boundary of the domain as a :class:`Union` object.
 
-        :return: The boundary of the domain.
+        :return: Two faces per ranged variable, with that variable fixed to its
+            lower or upper bound. Fixed-only domains produce an empty union.
         :rtype: Union
         """
         faces = []

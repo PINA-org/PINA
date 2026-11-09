@@ -17,9 +17,11 @@ class HelmholtzEquation(Equation):
     Here, :math:`k` is the squared wavenumber, while :math:`f` is the
     forcing term.
 
+    The Laplacian uses every input coordinate and every output component.
+
     :Example:
 
-        >>> from pina.equation import HelmholtzEquation
+        >>> from pina.equation.zoo import HelmholtzEquation
         >>> eq = HelmholtzEquation(k=1.0, forcing_term=lambda x: x**2)
         >>> # Use within a DomainEquationCondition:
         >>> # condition = DomainEquationCondition(domain=domain, equation=eq)
@@ -32,7 +34,10 @@ class HelmholtzEquation(Equation):
         :param k: The squared wavenumber.
         :type k: float | int
         :param Callable forcing_term: The forcing field function, taking as
-            input the points on which evaluation is required.
+            input the full labeled points. Its numeric or tensor result must
+            broadcast with the componentwise Laplacian, normally ``(n, m)``.
+        :raises ValueError: If ``k`` is not numeric or ``forcing_term`` is not
+            a callable instance. The sign of ``k`` is not restricted.
         """
         check_consistency(k, (int, float))
         check_consistency(forcing_term, (Callable))
@@ -43,9 +48,16 @@ class HelmholtzEquation(Equation):
             """
             Implementation of the Helmholtz equation.
 
-            :param LabelTensor input_: The input data of the problem.
-            :param LabelTensor output_: The output data of the problem.
-            :return: The residual of the Helmholtz equation.
+            :param LabelTensor input_: Input coordinates of shape ``(n, d)``,
+                with gradient tracking enabled.
+            :param LabelTensor output_: Predictions of shape ``(n, m)``, with
+                an autograd connection supporting second derivatives.
+            :raises TypeError: If arguments are not labeled tensors or an
+                unused gradient cannot be indexed.
+            :raises RuntimeError: If differentiation or forcing broadcasting
+                fails.
+            :return: The Laplacian plus ``k * output_`` minus forcing, normally
+                of shape ``(n, m)``. The stored ``k`` is not squared again.
             :rtype: LabelTensor
             """
             lap = laplacian(output_, input_)

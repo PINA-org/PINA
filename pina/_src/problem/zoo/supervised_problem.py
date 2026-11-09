@@ -15,11 +15,14 @@ class SupervisedProblem(BaseProblem):
     Definition of a supervised-learning problem.
 
     This class provides a simple way to define a supervised problem using the
-    :class:`~pina.condition.input_target_condition.InputTargetCondition`.
+    :class:`~pina.condition.InputTargetCondition` for tensors or
+    :class:`~pina.condition.GraphInputTargetCondition` for a graph. Graph inputs
+    are modified in place by assigning the target to their ``y`` attribute.
 
     :Example:
 
         >>> import torch
+        >>> from pina.problem.zoo import SupervisedProblem
         >>> input_data = torch.rand((100, 10))
         >>> output_data = torch.rand((100, 10))
         >>> problem = SupervisedProblem(input_data, output_data)
@@ -38,16 +41,24 @@ class SupervisedProblem(BaseProblem):
         """
         Initialization of the :class:`SupervisedProblem` class.
 
-        :param input_: Input data of the problem.
-        :type input_: torch.Tensor | LabelTensor | Graph | Data
-        :param output_: Output data of the problem.
-        :type output_: torch.Tensor | LabelTensor | Graph | Data
-        :param list[str] input_variables: List of names of the input variables.
-            If None, the input variables are inferred from `input_`.
+        :param input_: Input samples, normally ``(n, n_inputs)`` tensors, or a
+            graph with an ``x`` node-feature field. The original object is kept.
+        :type input_: torch.Tensor | LabelTensor | pina.graph.Graph |
+            torch_geometric.data.Data
+        :param output_: Target values, normally ``(n, n_outputs)`` tensors. For
+            tensor inputs the sample count must match. For graph inputs this is
+            assigned directly to ``input_.y`` without target validation.
+        :type output_: torch.Tensor | LabelTensor
+        :param input_variables: The input variable names, stored unchanged.
+            ``None`` leaves the names unspecified; no inference is performed.
             Default is ``None``.
-        :param list[str] output_variables: List of names of the output
-            variables. If None, the output variables are inferred from
-            `output_`. Default is ``None``.
+        :type input_variables: list[str] | None
+        :param output_variables: The output variable names, stored unchanged.
+            ``None`` leaves the names unspecified; no inference is performed.
+            Default is ``None``.
+        :type output_variables: list[str] | None
+        :raises ValueError: If a tensor condition rejects input/target types or
+            their sample counts differ.
         """
         # Set input and output variables
         self.input_variables = input_variables

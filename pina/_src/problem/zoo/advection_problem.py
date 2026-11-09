@@ -16,9 +16,11 @@ def initial_condition(input_, output_):
     """
     Implementation of the initial condition.
 
-    :param LabelTensor input_: Input data of the problem.
-    :param LabelTensor output_: Output data of the problem.
-    :return: The residual of the initial condition.
+    :param LabelTensor input_: Points of shape ``(n, d)`` including ``"x"``.
+    :param LabelTensor output_: Predictions of shape ``(n, 1)``.
+    :raises ValueError: If the spatial label is missing.
+    :return: Predictions minus ``sin(x)``, of shape ``(n, 1)`` for scalar
+        predictions.
     :rtype: LabelTensor
     """
     return output_ - torch.sin(input_.extract("x"))
@@ -42,11 +44,14 @@ class AdvectionProblem(SpatialProblem, TimeDependentProblem):
     where :math:`u = u(x, t)` is the solution field and :math:`c` is the
     advection velocity.
 
-    Periodic boundary conditions are imposed at the spatial boundaries:
+    The analytical profile is periodic at the spatial boundaries:
 
     .. math::
 
         u(0, t) = u(2\pi, t), \qquad t \in [0, 1].
+
+    No periodic boundary condition is installed by this class; only the PDE
+    and initial condition are added. Enforce periodicity separately if needed.
 
     The initial condition is prescribed as
 
@@ -69,6 +74,7 @@ class AdvectionProblem(SpatialProblem, TimeDependentProblem):
 
     :Example:
 
+        >>> from pina.problem.zoo import AdvectionProblem
         >>> problem = AdvectionProblem()
     """
 
@@ -89,10 +95,11 @@ class AdvectionProblem(SpatialProblem, TimeDependentProblem):
 
     def __init__(self, c=1.0):
         """
-        Initialization of the :class:`AdvectionProblem`.
+        Initialization of the :class:`AdvectionProblem` class.
 
         :param c: The advection velocity parameter. Default is ``1.0``.
         :type c: float | int
+        :raises ValueError: If numeric validation rejects ``c``.
         """
         super().__init__()
         check_consistency(c, (float, int))
@@ -106,8 +113,10 @@ class AdvectionProblem(SpatialProblem, TimeDependentProblem):
         """
         Implementation of the analytical solution of the advection problem.
 
-        :param LabelTensor pts: Points where the solution is evaluated.
-        :return: The analytical solution of the advection problem.
+        :param LabelTensor pts: Points of shape ``(n, 2)`` labeled ``"x"`` and
+            ``"t"``, in either column order.
+        :raises ValueError: If a required coordinate label is missing.
+        :return: The sine-wave profile of shape ``(n, 1)``, labeled ``"u"``.
         :rtype: LabelTensor
         """
         sol = torch.sin(pts.extract("x") - self.c * pts.extract("t"))

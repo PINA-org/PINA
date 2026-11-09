@@ -18,6 +18,7 @@ class Union(BaseOperation):
 
     :Example:
 
+        >>> from pina.domain import CartesianDomain, Union
         >>> cartesian1 = CartesianDomain({'x': [0, 1], 'y': [0, 1]})
         >>> cartesian2 = CartesianDomain({'x': [0, 1], 'y': [1, 2]})
         >>> union = Union([cartesian1, cartesian2])
@@ -27,9 +28,10 @@ class Union(BaseOperation):
         """
         Check if a point is inside the union of the domains.
 
-        :param LabelTensor point: The point to check.
-        :param bool check_border: If ``True``, the boundary is considered inside
-            the domain. Default is ``False``.
+        :param LabelTensor point: A single point with shape ``(1, n_variables)``
+            and labels matching the constituent domains.
+        :param bool check_border: The boundary flag passed to every constituent;
+            each applies its own membership rules. Default is ``False``.
         :raises ValueError: If ``point`` is not a :class:`LabelTensor`.
         :raises ValueError: If the labels of ``point`` differ from the variables
             of the domain.
@@ -48,19 +50,28 @@ class Union(BaseOperation):
 
     def sample(self, n, mode="random", variables="all"):
         """
-        The sampling routine.
+        Concatenate nearly equal sample allocations from the constituents.
+
+        Python's :mod:`random` shuffles geometry order and assigns any remainder
+        to the first geometries in that order. Allocation is not weighted by
+        volume, and points in overlapping regions are not deduplicated.
 
         :param int n: The number of samples to generate.
-        :param str mode: The sampling method. Default is ``random``.
-        :param variables: The list of variables to sample. If ``all``, all
-            variables are sampled. Default is ``all``.
-        :type variables: list[str] | str
+        :param str mode: A method supported by every constituent. Available
+            modes are listed in ``sample_modes``. Default is ``"random"``.
+        :param variables: The nonempty coordinate selection, or ``"all"`` for
+            every variable. Duplicate names are removed and columns sorted.
+            Default is ``"all"``.
+        :type variables: str | list[str] | tuple[str, ...] | set[str]
         :raises AssertionError: If ``n`` is not a positive integer.
         :raises ValueError: If the sampling mode is invalid.
         :raises ValueError: If ``variables`` is neither ``all``, a string, nor a
-            list/tuple of strings.
+            list, tuple, or set of strings.
         :raises ValueError: If any of the specified variables is unknown.
-        :return: The sampled points.
+        :raises TypeError: If there are no constituent geometries.
+        :return: Concatenated samples with one column per selected variable.
+            Random modes return ``n`` rows. Grid and Chebyshev child samplers
+            can expand their allocations, so the row count may exceed ``n``.
         :rtype: LabelTensor
         """
         # Validate sampling settings

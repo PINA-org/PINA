@@ -24,17 +24,17 @@ class MultiModelSolver(
     :class:`~pina._src.solver.base_solver.BaseSolver` with multi-model handling,
     manual optimization, and condition-wise loss aggregation.
 
-    Subclasses can inherit from this class to implement solver-specific behaviour
-    while reusing the common logic for model registration, optimizer and
+    Subclasses can inherit from this class to implement solver-specific
+    behaviour while reusing the common logic for model registration, optimizer,
     scheduler setup, manual optimization, loss evaluation, weighting, and
     aggregation across problem conditions.
 
     :Example:
 
         >>> from pina.solver import MultiModelSolver
-        >>> from pina.problem import PoissonProblem
+        >>> from pina.problem.zoo import Poisson2DSquareProblem
         >>> # Typically used as a base class.
-        >>> # solver = MultiModelSolver(problem=problem, models=[model1, model2])
+        >>> # solver = MultiModelSolver(problem=problem, models=models)
     """
 
     def __init__(
@@ -52,24 +52,35 @@ class MultiModelSolver(
 
         :param BaseProblem problem: The problem to be solved.
         :param models: The model or list of models used by the solver.
-        :type models: torch.nn.Module | list[torch.nn.Module]
+        :type models: torch.nn.Module | list[torch.nn.Module] |
+            tuple[torch.nn.Module, ...]
         :param optimizers: The optimizer or list of optimizers used by the
             solver. If ``None``, the ``torch.optim.Adam`` optimizer with a
             learning rate of ``0.001`` is used for each model.
             Default is ``None``.
-        :type optimizers: TorchOptimizer | list[TorchOptimizer]
+        :type optimizers: pina.optim.TorchOptimizer |
+            list[pina.optim.TorchOptimizer] |
+            tuple[pina.optim.TorchOptimizer, ...] | None
         :param schedulers: The scheduler or list of schedulers used by the
             solver. If ``None``, the ``torch.optim.lr_scheduler.ConstantLR``
             scheduler with a factor of ``1.0`` is used for each model.
             Default is ``None``.
-        :type schedulers: TorchScheduler | list[TorchScheduler]
-        :param BaseWeighting weighting: The weighting strategy used to combine
+        :type schedulers: pina.optim.TorchScheduler |
+            list[pina.optim.TorchScheduler] |
+            tuple[pina.optim.TorchScheduler, ...] | None
+        :param weighting: The weighting strategy used to combine
             condition losses. If ``None``, no weighting is applied. Default is
             ``None``.
+        :type weighting: pina.weighting.BaseWeighting | None
         :param loss: The loss function used to compute residual losses.
             If ``None``, :class:`torch.nn.MSELoss` is used. Default is ``None``.
-        :param bool use_lt: If ``True``, the solver uses LabelTensors as input.
+        :type loss: torch.nn.modules.loss._Loss | pina.loss.BaseDualLoss | None
+        :param bool use_lt: Whether to select labeled inputs in problem-variable
+            order and label forward outputs. PINA graphs support this with
+            labeled ``x`` features; unlabeled inputs require ``False``.
             Default is ``True``.
+        :raises ValueError: If base solver, component-count, wrapper-type, or
+            loss/weighting validation fails. Single wrappers are not broadcast.
         """
 
         # Initialize the base solver

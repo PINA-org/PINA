@@ -18,15 +18,15 @@ class GraphInputEquationCondition(GraphCondition):
 
     def __init__(self, graph, equation, input_key="x"):
         """
-        Initialization of the :class:`GraphInputEquationCondition`.
+        Initialization of the :class:`GraphInputEquationCondition` class.
 
         :param Graph graph: The graph from which subgraphs are sampled.
-        :param BaseEquation equation: The equation used to compute the
+        :param pina.equation.BaseEquation equation: The equation used to compute
             residual from node features and model predictions.
         :param str input_key: The name of the graph attribute containing
             the input node features. Default is ``"x"``.
         :raises ValueError: If the equation is not an instance of
-            :class:`BaseEquation`.
+            :class:`pina.equation.BaseEquation`.
         """
         check_consistency(equation, BaseEquation)
         GraphCondition.__init__(self, graph, key=input_key)
@@ -38,7 +38,7 @@ class GraphInputEquationCondition(GraphCondition):
         Return the equation associated with this condition.
 
         :return: The equation used to compute the condition residual.
-        :rtype: BaseEquation
+        :rtype: pina.equation.BaseEquation
         """
         return self._equation
 
@@ -51,9 +51,10 @@ class GraphInputEquationCondition(GraphCondition):
         equation using these features, the model predictions, and the
         solver's unknown parameters. No loss aggregation is applied.
 
-        :param Graph batch: The graph batch containing the input node
+        :param batch: The graph batch containing the input node
             features under the attribute selected by ``input_key``.
-        :param BaseSolver solver: The solver providing the model forward
+        :type batch: pina.graph.Graph | torch_geometric.data.Data
+        :param pina.solver.BaseSolver solver: The solver providing the forward
             pass and the unknown parameters used by the equation.
         :raises AttributeError: If the batch lacks the selected feature
             attribute.

@@ -37,14 +37,17 @@ class NeuralTangentKernelWeighting(BaseWeighting):
         Initialization of the :class:`NeuralTangentKernelWeighting` class.
 
         :param int update_every_n_epochs: The number of training epochs between
-            weight updates. If set to 1, the weights are updated at every epoch.
-            This parameter is ignored by static weighting schemes.
+            eligible epochs. Every aggregation call in an eligible epoch
+            recomputes weights, including epoch zero.
             Default is ``1``.
         :param float alpha: The parameter controlling the exponential moving
             average of the weights. It must be in the range [0, 1], where a
-            value of ``0.0`` means that only the current gradient norms are used
-            to compute the weights, and a value of ``1.0`` means that only the
-            last saved weights are used. Default is ``0.5``.
+            value of ``0.0`` uses each gradient norm divided by their sum, and
+            ``1.0`` preserves saved weights, falling back to ``1`` for unseen
+            conditions. Gradients are still computed at either endpoint.
+            Default is ``0.5``.
+        :raises AssertionError: If the update interval is not a positive
+            integer.
         :raises ValueError: If ``alpha`` is not a float.
         :raises ValueError: If ``alpha`` is not between 0.0 and 1.0 (inclusive).
         """
@@ -66,15 +69,22 @@ class NeuralTangentKernelWeighting(BaseWeighting):
 
     def update_weights(self, losses):
         """
-        Update the weights based on the current losses.
+        Smooth normalized model-parameter gradient norms with saved weights.
 
-        This method defines how the weighting strategy adapts over time. It is
-        responsible for computing and storing updated weights that will be used
-        during aggregation.
-
-        :param dict losses: The mapping from loss names to loss tensors.
-        :return: The updated weights.
-        :rtype: dict
+        :param dict[str, torch.Tensor] losses: Differentiable scalar or
+            one-element losses connected to trainable parameters of the attached
+            solver's ``model``. Unused parameter gradients are omitted.
+        :raises AttributeError: If no solver is attached or it has no ``model``.
+        :raises RuntimeError: If gradients cannot be computed or no trainable
+            parameters exist.
+        :raises ValueError: If a loss has no usable model-parameter gradients.
+        :return: A new mapping with
+            ``alpha * saved + (1 - alpha) * norm / total`` for each condition;
+            unseen saved values default to ``1``. Norms use
+            the supplied condition subset and a retained autograd graph without
+            higher-order tracking. Does not save the returned weights. A zero
+            total norm is unguarded and can produce NaN, even at ``alpha=1.0``.
+        :rtype: dict[str, torch.Tensor]
         """
         # Get model parameters and define a dictionary to store the norms
         params = [p for p in self.solver.model.parameters() if p.requires_grad]

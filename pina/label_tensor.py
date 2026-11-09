@@ -1,4 +1,4 @@
-"""Public API for LabeledTensor."""
+"""Public API for tensors with dimension and component labels."""
 
 from pina._src.core.label_tensor import LabelTensor
 

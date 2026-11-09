@@ -29,6 +29,16 @@ _DEPRECATED_IMPORTS = {"PinaDataModule": "DataModule"}
 
 
 def __getattr__(name):
+    """
+    Resolve deprecated package-level imports and warn about replacements.
+
+    :param str name: The requested attribute. ``"Condition"`` resolves to
+        :class:`pina.condition.Condition`; ``"PinaDataModule"`` resolves to
+        :class:`pina.DataModule`. Both emit :class:`DeprecationWarning`.
+    :raises AttributeError: If ``name`` is not a supported compatibility alias.
+    :return: The class corresponding to the deprecated import.
+    :rtype: type[pina.condition.Condition] | type[pina.DataModule]
+    """
     if name == "Condition":
         warnings.warn(
             "Importing 'Condition' from 'pina' is deprecated; use the direct "

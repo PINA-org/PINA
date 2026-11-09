@@ -22,6 +22,15 @@ _DEPRECATED_IMPORTS = {
 
 
 def __getattr__(name):
+    """
+    Resolve deprecated optimizer and scheduler interface names.
+
+    :param str name: The requested legacy attribute name.
+    :return: The matching interface class for ``"Optimizer"`` or
+        ``"Scheduler"``, emitting ``DeprecationWarning``. Unrecognized names
+        return ``None``.
+    :rtype: type | None
+    """
     if name in _DEPRECATED_IMPORTS:
 
         warnings.warn(

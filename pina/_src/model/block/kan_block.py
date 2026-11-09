@@ -50,26 +50,30 @@ class KANBlock(torch.nn.Module):
         :param int input_dimensions: The number of input features.
         :param int output_dimensions: The number of output features.
         :param int spline_order: The order of each spline basis function.
-            Default is 3 (cubic splines).
+            Basis degree is ``spline_order - 1``. Default is ``3`` (quadratic).
         :param int n_knots: The number of knots for each spline basis function.
-            Default is 10.
+            Default is ``10``; at least twice the order knots are constructed.
         :param grid_range: The range for the spline knots. It must be either a
-            list or a tuple of the form [min, max]. Default is [0, 1].
-        :type grid_range: list | tuple.
-        :param torch.nn.Module base_function: The base activation function to be
+            list or tuple of numeric endpoints. Default is ``[0, 1]``.
+        :type grid_range: list[int | float] | tuple[int | float, int | float]
+        :param type[torch.nn.Module] base_function: The activation class to be
             applied to the input before the linear transformation. Default is
             :class:`torch.nn.SiLU`.
         :param bool use_base_linear: Whether to include a linear transformation
-            of the base function output. Default is True.
+            of the base function output. Default is ``True``.
         :param bool use_bias: Whether to include a bias term in the output.
-            Default is True.
+            Default is ``True``.
         :param init_scale_spline: The scale for initializing each spline
-            control points. Default is 1e-2.
-        :type init_scale_spline: float | int.
+            control points. Default is ``1e-2``.
+        :type init_scale_spline: float | int
         :param init_scale_base: The scale for initializing the base linear
-            weights. Default is 1.0.
-        :type init_scale_base: float | int.
+            weights. Default is ``1.0``.
+        :type init_scale_base: float | int
         :raises ValueError: If ``grid_range`` is not of length 2.
+        :raises ValueError: If activation, flag, endpoint, or scale types fail
+            validation. Endpoint ordering is not validated.
+        :raises AssertionError: If dimensions, order, or knot count are not
+            positive integers.
         """
         super().__init__()
 
@@ -145,9 +149,13 @@ class KANBlock(torch.nn.Module):
         transformation of the base function output, and then aggregated across
         input dimensions to produce the final output.
 
-        :param x: The input tensor for the model.
+        :param x: Input of shape ``(batch, input_dimensions)``.
         :type x: torch.Tensor | LabelTensor
-        :return: The output tensor of the model.
+        :return: Input-summed spline/base contributions of shape
+            ``(batch, output_dimensions)``. The scalar ``1 -> 1`` spline case
+            squeezes an axis internally. With base linear terms, broadcasting
+            couples batch rows before summation, returning ``(batch, 1)``;
+            without them the result has shape ``(batch,)``.
         :rtype: torch.Tensor | LabelTensor
         """
         y = self.spline(x)

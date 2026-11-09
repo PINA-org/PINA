@@ -16,11 +16,9 @@ class RadialFieldNetworkBlock(MessagePassing):
     2020. It serves as an inner block in a larger graph neural network
     architecture.
 
-    The message between two nodes connected by an edge is computed by applying a
-    linear transformation to the norm of the difference between the sender and
-    recipient node features, together with the radial distance between the
-    sender and recipient node features, followed by a non-linear activation
-    function. Messages are then aggregated using an aggregation scheme
+    Each message multiplies the recipient-minus-sender feature difference by
+    a learned scalar MLP of its norm. Self loops are removed before propagation.
+    Messages are then aggregated using an aggregation scheme
     (e.g., sum, mean, min, max, or product).
 
     The update step is performed by a simple addition of the incoming messages
@@ -61,25 +59,29 @@ class RadialFieldNetworkBlock(MessagePassing):
 
         :param int node_feature_dim: The dimension of the node features.
         :param int hidden_dim: The dimension of the hidden features.
-            Default is 64.
-        :param int n_layers: The number of layers in the network. Default is 2.
-        :param torch.nn.Module activation: The activation function.
+            Default is ``64``.
+        :param int n_layers: Hidden layer count. Default is ``2``.
+        :param type[torch.nn.Module] activation: No-argument activation class.
             Default is :class:`torch.nn.Tanh`.
         :param str aggr: The aggregation scheme to use for message passing.
-            Available options are "add", "mean", "min", "max", "mul".
+            Available options include ``"add"``, ``"mean"``, ``"min"``,
+            ``"max"``, and ``"mul"``.
             See :class:`torch_geometric.nn.MessagePassing` for more details.
-            Default is "add".
-        :param int node_dim: The axis along which to propagate. Default is -2.
+            Default is ``"add"``.
+        :param int node_dim: The propagation axis. Default is ``-2``.
         :param str flow: The direction of message passing. Available options
-            are "source_to_target" and "target_to_source".
-            The "source_to_target" flow means that messages are sent from
-            the source node to the target node, while the "target_to_source"
+            are ``"source_to_target"`` and ``"target_to_source"``.
+            The ``"source_to_target"`` flow means that messages are sent from
+            the source node to the target node, while ``"target_to_source"``
             flow means that messages are sent from the target node to the
             source node. See :class:`torch_geometric.nn.MessagePassing` for more
-            details. Default is "source_to_target".
-        :raises AssertionError: If `node_feature_dim` is not a positive integer.
-        :raises AssertionError: If `hidden_dim` is not a positive integer.
-        :raises AssertionError: If `n_layers` is not a positive integer.
+            details. Default is ``"source_to_target"``.
+        :raises AssertionError: If ``node_feature_dim`` is not a positive
+            integer.
+        :raises AssertionError: If ``hidden_dim`` is not a positive integer.
+        :raises AssertionError: If ``n_layers`` is not a positive integer.
+        :raises ValueError: If activation or PyG propagation options are
+            invalid.
         """
         super().__init__(aggr=aggr, node_dim=node_dim, flow=flow)
 
@@ -101,10 +103,11 @@ class RadialFieldNetworkBlock(MessagePassing):
         """
         Forward pass of the block, triggering the message-passing routine.
 
-        :param x: The node features.
+        :param x: Node features of shape ``(N, node_feature_dim)``. The radial
+            norm uses axis one, so batched higher-rank inputs are not supported.
         :type x: torch.Tensor | LabelTensor
-        :param torch.Tensor edge_index: The edge indices.
-        :return: The updated node features.
+        :param torch.Tensor edge_index: Integer connectivity shaped ``(2, E)``.
+        :return: Updated node features of shape ``(N, node_feature_dim)``.
         :rtype: torch.Tensor
         """
         edge_index, _ = remove_self_loops(edge_index)

@@ -41,6 +41,14 @@ _DEPRECATED_IMPORTS = {
 
 
 def __getattr__(name):
+    """
+    Resolve legacy equation-zoo imports with a deprecation warning.
+
+    :param str name: The requested attribute name.
+    :return: The matching class from :mod:`pina.equation.zoo`, or ``None`` for
+        an unrecognized name. Recognized names emit ``DeprecationWarning``.
+    :rtype: type | None
+    """
     if name in _DEPRECATED_IMPORTS:
 
         warnings.warn(

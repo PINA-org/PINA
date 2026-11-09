@@ -26,10 +26,18 @@ class TensorCondition(BaseCondition):
         Other fields, such as equations or configuration values, are stored
         unchanged in every batch.
 
-        :param int batch_size: Number of samples per batch. If ``None``, all
-            samples are stored as a single batch.
-        :return: The stored batches.
-        :rtype: list[dict]
+        Tensor slices share storage with the original fields. Calling this
+        method replaces any existing batches.
+
+        :param batch_size: The number of samples per batch. ``None`` or ``0``
+            stores all samples in one batch. A negative value produces no
+            batches. Default is ``None``.
+        :type batch_size: int | None
+        :raises TypeError: If a truthy ``batch_size`` is not an integer accepted
+            by :func:`range`.
+        :return: The stored batches, also assigned to ``self.data``. Empty
+            input produces an empty list.
+        :rtype: list[dict[str, Any]]
         """
         n_samples = self._input.shape[0]
         if n_samples == 0:
@@ -53,9 +61,10 @@ class TensorCondition(BaseCondition):
 
     def __len__(self):
         """
-        Return the number of data points in the condition.
+        Return the number of stored batches in the condition.
 
-        :return: The number of data points.
+        :raises AttributeError: If :meth:`store_data` has not been called.
+        :return: The number of stored batches.
         :rtype: int
         """
         return len(self.data)
@@ -64,10 +73,22 @@ class TensorCondition(BaseCondition):
         """
         Return the batch with the given id, optionally moved to ``device``.
 
-        :param int id: The id of the batch to retrieve.
-        :param device: The target device for the batch. Default is ``None``.
-        :return: The materialized batch.
-        :rtype: dict
+        Negative indices follow Python list indexing conventions. Without a
+        device argument, return the stored dictionary itself. With a device,
+        return a new dictionary, moving only tensor values; equations and other
+        non-tensor fields are not moved.
+
+        :param id: The index of the batch to retrieve. Tensor indices must
+            contain a single integer value.
+        :type id: int | torch.Tensor
+        :param device: The target device for tensor fields. If ``None``, leave
+            the batch on its existing device. Default is ``None``.
+        :type device: str | torch.device | int | None
+        :raises AttributeError: If :meth:`store_data` has not been called.
+        :raises IndexError: If the batch index is out of range.
+        :return: The selected batch dictionary, with fields defined by the
+            concrete condition's ``__fields__``.
+        :rtype: dict[str, Any]
         """
         batch = self.data[int(id)]
         if device is None:
@@ -79,10 +100,16 @@ class TensorCondition(BaseCondition):
 
     def __getitem__(self, id):
         """
-        Materialize the data points at the specified index.
+        Retrieve the stored batch at the specified index.
 
-        :param int idx: The index of the data point to retrieve.
-        :return: The materialized batch.
-        :rtype: dict
+        Negative indices follow Python list indexing conventions.
+
+        :param id: The index of the batch to retrieve. Tensor indices must
+            contain a single integer value.
+        :type id: int | torch.Tensor
+        :raises AttributeError: If :meth:`store_data` has not been called.
+        :raises IndexError: If the batch index is out of range.
+        :return: The stored batch dictionary without changing its device.
+        :rtype: dict[str, Any]
         """
         return self.materialize(id)

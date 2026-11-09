@@ -13,9 +13,9 @@ class SupervisedSingleModelSolver(SingleModelSolver):
 
     This solver is designed for problems defined by input-target pairs and uses
     a single model to approximate the mapping from input variables to target
-    variables. It supports only
+    variables. It supports tensor
     :class:`~pina._src.condition.input_target_condition.InputTargetCondition`
-    conditions.
+    and :class:`~pina.condition.GraphInputTargetCondition` conditions.
 
     Given a model :math:`\mathcal{M}`, the solver minimizes the discrepancy
     between the target values :math:`\mathbf{u}_i` and the model predictions
@@ -35,11 +35,11 @@ class SupervisedSingleModelSolver(SingleModelSolver):
     :Example:
 
         >>> from pina.solver import SupervisedSingleModelSolver
-        >>> from pina.problem import SupervisedProblem
+        >>> from pina.problem.zoo import SupervisedProblem
         >>> # solver = SupervisedSingleModelSolver(
         >>> #     problem=problem, model=model
         >>> # )
-        >>> # solver.train()
+        >>> # Train with pina.Trainer(solver=solver, ...).train().
     """
 
     # Accepted conditions types for this solver
@@ -63,19 +63,27 @@ class SupervisedSingleModelSolver(SingleModelSolver):
 
         :param BaseProblem problem: The problem to be solved.
         :param torch.nn.Module model: The model used by the solver.
-        :param TorchOptimizer optimizer: The optimizer used by the solver.
+        :param optimizer: The optimizer wrapper used by the solver.
             If ``None``, the ``torch.optim.Adam`` optimizer with a learning rate
             of ``0.001`` is used. Default is ``None``.
-        :param TorchScheduler scheduler: The scheduler used by the solver.
+        :type optimizer: pina.optim.TorchOptimizer | None
+        :param scheduler: The scheduler wrapper used by the solver.
             If ``None``, the ``torch.optim.lr_scheduler.ConstantLR`` scheduler
             with a factor of ``1.0`` is used. Default is ``None``.
-        :param BaseWeighting weighting: The weighting strategy used to combine
+        :type scheduler: pina.optim.TorchScheduler | None
+        :param weighting: The weighting strategy used to combine
             condition losses. If ``None``, no weighting is applied. Default is
             ``None``.
+        :type weighting: pina.weighting.BaseWeighting | None
         :param loss: The loss function used to compute residual losses.
             If ``None``, :class:`torch.nn.MSELoss` is used. Default is ``None``.
-        :param bool use_lt: If ``True``, the solver uses LabelTensors as input.
+        :type loss: torch.nn.modules.loss._Loss | pina.loss.BaseDualLoss | None
+        :param bool use_lt: Whether to select labeled inputs in problem-variable
+            order and label forward outputs. PINA graphs support this with
+            labeled ``x`` features; unlabeled inputs require ``False``.
             Default is ``True``.
+        :raises ValueError: If the problem, conditions, model, wrappers, loss,
+            or weighting fail base-solver validation.
         """
         SingleModelSolver.__init__(
             self,
