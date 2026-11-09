@@ -12,9 +12,10 @@ class DataModule(LightningDataModule):
     Lightning data module for PINA conditions.
 
     Each dataset row is ``[condition_id, batch_id]``. The condition batch is
-    materialized in :meth:`transfer_batch_to_device`. Each step groups one
-    batch from every condition present in the split. Shorter conditions cycle
-    until the condition with the most batches is exhausted.
+    materialized in :meth:`transfer_batch_to_device`, so the dataloaders yield
+    one condition batch per step.
+
+    TODO Improve documentation for the batching and transfer process.
     """
 
     def __init__(
@@ -25,7 +26,7 @@ class DataModule(LightningDataModule):
         val_size=0.0,
         test_size=0.0,
         batch_size=None,
-        batching_mode="common_batch_size",
+        batching_mode="simple",
         shuffle=True,
         num_workers=0,
         pin_memory=False,
@@ -60,9 +61,7 @@ class DataModule(LightningDataModule):
             Default is ``0.0``.
         :param batch_size: Default batch size passed to each condition's
             ``store_data`` method. Interpretation of ``None`` depends on
-            the condition. Each step evaluates one stored batch per condition,
-            cycling shorter conditions. When each condition stores one batch,
-            all conditions are evaluated in one step. Default is ``None``.
+            the condition. Default is ``None``.
         :type batch_size: int | None
         :param str batching_mode: Batching mode identifier. Stored but not
             used by the current implementation. Default is
@@ -88,7 +87,7 @@ class DataModule(LightningDataModule):
         super().__init__()
         self.problem = problem
         self.batch_size = batch_size
-        self.batching_mode = batching_mode
+        self.batching_aggregation = batching_mode
         self.shuffle = shuffle
         self.num_workers = num_workers
         self.pin_memory = pin_memory
@@ -121,6 +120,34 @@ class DataModule(LightningDataModule):
         }
         return self.condition_name_to_idx
 
+    def _simple_aggregate_condition_rows(self, condition_rows):
+
+        tensor = torch.tensor(condition_rows, dtype=torch.long)
+        return torch.permute(tensor, (1, 0, 2))
+
+
+    def aggregate_condition_rows(self, condition_rows):
+        """
+        Aggregate condition-specific rows into a single tensor.
+
+        :param condition_rows: List of lists containing condition-specific rows.
+        :type condition_rows: list[list[int]]
+        :return: Aggregated tensor of shapoe TODO
+        :rtype: torch.Tensor
+        """
+        if condition_rows == [[], []]: # TODO check to improve for empty dataset
+            return torch.empty((0, 2), dtype=torch.int64)
+
+        aggregate_method = getattr(
+            self, 
+            f"_{self.batching_aggregation}_aggregate_condition_rows"
+        )
+
+        if aggregate_method is None:
+            raise ValueError(f"Aggregation method '{self.batching_aggregation}' not found.")
+
+        return aggregate_method(condition_rows)
+
     def create_datasets(self):
         """
         Split stored condition batch identifiers into datasets.
@@ -148,6 +175,10 @@ class DataModule(LightningDataModule):
         train_rows, val_rows, test_rows = [], [], []
 
         for condition_name, condition in self.problem.conditions.items():
+            condition_train_rows = []
+            condition_val_rows = []
+            condition_test_rows = []
+
             n_batches = len(condition)
             indices = (
                 torch.randperm(n_batches).tolist()
@@ -166,21 +197,22 @@ class DataModule(LightningDataModule):
 
             condition_id = self.condition_name_to_idx[condition_name]
             for batch_id in indices[:train_end]:
-                train_rows.append([condition_id, batch_id])
+                # train_rows.append([condition_id, batch_id])
+                condition_train_rows.append([condition_id, batch_id])
             for batch_id in indices[train_end:val_end]:
-                val_rows.append([condition_id, batch_id])
+                # val_rows.append([condition_id, batch_id])
+                condition_val_rows.append([condition_id, batch_id])
             for batch_id in indices[val_end:]:
-                test_rows.append([condition_id, batch_id])
+                # test_rows.append([condition_id, batch_id])
+                condition_test_rows.append([condition_id, batch_id])
 
-        self.train_dataset = torch.tensor(train_rows, dtype=torch.long).reshape(
-            -1, 2
-        )
-        self.val_dataset = torch.tensor(val_rows, dtype=torch.long).reshape(
-            -1, 2
-        )
-        self.test_dataset = torch.tensor(test_rows, dtype=torch.long).reshape(
-            -1, 2
-        )
+            train_rows.append(condition_train_rows)
+            val_rows.append(condition_val_rows)
+            test_rows.append(condition_test_rows)
+
+        self.train_dataset = self.aggregate_condition_rows(train_rows)
+        self.val_dataset = self.aggregate_condition_rows(val_rows)
+        self.test_dataset = self.aggregate_condition_rows(test_rows)
 
         logger.debug(
             "Created datasets with %d train, %d validation, and %d test rows.",
@@ -229,10 +261,8 @@ class DataModule(LightningDataModule):
         """
         Create a dataloader for condition and batch identifiers.
 
-        Each iteration yields one row per condition present in the split.
-        Rows for each condition are visited in dataset order, cycling shorter
-        conditions until the longest is exhausted. Conditions absent from the
-        split are omitted. Default collation groups the selected rows.
+        Each iteration yields one dataset row with shape ``[1, 2]``.
+        Rows are visited in dataset order using default collation.
 
         :param torch.Tensor dataset: The identifier dataset with shape
             ``[n_batches, 2]``.
@@ -242,25 +272,9 @@ class DataModule(LightningDataModule):
         """
         if len(dataset) == 0:
             return []
-
-        # Group row indices, not samples: each row identifies a stored batch
-        condition_indices = {}
-        for index, condition_id in enumerate(dataset[:, 0].tolist()):
-            condition_indices.setdefault(condition_id, []).append(index)
-
-        # Exactly one batch per condition avoids overwriting condition losses
-        n_steps = max(len(indices) for indices in condition_indices.values())
-        batch_indices = [
-            [
-                indices[step % len(indices)]
-                for indices in condition_indices.values()
-            ]
-            for step in range(n_steps)
-        ]
-
         return DataLoader(
             dataset,
-            batch_sampler=batch_indices,
+            batch_size=1,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
         )
@@ -308,9 +322,9 @@ class DataModule(LightningDataModule):
         condition's ``materialize`` method with the batch identifier and
         requested device.
 
-        :param torch.Tensor batch: Identifier rows with shape ``[n_rows, 2]``,
-            each containing a condition identifier and a batch identifier. Each
-            step provides one row per condition present in the split.
+        :param torch.Tensor batch: Identifier rows with shape
+            ``[n_rows, 2]``, each containing a condition identifier and a
+            batch identifier. Dataloaders normally provide one row.
         :param device: The device on which condition batches are
             materialized. If ``None``, device handling is delegated to
             each condition without a target device.
@@ -327,7 +341,9 @@ class DataModule(LightningDataModule):
             its condition.
         """
         result = []
-        for condition_id, batch_id in batch:
+        assert batch.ndim == 3 and batch.shape[0] == 1, "Batch must have shape [1, n_rows, 2]"
+
+        for condition_id, batch_id in batch.squeeze(0):
             name = self.idx_to_condition_name[int(condition_id)]
             data = self.problem.conditions[name].materialize(
                 int(batch_id), device=device
