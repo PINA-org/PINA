@@ -58,15 +58,13 @@ class SingleModelSolver(SingleModelMixin, ConditionAggregatorMixin, BaseSolver):
         :param bool use_lt: If ``True``, the solver uses LabelTensors as input.
             Default is ``True``.
         """
-        # Initialize the base solver
-        BaseSolver.__init__(self, problem=problem, use_lt=use_lt)
-
-        # Initialize the components of the solver
-        self._init_solver_components(
+        BaseSolver.__init__(
+            self,
+            problem=problem,
             models=model,
             optimizers=optimizer,
             schedulers=scheduler,
+            weighting=weighting,
+            loss=loss,
+            use_lt=use_lt,
         )
-
-        # Initialize the weighting scheme for the conditions and the loss
-        self._init_weighting_and_loss(weighting=weighting, loss=loss)
