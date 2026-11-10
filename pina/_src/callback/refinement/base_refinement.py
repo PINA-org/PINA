@@ -102,7 +102,7 @@ class BaseRefinement(Callback, RefinementInterface):
         datamodule = trainer.datamodule
         train_dataset = datamodule.train_dataset
         train_batch_ids = {}
-        for condition_id, batch_id in train_dataset:
+        for condition_id, batch_id in train_dataset.reshape(-1, 2):
             name = datamodule.idx_to_condition_name[int(condition_id)]
             train_batch_ids.setdefault(name, []).append(int(batch_id))
 

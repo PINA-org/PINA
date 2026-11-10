@@ -40,6 +40,7 @@ class Trainer(lightning.pytorch.Trainer):
     _AVAIL_BATCHING_MODES = {
         "common_batch_size",
         "proportional",
+        "simple"
     }
 
     def __init__(
@@ -49,7 +50,7 @@ class Trainer(lightning.pytorch.Trainer):
         train_size=1.0,
         test_size=0.0,
         val_size=0.0,
-        batching_mode="common_batch_size",
+        batching_mode="simple",
         num_workers=0,
         pin_memory=False,
         shuffle=True,
@@ -74,9 +75,10 @@ class Trainer(lightning.pytorch.Trainer):
             split. Must belong to the interval ``[0, 1]``. Default is ``0.0``.
         :param str batching_mode: The strategy used to aggregate batches across
             dataloaders. Available options are ``"common_batch_size"`` for
-            uniform batch sizes across conditions, and ``"proportional"`` for
-            batch sizes proportional to dataset sizes.
-            Default is ``"common_batch_size"``.
+            uniform batch sizes across conditions, ``"proportional"`` for
+            batch sizes proportional to dataset sizes, and ``"simple"`` for
+            the current one-batch-per-condition aggregation.
+            Default is ``"simple"``.
         :param int num_workers: The number of worker processes used by
             dataloaders. Default is ``0`` for sequential loading.
         :param bool pin_memory: Whether pinned memory should be enabled during
@@ -182,15 +184,15 @@ class Trainer(lightning.pytorch.Trainer):
             )
 
         # Raise warning if batch size and batching mode are incompatible
-        if batch_size is None and batching_mode != "common_batch_size":
+        if batch_size is None and batching_mode != "simple":
             warnings.warn(
                 f"Batching mode '{batching_mode}' is ignored when the batch "
-                "size is None. Setting batching_mode to 'common_batch_size'.",
+                "size is None. Setting batching_mode to 'simple'.",
                 UserWarning,
             )
 
-            # Set batching mode to common_batch_size if incompatible
-            batching_mode = "common_batch_size"
+            # Set batching mode to simple if incompatible
+            batching_mode = "simple"
 
         # Raise warning if batch size and batching mode are incompatible
         if (
@@ -201,12 +203,12 @@ class Trainer(lightning.pytorch.Trainer):
             warnings.warn(
                 "Batching mode 'proportional' requires the batch size to be "
                 "larger than the number of conditions. Setting batching_mode "
-                "to 'common_batch_size'.",
+                "to 'simple'.",
                 UserWarning,
             )
 
-            # Set batching mode to common_batch_size if incompatible
-            batching_mode = "common_batch_size"
+            # Set batching mode to simple if incompatible
+            batching_mode = "simple"
 
         # Initialize the class attributes
         self.solver = solver

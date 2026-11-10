@@ -21,7 +21,7 @@ class DummyDataLoader:
 
 
 def _update_batching_mode(batch_size, batching_mode):
-    return batching_mode if batch_size else "common_batch_size"
+    return batching_mode if batch_size else "simple"
 
 
 def _update_pin_memory(batch_size, pin_memory):

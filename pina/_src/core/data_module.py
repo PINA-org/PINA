@@ -121,9 +121,18 @@ class DataModule(LightningDataModule):
         return self.condition_name_to_idx
 
     def _simple_aggregate_condition_rows(self, condition_rows):
+        non_empty_rows = [rows for rows in condition_rows if rows]
+        if not non_empty_rows:
+            return torch.empty((0, 0, 2), dtype=torch.long)
 
-        tensor = torch.tensor(condition_rows, dtype=torch.long)
-        return torch.permute(tensor, (1, 0, 2))
+        # One batch per condition and step, cycling shorter conditions until
+        # the condition with the most batches is exhausted.
+        n_steps = max(len(rows) for rows in non_empty_rows)
+        aggregated_rows = [
+            [rows[step % len(rows)] for rows in non_empty_rows]
+            for step in range(n_steps)
+        ]
+        return torch.tensor(aggregated_rows, dtype=torch.long)
 
 
     def aggregate_condition_rows(self, condition_rows):
@@ -132,12 +141,10 @@ class DataModule(LightningDataModule):
 
         :param condition_rows: List of lists containing condition-specific rows.
         :type condition_rows: list[list[int]]
-        :return: Aggregated tensor of shapoe TODO
+        :return: Aggregated tensor with one condition batch per condition and
+            step.
         :rtype: torch.Tensor
         """
-        if condition_rows == [[], []]: # TODO check to improve for empty dataset
-            return torch.empty((0, 2), dtype=torch.int64)
-
         aggregate_method = getattr(
             self, 
             f"_{self.batching_aggregation}_aggregate_condition_rows"
@@ -158,9 +165,10 @@ class DataModule(LightningDataModule):
         ``test_size`` is not used.
 
         Store the splits in ``train_dataset``, ``val_dataset``, and
-        ``test_dataset`` as integer tensors with shape ``[n_batches, 2]``.
-        Each row contains a condition identifier and a batch identifier.
-        Empty splits have shape ``[0, 2]``.
+        ``test_dataset`` as integer tensors with shape
+        ``[n_steps, n_conditions, 2]``. Each row contains a condition
+        identifier and a batch identifier. Empty splits have shape
+        ``[0, 0, 2]``.
 
         Conditions must have stored their batches, and
         :meth:`enumerate_condition` must have been called.
@@ -209,6 +217,10 @@ class DataModule(LightningDataModule):
             train_rows.append(condition_train_rows)
             val_rows.append(condition_val_rows)
             test_rows.append(condition_test_rows)
+
+        print("Train rows:", train_rows)
+        print("Val rows:", val_rows)
+        print("Test rows:", test_rows)
 
         self.train_dataset = self.aggregate_condition_rows(train_rows)
         self.val_dataset = self.aggregate_condition_rows(val_rows)
@@ -261,11 +273,11 @@ class DataModule(LightningDataModule):
         """
         Create a dataloader for condition and batch identifiers.
 
-        Each iteration yields one dataset row with shape ``[1, 2]``.
-        Rows are visited in dataset order using default collation.
+        Each iteration yields one step with shape ``[1, n_conditions, 2]``.
+        Steps are visited in dataset order using default collation.
 
         :param torch.Tensor dataset: The identifier dataset with shape
-            ``[n_batches, 2]``.
+            ``[n_steps, n_conditions, 2]``.
         :return: A dataloader over the identifier rows, or an empty list
             if the dataset is empty.
         :rtype: DataLoader | list

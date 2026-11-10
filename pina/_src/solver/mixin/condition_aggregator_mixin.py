@@ -43,6 +43,8 @@ class ConditionAggregatorMixin:
                 batch_idx=batch_idx,
             )
 
+        print("Condition losses:", condition_losses)
+
         # Clamp parameters - null operation if problem is not InverseProblem
         self._clamp_params()
 
