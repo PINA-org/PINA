@@ -14,6 +14,8 @@ class DataModule(LightningDataModule):
     Each dataset row is ``[condition_id, batch_id]``. The condition batch is
     materialized in :meth:`transfer_batch_to_device`, so the dataloaders yield
     one condition batch per step.
+
+    TODO Improve documentation for the batching and transfer process.
     """
 
     def __init__(
@@ -24,7 +26,7 @@ class DataModule(LightningDataModule):
         val_size=0.0,
         test_size=0.0,
         batch_size=None,
-        batching_mode="common_batch_size",
+        batching_mode="simple",
         shuffle=True,
         num_workers=0,
         pin_memory=False,
@@ -85,7 +87,7 @@ class DataModule(LightningDataModule):
         super().__init__()
         self.problem = problem
         self.batch_size = batch_size
-        self.batching_mode = batching_mode
+        self.batching_aggregation = batching_mode
         self.shuffle = shuffle
         self.num_workers = num_workers
         self.pin_memory = pin_memory
@@ -118,6 +120,41 @@ class DataModule(LightningDataModule):
         }
         return self.condition_name_to_idx
 
+    def _simple_aggregate_condition_rows(self, condition_rows):
+        non_empty_rows = [rows for rows in condition_rows if rows]
+        if not non_empty_rows:
+            return torch.empty((0, 0, 2), dtype=torch.long)
+
+        # One batch per condition and step, cycling shorter conditions until
+        # the condition with the most batches is exhausted.
+        n_steps = max(len(rows) for rows in non_empty_rows)
+        aggregated_rows = [
+            [rows[step % len(rows)] for rows in non_empty_rows]
+            for step in range(n_steps)
+        ]
+        return torch.tensor(aggregated_rows, dtype=torch.long)
+
+
+    def aggregate_condition_rows(self, condition_rows):
+        """
+        Aggregate condition-specific rows into a single tensor.
+
+        :param condition_rows: List of lists containing condition-specific rows.
+        :type condition_rows: list[list[int]]
+        :return: Aggregated tensor with one condition batch per condition and
+            step.
+        :rtype: torch.Tensor
+        """
+        aggregate_method = getattr(
+            self, 
+            f"_{self.batching_aggregation}_aggregate_condition_rows"
+        )
+
+        if aggregate_method is None:
+            raise ValueError(f"Aggregation method '{self.batching_aggregation}' not found.")
+
+        return aggregate_method(condition_rows)
+
     def create_datasets(self):
         """
         Split stored condition batch identifiers into datasets.
@@ -128,9 +165,10 @@ class DataModule(LightningDataModule):
         ``test_size`` is not used.
 
         Store the splits in ``train_dataset``, ``val_dataset``, and
-        ``test_dataset`` as integer tensors with shape ``[n_batches, 2]``.
-        Each row contains a condition identifier and a batch identifier.
-        Empty splits have shape ``[0, 2]``.
+        ``test_dataset`` as integer tensors with shape
+        ``[n_steps, n_conditions, 2]``. Each row contains a condition
+        identifier and a batch identifier. Empty splits have shape
+        ``[0, 0, 2]``.
 
         Conditions must have stored their batches, and
         :meth:`enumerate_condition` must have been called.
@@ -145,6 +183,10 @@ class DataModule(LightningDataModule):
         train_rows, val_rows, test_rows = [], [], []
 
         for condition_name, condition in self.problem.conditions.items():
+            condition_train_rows = []
+            condition_val_rows = []
+            condition_test_rows = []
+
             n_batches = len(condition)
             indices = (
                 torch.randperm(n_batches).tolist()
@@ -163,21 +205,26 @@ class DataModule(LightningDataModule):
 
             condition_id = self.condition_name_to_idx[condition_name]
             for batch_id in indices[:train_end]:
-                train_rows.append([condition_id, batch_id])
+                # train_rows.append([condition_id, batch_id])
+                condition_train_rows.append([condition_id, batch_id])
             for batch_id in indices[train_end:val_end]:
-                val_rows.append([condition_id, batch_id])
+                # val_rows.append([condition_id, batch_id])
+                condition_val_rows.append([condition_id, batch_id])
             for batch_id in indices[val_end:]:
-                test_rows.append([condition_id, batch_id])
+                # test_rows.append([condition_id, batch_id])
+                condition_test_rows.append([condition_id, batch_id])
 
-        self.train_dataset = torch.tensor(train_rows, dtype=torch.long).reshape(
-            -1, 2
-        )
-        self.val_dataset = torch.tensor(val_rows, dtype=torch.long).reshape(
-            -1, 2
-        )
-        self.test_dataset = torch.tensor(test_rows, dtype=torch.long).reshape(
-            -1, 2
-        )
+            train_rows.append(condition_train_rows)
+            val_rows.append(condition_val_rows)
+            test_rows.append(condition_test_rows)
+
+        print("Train rows:", train_rows)
+        print("Val rows:", val_rows)
+        print("Test rows:", test_rows)
+
+        self.train_dataset = self.aggregate_condition_rows(train_rows)
+        self.val_dataset = self.aggregate_condition_rows(val_rows)
+        self.test_dataset = self.aggregate_condition_rows(test_rows)
 
         logger.debug(
             "Created datasets with %d train, %d validation, and %d test rows.",
@@ -226,11 +273,11 @@ class DataModule(LightningDataModule):
         """
         Create a dataloader for condition and batch identifiers.
 
-        Each iteration yields one dataset row with shape ``[1, 2]``.
-        Rows are visited in dataset order using default collation.
+        Each iteration yields one step with shape ``[1, n_conditions, 2]``.
+        Steps are visited in dataset order using default collation.
 
         :param torch.Tensor dataset: The identifier dataset with shape
-            ``[n_batches, 2]``.
+            ``[n_steps, n_conditions, 2]``.
         :return: A dataloader over the identifier rows, or an empty list
             if the dataset is empty.
         :rtype: DataLoader | list
@@ -306,7 +353,9 @@ class DataModule(LightningDataModule):
             its condition.
         """
         result = []
-        for condition_id, batch_id in batch:
+        assert batch.ndim == 3 and batch.shape[0] == 1, "Batch must have shape [1, n_rows, 2]"
+
+        for condition_id, batch_id in batch.squeeze(0):
             name = self.idx_to_condition_name[int(condition_id)]
             data = self.problem.conditions[name].materialize(
                 int(batch_id), device=device

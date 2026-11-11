@@ -65,7 +65,7 @@ def _batch_ids_by_condition(datamodule, dataset):
     ids = {}
     if dataset is None or len(dataset) == 0:
         return ids
-    for condition_id, batch_id in dataset:
+    for condition_id, batch_id in dataset.reshape(-1, 2):
         name = datamodule.idx_to_condition_name[int(condition_id)]
         ids.setdefault(name, []).append(int(batch_id))
     return ids

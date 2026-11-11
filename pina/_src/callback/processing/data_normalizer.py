@@ -105,15 +105,16 @@ class DataNormalizer(Callback):
 
         :param DataModule datamodule: The data module containing the condition
             index mappings.
-        :param torch.Tensor dataset: The dataset tensor of shape ``(N, 2)``
-            with rows ``[condition_id, batch_id]``.
+        :param torch.Tensor dataset: The dataset tensor with rows
+            ``[condition_id, batch_id]``. Its shape is
+            ``(n_steps, n_conditions, 2)``; leading dimensions are flattened.
         :return: Mapping from condition name to list of batch ids.
         :rtype: dict[str, list[int]]
         """
         batch_ids = {}
         if dataset is None or len(dataset) == 0:
             return batch_ids
-        for condition_id, batch_id in dataset:
+        for condition_id, batch_id in dataset.reshape(-1, 2):
             name = datamodule.idx_to_condition_name[int(condition_id)]
             batch_ids.setdefault(name, []).append(int(batch_id))
         return batch_ids

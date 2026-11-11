@@ -38,6 +38,9 @@ class BaseProblem(ProblemInterface):
         """
         self._discretised_domains = {}
 
+        # Copy the conditions so class-level dictionaries are not mutated
+        self.conditions = dict(self.conditions)
+
         # Create a correspondence between the problem and the conditions
         for condition_name in self.conditions:
             self.conditions[condition_name].problem = self
