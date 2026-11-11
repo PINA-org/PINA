@@ -55,6 +55,7 @@ jobs:
       working-directory: docs/
 
   coverage: ##################################################################
+    if: github.event.pull_request.head.ref == 'dev' && github.event.pull_request.base.ref == 'master' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
 
     steps:
