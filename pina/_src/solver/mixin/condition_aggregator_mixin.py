@@ -2,7 +2,9 @@
 
 import torch
 
-from pina import logger
+from pina._src.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class ConditionAggregatorMixin:
@@ -43,7 +45,7 @@ class ConditionAggregatorMixin:
                 batch_idx=batch_idx,
             )
 
-        print("Condition losses:", condition_losses)
+        logger.debug("Condition losses: %s", condition_losses)
 
         # Clamp parameters - null operation if problem is not InverseProblem
         self._clamp_params()

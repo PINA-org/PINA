@@ -1,8 +1,10 @@
 """Module for enforcing type hints in Python functions."""
 
 import inspect
-import typing
 import logging
+import typing
+
+from pina._src.core.logging import get_logger
 
 
 def enforce_types(func):
@@ -58,7 +60,7 @@ def enforce_types(func):
         :return: The result of the decorated function.
         :rtype: Any
         """
-        level = logging.getLevelName(logging.getLogger().getEffectiveLevel())
+        level = logging.getLevelName(get_logger().getEffectiveLevel())
 
         # Enforce type hints only in debug mode
         if level != "DEBUG":

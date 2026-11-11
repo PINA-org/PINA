@@ -4,7 +4,9 @@ import torch
 from lightning.pytorch import LightningDataModule
 from torch.utils.data import DataLoader
 
-from pina import logger
+from pina._src.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class DataModule(LightningDataModule):
@@ -218,9 +220,12 @@ class DataModule(LightningDataModule):
             val_rows.append(condition_val_rows)
             test_rows.append(condition_test_rows)
 
-        print("Train rows:", train_rows)
-        print("Val rows:", val_rows)
-        print("Test rows:", test_rows)
+        logger.debug(
+            "Dataset rows by split: train=%s, validation=%s, test=%s.",
+            train_rows,
+            val_rows,
+            test_rows,
+        )
 
         self.train_dataset = self.aggregate_condition_rows(train_rows)
         self.val_dataset = self.aggregate_condition_rows(val_rows)

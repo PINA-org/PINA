@@ -47,6 +47,7 @@ Boundary: `FixedValue`, `FixedGradient`, `FixedFlux`, `FixedLaplacian`.
 - `LabelTensor` — `torch.Tensor` with named columns; index via `.extract(["x", "y"])`
 - Differential operators: `grad`, `div`, `laplacian`, `advection` — not cached, compute once
 - `Trainer` wraps `lightning.pytorch.Trainer`; handles DataModule, batching, device placement
+- Logging: `pina.enable_debug_logging()` or `PINA_LOG_LEVEL=DEBUG`; use `get_logger(__name__)` in modules
 
 ## Skills
 

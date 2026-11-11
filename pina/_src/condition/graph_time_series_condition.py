@@ -1,8 +1,8 @@
 """Module for the Graph Time-Series Condition class."""
 
 import torch
+from torch_geometric.data import Data
 
-from pina import logger
 from pina._src.condition.graph_condition import GraphCondition
 from pina._src.condition.time_series_condition import (
     TimeSeriesCondition,
@@ -11,7 +11,9 @@ from pina._src.condition.time_series_condition import (
 )
 from pina._src.core.graph import Graph
 from pina._src.core.label_tensor import LabelTensor
-from torch_geometric.data import Data
+from pina._src.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):

@@ -1,18 +1,22 @@
 """Module for the base solver class."""
 
 from abc import ABCMeta
+
 import lightning
 import torch
-from pina import logger
-from pina._src.core.utils import labelize_forward, check_consistency
-from pina._src.solver.solver_interface import SolverInterface
-from pina._src.weighting.base_weighting import BaseWeighting
-from pina._src.problem.inverse_problem import InverseProblem
+
+from pina._src.core.logging import get_logger
+from pina._src.core.utils import check_consistency, labelize_forward
+from pina._src.loss.base_dual_loss import BaseDualLoss
 from pina._src.optim.torch_optimizer import TorchOptimizer
 from pina._src.optim.torch_scheduler import TorchScheduler
-from pina._src.weighting.no_weighting import _NoWeighting
 from pina._src.problem.base_problem import BaseProblem
-from pina._src.loss.base_dual_loss import BaseDualLoss
+from pina._src.problem.inverse_problem import InverseProblem
+from pina._src.solver.solver_interface import SolverInterface
+from pina._src.weighting.base_weighting import BaseWeighting
+from pina._src.weighting.no_weighting import _NoWeighting
+
+logger = get_logger(__name__)
 
 
 class BaseSolver(SolverInterface, metaclass=ABCMeta):
