@@ -4,27 +4,33 @@ tools for Physics-Informed Neural Networks (PINNs), Neural Operators,
 and data-driven physical modelling.
 """
 
-import logging
-
-__all__ = [
-    "LabelTensor",
-    "Trainer",
-    "DataModule",
-    "Graph",
-]
-
-logger = logging.getLogger("pina")
-if not logger.handlers:
-    logger.addHandler(logging.NullHandler())
-
-from pina._src.core.label_tensor import LabelTensor
-from pina._src.core.graph import Graph
-from pina._src.core.trainer import Trainer
-from pina._src.core.data_module import DataModule
-
-# Back-compatibility with version 0.2, to be removed soon
 import warnings
 
+from pina._src.core.data_module import DataModule
+from pina._src.core.graph import Graph
+from pina._src.core.label_tensor import LabelTensor
+from pina._src.core.logging import (
+    disable_logging,
+    enable_debug_logging,
+    get_logger,
+    logger,
+    set_level,
+)
+from pina._src.core.trainer import Trainer
+
+__all__ = [
+    "DataModule",
+    "Graph",
+    "LabelTensor",
+    "Trainer",
+    "disable_logging",
+    "enable_debug_logging",
+    "get_logger",
+    "logger",
+    "set_level",
+]
+
+# Back-compatibility with version 0.2, to be removed soon
 _DEPRECATED_IMPORTS = {"PinaDataModule": "DataModule"}
 
 

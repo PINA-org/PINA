@@ -6,6 +6,7 @@ pina
 
     Trainer <trainer>
     DataModule <data_module>
+    Logging <logging>
     LabelTensor <label_tensor>
     Graph <graph/graph>
     LabelBatch <graph/label_batch>

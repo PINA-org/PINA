@@ -16,7 +16,11 @@ required to specify both ``components`` and ``d`` as lists of strings.
 """
 
 import torch
+
 from pina._src.core.label_tensor import LabelTensor
+from pina._src.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def _check_values(output_, input_, components, d):
@@ -145,6 +149,9 @@ def fast_grad(output_, input_, components, d):
     :return: The computed gradient tensor.
     :rtype: LabelTensor
     """
+    logger.debug(
+        "operator.fast_grad: components=%s, d=%s.", components, d
+    )
     # Work on the plain output tensor to skip LabelTensor overhead
     out = output_.tensor
     labels = output_.labels
@@ -159,6 +166,7 @@ def fast_grad(output_, input_, components, d):
     cols = [labels.index(c) for c in components]
     grads = [_scalar_grad(out[..., j : j + 1], input_, d_idx) for j in cols]
     grads = grads[0] if len(grads) == 1 else torch.cat(grads, dim=-1)
+    logger.debug("operator.fast_grad: -> shape=%s.", tuple(grads.shape))
 
     return LabelTensor(
         grads, labels=[f"d{c}d{i}" for c in components for i in d]
@@ -186,6 +194,7 @@ def fast_div(output_, input_, components, d):
         the divergence is computed. It must be a subset of the input labels.
     :rtype: LabelTensor
     """
+    logger.debug("operator.fast_div: components=%s, d=%s.", components, d)
     grad_out = fast_grad(
         output_=output_, input_=input_, components=components, d=d
     )
@@ -223,6 +232,11 @@ def fast_laplacian(output_, input_, components, d, method="std"):
     :rtype: LabelTensor
     :raises ValueError: If the passed method is neither ``std`` nor ``divgrad``.
     """
+    logger.debug(
+        "operator.fast_laplacian: method=%s, components=%s.",
+        method,
+        components,
+    )
     # Scalar laplacian
     if output_.shape[-1] == 1:
         return LabelTensor(
@@ -296,6 +310,12 @@ def fast_advection(output_, input_, velocity_field, components, d):
     :return: The computed advection tensor.
     :rtype: LabelTensor
     """
+    logger.debug(
+        "operator.fast_advection: components=%s, d=%s, velocity_field=%s.",
+        components,
+        d,
+        velocity_field,
+    )
     # Add a dimension to the velocity field for following operations
     velocity = output_.extract(velocity_field).unsqueeze(-1)
 
@@ -349,6 +369,7 @@ def grad(output_, input_, components=None, d=None):
         >>> grad(u, x, components=["u"], d=["x"])
         LabelTensor([[2.0 * x] ...], labels=["dudx"])
     """
+    logger.debug("operator.grad: components=%s, d=%s.", components, d)
     components, d = _check_values(
         output_=output_, input_=input_, components=components, d=d
     )
@@ -390,6 +411,7 @@ def div(output_, input_, components=None, d=None):
         >>> div(u, x, components=["u", "v"], d=["x", "y"])
         LabelTensor([...], labels=["div"])
     """
+    logger.debug("operator.div: components=%s, d=%s.", components, d)
     components, d = _check_values(
         output_=output_, input_=input_, components=components, d=d
     )
@@ -441,6 +463,9 @@ def laplacian(output_, input_, components=None, d=None, method="std"):
         >>> laplacian(u, x, components=["u"], d=["x"])
         LabelTensor([...], labels=["ddu"])
     """
+    logger.debug(
+        "operator.laplacian: method=%s, components=%s.", method, components
+    )
     components, d = _check_values(
         output_=output_, input_=input_, components=components, d=d
     )
@@ -495,6 +520,12 @@ def advection(output_, input_, velocity_field, components=None, d=None):
         ...     components=["u"], d=["x", "y"])
         LabelTensor([...], labels=["adv_u"])
     """
+    logger.debug(
+        "operator.advection: components=%s, d=%s, velocity_field=%s.",
+        components,
+        d,
+        velocity_field,
+    )
     components, d = _check_values(
         output_=output_, input_=input_, components=components, d=d
     )

@@ -1,10 +1,13 @@
 """Module for utility functions."""
 
-import types
 from functools import reduce
+
 import torch
 
 from pina._src.core.label_tensor import LabelTensor
+from pina._src.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 # Codacy error unused parameters
@@ -24,6 +27,9 @@ def custom_warning_format(
     :return: The formatted warning message.
     :rtype: str
     """
+    logger.debug(
+        "utils.custom_warning_format: category=%s.", category.__name__
+    )
     return f"{filename}: {category.__name__}: {message}\n"
 
 
@@ -50,6 +56,12 @@ def check_consistency(object_, object_instance, subclass=False):
         >>> tensor = LabelTensor(torch.randn(3, 2), labels=["x", "y"])
         >>> check_consistency(tensor, LabelTensor)
     """
+    logger.debug(
+        "utils.check_consistency: checking %s against %s (subclass=%s).",
+        type(object_).__name__,
+        object_instance,
+        subclass,
+    )
     if not isinstance(object_, (list, set, tuple)):
         object_ = [object_]
 
@@ -64,7 +76,7 @@ def check_consistency(object_, object_instance, subclass=False):
         if subclass:
             if not is_class:
                 raise ValueError(
-                    f"You passed {repr(obj)} "
+                    f"You passed {obj!r} "
                     f"(an instance of {type(obj).__name__}), "
                     f"but a {expected_type_name} class was expected. "
                     f"Please pass a {expected_type_name} class or a "
@@ -86,11 +98,13 @@ def check_consistency(object_, object_instance, subclass=False):
                 )
             if not isinstance(obj, object_instance):
                 raise ValueError(
-                    f"You passed {repr(obj)} "
+                    f"You passed {obj!r} "
                     f"(an instance of {type(obj).__name__}), "
                     f"but a {expected_type_name} instance was expected. "
                     f"Please pass a {expected_type_name} instance."
                 )
+
+    logger.debug("utils.check_consistency: -> consistent.")
 
 
 def labelize_forward(forward, input_variables, output_variables):
@@ -106,6 +120,11 @@ def labelize_forward(forward, input_variables, output_variables):
     :return: The decorated forward function.
     :rtype: Callable
     """
+    logger.debug(
+        "utils.labelize_forward: inputs=%s, outputs=%s.",
+        input_variables,
+        output_variables,
+    )
 
     def wrapper(x, *args, **kwargs):
         """
@@ -121,12 +140,17 @@ def labelize_forward(forward, input_variables, output_variables):
             :class:`torch.nn.Module`.
         :rtype: LabelTensor
         """
+        logger.debug("utils.labelize_forward.wrapper: called.")
         x = x.extract(input_variables)
         output = forward(x, *args, **kwargs)
         # keep it like this, directly using LabelTensor(...) raises errors
         # when compiling the code
         output = output.as_subclass(LabelTensor)
         output.labels = output_variables
+        logger.debug(
+            "utils.labelize_forward.wrapper: -> shape=%s.",
+            tuple(output.shape),
+        )
         return output
 
     return wrapper
@@ -153,6 +177,7 @@ def merge_tensors(tensors):
         >>> merged.labels
         ['x', 'y']
     """
+    logger.debug("utils.merge_tensors: %d tensors.", len(tensors))
     if tensors:
         return reduce(merge_two_tensors, tensors[1:], tensors[0])
     raise ValueError("Expected at least one tensor")
@@ -169,6 +194,11 @@ def merge_two_tensors(tensor1, tensor2):
     :return: The merged tensor.
     :rtype: LabelTensor
     """
+    logger.debug(
+        "utils.merge_two_tensors: shapes=%s, %s.",
+        tuple(tensor1.shape),
+        tuple(tensor2.shape),
+    )
     n1 = tensor1.shape[0]
     n2 = tensor2.shape[0]
 
@@ -197,6 +227,7 @@ def torch_lhs(n, dim):
         torch.Size([10, 2])
     """
 
+    logger.debug("utils.torch_lhs: n=%d, dim=%d.", n, dim)
     if not isinstance(n, int):
         raise TypeError("number of point n must be int")
 
@@ -229,7 +260,9 @@ def is_function(f):
     :return: ``True`` if ``f`` is a function, ``False`` otherwise.
     :rtype: bool
     """
-    return callable(f)
+    result = callable(f)
+    logger.debug("utils.is_function: %s -> %s.", f, result)
+    return result
 
 
 def chebyshev_roots(n):
@@ -246,6 +279,7 @@ def chebyshev_roots(n):
         >>> roots.shape
         torch.Size([5])
     """
+    logger.debug("utils.chebyshev_roots: n=%d.", n)
     pi = torch.acos(torch.zeros(1)).item() * 2
     k = torch.arange(n)
     nodes = torch.sort(torch.cos(pi * (k + 0.5) / n))[0]
@@ -261,6 +295,9 @@ def check_positive_integer(value, strict=True):
         Default is True.
     :raises AssertionError: If the value is not a positive integer.
     """
+    logger.debug(
+        "utils.check_positive_integer: value=%s, strict=%s.", value, strict
+    )
     if strict:
         assert (
             isinstance(value, int) and value > 0
@@ -291,6 +328,12 @@ def in_range(value, range_vals, strict=True):
         >>> in_range(10, [0, 10], strict=False)
         True
     """
+    logger.debug(
+        "utils.in_range: value=%s, range=%s, strict=%s.",
+        value,
+        range_vals,
+        strict,
+    )
     # Validate inputs
     check_consistency(value, (float, int))
     check_consistency(range_vals, (float, int))
