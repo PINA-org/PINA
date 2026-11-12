@@ -1,16 +1,21 @@
 """Trainer utilities built on top of the PyTorch Lightning Trainer class."""
 
 import warnings
-import torch
+
 import lightning
-from pina._src.solver.mixin.physics_informed_mixin import PhysicsInformedMixin
-from pina._src.solver.base_solver import BaseSolver
+import torch
+
 from pina._src.core.data_module import DataModule
+from pina._src.core.logging import get_logger
 from pina._src.core.utils import (
     check_consistency,
-    custom_warning_format,
     check_positive_integer,
+    custom_warning_format,
 )
+from pina._src.solver.base_solver import BaseSolver
+from pina._src.solver.mixin.physics_informed_mixin import PhysicsInformedMixin
+
+logger = get_logger(__name__)
 
 # Set custom warning format and filter warnings
 warnings.formatwarning = custom_warning_format
@@ -251,6 +256,16 @@ class Trainer(lightning.pytorch.Trainer):
             collate_fn=collate_fn,
         )
 
+        logger.info(
+            "Trainer.__init__: batch_size=%s, batching_mode=%s, "
+            "train/val/test=%s/%s/%s.",
+            self.batch_size,
+            batching_mode,
+            train_size,
+            val_size,
+            test_size,
+        )
+
         # Set logging kwargs
         self.logging_kwargs = {
             "sync_dist": bool(
@@ -260,6 +275,9 @@ class Trainer(lightning.pytorch.Trainer):
             "prog_bar": bool(kwargs["enable_progress_bar"]),
             "on_epoch": True,
         }
+        logger.debug(
+            "Trainer.__init__: logging_kwargs=%s.", self.logging_kwargs
+        )
 
     @staticmethod
     def _resolve_dataloader_options(dataloader_cls, collate_fn, conditions):
@@ -297,6 +315,13 @@ class Trainer(lightning.pytorch.Trainer):
         dataloader_cls = _normalize(dataloader_cls, "dataloader_cls")
         collate_fn = _normalize(collate_fn, "collate_fn")
 
+        logger.debug(
+            "Trainer._resolve_dataloader_options: %d conditions, "
+            "dataloader_cls=%s, collate_fn=%s.",
+            len(conditions),
+            dataloader_cls,
+            collate_fn,
+        )
         return dataloader_cls, collate_fn
 
     def _move_to_device(self):
@@ -309,12 +334,17 @@ class Trainer(lightning.pytorch.Trainer):
         """
         # Get the device from the accelerator connector
         device = self._accelerator_connector._parallel_devices[0]
+        logger.debug("Trainer._move_to_device: device=%s.", device)
 
         # Get the problem instance from the solver
         problem = self.solver.problem
 
         # Move the unknown parameters to the correct device if they exist
         if hasattr(problem, "unknown_parameters"):
+            logger.debug(
+                "Trainer._move_to_device: moving %d unknown parameter(s).",
+                len(problem.unknown_parameters),
+            )
             for key in problem.unknown_parameters:
                 problem.unknown_parameters[key] = torch.nn.Parameter(
                     problem.unknown_parameters[key].data.to(device)
@@ -329,7 +359,12 @@ class Trainer(lightning.pytorch.Trainer):
         :return: Result returned by Lightning's ``fit`` method.
         :rtype: Any
         """
-        return super().fit(self.solver, datamodule=self.data_module, **kwargs)
+        logger.info("Trainer.train: starting.")
+        result = super().fit(
+            self.solver, datamodule=self.data_module, **kwargs
+        )
+        logger.info("Trainer.train: finished.")
+        return result
 
     def test(self, **kwargs):
         """
@@ -340,7 +375,12 @@ class Trainer(lightning.pytorch.Trainer):
         :return: Result returned by Lightning's ``test`` method.
         :rtype: Any
         """
-        return super().test(self.solver, datamodule=self.data_module, **kwargs)
+        logger.info("Trainer.test: starting.")
+        result = super().test(
+            self.solver, datamodule=self.data_module, **kwargs
+        )
+        logger.info("Trainer.test: finished.")
+        return result
 
     @property
     def solver(self):
@@ -350,6 +390,9 @@ class Trainer(lightning.pytorch.Trainer):
         :return: The solver used by the trainer.
         :rtype: BaseSolver
         """
+        logger.debug(
+            "Trainer.solver: returning %s.", type(self._solver).__name__
+        )
         return self._solver
 
     @solver.setter
@@ -359,4 +402,5 @@ class Trainer(lightning.pytorch.Trainer):
 
         :param BaseSolver solver: The solver instance to attach.
         """
+        logger.debug("Trainer.solver: set to %s.", type(solver).__name__)
         self._solver = solver

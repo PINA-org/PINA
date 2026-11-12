@@ -103,6 +103,17 @@ class DataModule(LightningDataModule):
             problem_setting = {}
         self.problem_setting = problem_setting
 
+        logger.debug(
+            "DataModule.__init__: batching_mode=%s, batch_size=%s, "
+            "train/val/test=%s/%s/%s, shuffle=%s.",
+            batching_mode,
+            batch_size,
+            train_size,
+            val_size,
+            test_size,
+            shuffle,
+        )
+
     def enumerate_condition(self):
         """
         Assign integer identifiers to the problem's conditions.
@@ -120,16 +131,30 @@ class DataModule(LightningDataModule):
         self.idx_to_condition_name = {
             idx: name for name, idx in self.condition_name_to_idx.items()
         }
+        logger.debug(
+            "DataModule.enumerate_condition: %d conditions -> %s.",
+            len(self.condition_name_to_idx),
+            self.condition_name_to_idx,
+        )
         return self.condition_name_to_idx
 
     def _simple_aggregate_condition_rows(self, condition_rows):
         non_empty_rows = [rows for rows in condition_rows if rows]
         if not non_empty_rows:
+            logger.debug(
+                "DataModule._simple_aggregate_condition_rows: no rows."
+            )
             return torch.empty((0, 0, 2), dtype=torch.long)
 
         # One batch per condition and step, cycling shorter conditions until
         # the condition with the most batches is exhausted.
         n_steps = max(len(rows) for rows in non_empty_rows)
+        logger.debug(
+            "DataModule._simple_aggregate_condition_rows: %d non-empty "
+            "row sets, %d steps.",
+            len(non_empty_rows),
+            n_steps,
+        )
         aggregated_rows = [
             [rows[step % len(rows)] for rows in non_empty_rows]
             for step in range(n_steps)
@@ -155,7 +180,17 @@ class DataModule(LightningDataModule):
         if aggregate_method is None:
             raise ValueError(f"Aggregation method '{self.batching_aggregation}' not found.")
 
-        return aggregate_method(condition_rows)
+        logger.debug(
+            "DataModule.aggregate_condition_rows: method=%s, inputs=%d.",
+            self.batching_aggregation,
+            len(condition_rows),
+        )
+        aggregated = aggregate_method(condition_rows)
+        logger.debug(
+            "DataModule.aggregate_condition_rows: -> shape %s.",
+            tuple(aggregated.shape),
+        )
+        return aggregated
 
     def create_datasets(self):
         """
@@ -182,6 +217,11 @@ class DataModule(LightningDataModule):
         :raises KeyError: If a condition is absent from the identifier
             mapping.
         """
+        logger.debug(
+            "DataModule.create_datasets: %d conditions, shuffle=%s.",
+            len(self.problem.conditions),
+            self.shuffle,
+        )
         train_rows, val_rows, test_rows = [], [], []
 
         for condition_name, condition in self.problem.conditions.items():
@@ -262,6 +302,7 @@ class DataModule(LightningDataModule):
                 f"Invalid stage. Got {stage}, expected 'fit' or 'test'."
             )
 
+        logger.info("DataModule.setup: stage=%r.", stage)
         self.problem.move_discretisation_into_conditions()
 
         for name, condition in self.problem.conditions.items():
@@ -269,10 +310,19 @@ class DataModule(LightningDataModule):
                 "batch_size": self.batch_size,
                 **self.problem_setting.get(name, {}),
             }
+            logger.debug(
+                "DataModule.setup: storing condition '%s' with settings %s.",
+                name,
+                settings,
+            )
             condition.store_data(**settings)
 
         self.enumerate_condition()
         self.create_datasets()
+        logger.info(
+            "DataModule.setup: stored %d conditions and built datasets.",
+            len(self.problem.conditions),
+        )
 
     def _dataloader(self, dataset):
         """
@@ -288,7 +338,13 @@ class DataModule(LightningDataModule):
         :rtype: DataLoader | list
         """
         if len(dataset) == 0:
+            logger.debug(
+                "DataModule._dataloader: empty dataset, no dataloader created."
+            )
             return []
+        logger.debug(
+            "DataModule._dataloader: dataset length=%d.", len(dataset)
+        )
         return DataLoader(
             dataset,
             batch_size=1,
@@ -306,6 +362,9 @@ class DataModule(LightningDataModule):
         :raises AttributeError: If the training dataset has not been
             created.
         """
+        logger.debug(
+            "DataModule.train_dataloader: %d steps.", len(self.train_dataset)
+        )
         return self._dataloader(self.train_dataset)
 
     def val_dataloader(self):
@@ -318,6 +377,9 @@ class DataModule(LightningDataModule):
         :raises AttributeError: If the validation dataset has not been
             created.
         """
+        logger.debug(
+            "DataModule.val_dataloader: %d steps.", len(self.val_dataset)
+        )
         return self._dataloader(self.val_dataset)
 
     def test_dataloader(self):
@@ -329,6 +391,9 @@ class DataModule(LightningDataModule):
         :rtype: DataLoader | list
         :raises AttributeError: If the test dataset has not been created.
         """
+        logger.debug(
+            "DataModule.test_dataloader: %d steps.", len(self.test_dataset)
+        )
         return self._dataloader(self.test_dataset)
 
     def transfer_batch_to_device(self, batch, device, _):
@@ -358,6 +423,11 @@ class DataModule(LightningDataModule):
             its condition.
         """
         result = []
+        logger.debug(
+            "DataModule.transfer_batch_to_device: device=%s, conditions=%d.",
+            device,
+            batch.shape[1],
+        )
         assert batch.ndim == 3 and batch.shape[0] == 1, "Batch must have shape [1, n_rows, 2]"
 
         for condition_id, batch_id in batch.squeeze(0):

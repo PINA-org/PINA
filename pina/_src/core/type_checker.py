@@ -6,6 +6,8 @@ import typing
 
 from pina._src.core.logging import get_logger
 
+logger = get_logger(__name__)
+
 
 def enforce_types(func):
     """
@@ -49,6 +51,8 @@ def enforce_types(func):
         dummy_function2(1, right=False)
     """
 
+    logger.debug("enforce_types: wrapping %s.", func.__qualname__)
+
     def wrapper(*args, **kwargs):
         """
         Wrapper function to enforce type hints.
@@ -66,6 +70,8 @@ def enforce_types(func):
         if level != "DEBUG":
             return func(*args, **kwargs)
 
+        logger.debug("enforce_types: checking %s.", func.__qualname__)
+
         # Get the type hints for the function arguments
         hints = typing.get_type_hints(func)
         sig = inspect.signature(func)
@@ -75,6 +81,13 @@ def enforce_types(func):
         for arg_name, arg_value in bound.arguments.items():
             expected_type = hints.get(arg_name)
             if expected_type and not isinstance(arg_value, expected_type):
+                logger.debug(
+                    "enforce_types: argument '%s' of %s expected %s, got %s.",
+                    arg_name,
+                    func.__qualname__,
+                    expected_type.__name__,
+                    type(arg_value).__name__,
+                )
                 raise TypeError(
                     f"Argument '{arg_name}' must be {expected_type.__name__}, "
                     f"but got {type(arg_value).__name__}!"
@@ -85,6 +98,12 @@ def enforce_types(func):
         result = func(*args, **kwargs)
 
         if return_type and not isinstance(result, return_type):
+            logger.debug(
+                "enforce_types: return value of %s expected %s, got %s.",
+                func.__qualname__,
+                return_type.__name__,
+                type(result).__name__,
+            )
             raise TypeError(
                 f"Return value must be {return_type.__name__}, "
                 f"but got {type(result).__name__}!"
