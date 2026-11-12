@@ -1,11 +1,15 @@
 """Module to build Graph objects and perform operations on them."""
 
 import torch
-from torch_geometric.data import Data, Batch
+from torch_geometric.data import Batch, Data
 from torch_geometric.utils import k_hop_subgraph, to_undirected
 from torch_geometric.utils.loop import remove_self_loops
+
 from pina._src.core.label_tensor import LabelTensor
+from pina._src.core.logging import get_logger
 from pina._src.core.utils import check_consistency, is_function
+
+logger = get_logger(__name__)
 
 
 class Graph(Data):
@@ -38,6 +42,12 @@ class Graph(Data):
         :return: A new instance of the :class:`~pina.graph.Graph` class.
         :rtype: Graph
         """
+        logger.debug(
+            "Graph.__new__: x shape=%s, pos shape=%s, edge_index shape=%s.",
+            getattr(kwargs.get("x"), "shape", None),
+            getattr(kwargs.get("pos"), "shape", None),
+            getattr(kwargs.get("edge_index"), "shape", None),
+        )
         # create class instance
         instance = Data.__new__(cls)
 
@@ -77,6 +87,15 @@ class Graph(Data):
         :param dict kwargs: Additional keyword arguments passed to the
             :class:`~torch_geometric.data.Data` class constructor.
         """
+        logger.debug(
+            "Graph.__init__: x shape=%s, edge_index shape=%s, pos shape=%s, "
+            "edge_attr shape=%s, undirected=%s.",
+            getattr(x, "shape", None),
+            getattr(edge_index, "shape", None),
+            getattr(pos, "shape", None),
+            getattr(edge_attr, "shape", None),
+            undirected,
+        )
         # preprocessing
         self._preprocess_edge_index(edge_index, undirected)
 
@@ -91,6 +110,9 @@ class Graph(Data):
 
         :param dict kwargs: Attributes to be checked for consistency.
         """
+        logger.debug(
+            "Graph._check_type_consistency: keys=%s.", sorted(kwargs)
+        )
         # default types, specified in cls.__new__, by default they are Nont
         # if specified in **kwargs they get override
         x, pos, edge_index, edge_attr = None, None, None, None
@@ -117,6 +139,10 @@ class Graph(Data):
         :param torch.Tensor pos: The position tensor.
         :raises ValueError: If the position tensor is not consistent.
         """
+        logger.debug(
+            "Graph._check_pos_consistency: pos shape=%s.",
+            getattr(pos, "shape", None),
+        )
         if pos is not None:
             check_consistency(pos, (torch.Tensor, LabelTensor))
             if pos.ndim != 2:
@@ -130,6 +156,10 @@ class Graph(Data):
         :param torch.Tensor edge_index: The edge index tensor.
         :raises ValueError: If the edge index tensor is not consistent.
         """
+        logger.debug(
+            "Graph._check_edge_index_consistency: shape=%s.",
+            getattr(edge_index, "shape", None),
+        )
         check_consistency(edge_index, (torch.Tensor, LabelTensor))
         if edge_index.ndim != 2:
             raise ValueError("edge_index must be a 2D tensor.")
@@ -147,6 +177,12 @@ class Graph(Data):
         :param torch.Tensor edge_index: The edge index tensor.
         :raises ValueError: If the edge attribute tensor is not consistent.
         """
+        logger.debug(
+            "Graph._check_edge_attr_consistency: edge_attr shape=%s, "
+            "edge_index shape=%s.",
+            getattr(edge_attr, "shape", None),
+            getattr(edge_index, "shape", None),
+        )
         if edge_attr is not None:
             check_consistency(edge_attr, (torch.Tensor, LabelTensor))
             if edge_attr.ndim != 2:
@@ -171,6 +207,11 @@ class Graph(Data):
         :type pos: torch.Tensor | LabelTensor
         :raises ValueError: If the input tensor is not consistent.
         """
+        logger.debug(
+            "Graph._check_x_consistency: x shape=%s, pos shape=%s.",
+            getattr(x, "shape", None),
+            getattr(pos, "shape", None),
+        )
         if x is not None:
             check_consistency(x, (torch.Tensor, LabelTensor))
             if x.ndim != 2:
@@ -189,6 +230,11 @@ class Graph(Data):
         :return: The preprocessed edge index.
         :rtype: torch.Tensor
         """
+        logger.debug(
+            "Graph._preprocess_edge_index: shape=%s, undirected=%s.",
+            getattr(edge_index, "shape", None),
+            undirected,
+        )
         if undirected:
             edge_index = to_undirected(edge_index)
         return edge_index
@@ -202,6 +248,7 @@ class Graph(Data):
         :return: Batch object with extraction performed on x
         :rtype: PinaBatch
         """
+        logger.debug("Graph.extract: labels=%s, attr=%s.", labels, attr)
         # Extract labels from LabelTensor object
         tensor = getattr(self, attr).extract(labels)
         # Set the extracted tensor as the new attribute
@@ -230,6 +277,12 @@ class Graph(Data):
             num_nodes=self.num_nodes,
         )[0]
         subgraph = self.subgraph(subset)
+        logger.debug(
+            "Graph.create_subgraph: start_node=%d, num_hops=%d -> %d nodes.",
+            int(start_node),
+            num_hops,
+            subgraph.num_nodes,
+        )
 
         for key, value in self.items():
             if not isinstance(value, LabelTensor) or key not in subgraph:
@@ -296,6 +349,11 @@ class GraphBuilder:
         """
         if not loop:
             edge_index = remove_self_loops(edge_index)[0]
+        logger.debug(
+            "GraphBuilder.__new__: nodes=%d, edges=%d.",
+            pos.shape[0] if hasattr(pos, "shape") else 0,
+            edge_index.shape[1] if hasattr(edge_index, "shape") else 0,
+        )
         edge_attr = cls._create_edge_attr(
             pos, edge_index, edge_attr, custom_edge_func or cls._build_edge_attr
         )
@@ -321,6 +379,11 @@ class GraphBuilder:
         :return: The edge attributes.
         :rtype: torch.Tensor | LabelTensor | None
         """
+        logger.debug(
+            "GraphBuilder._create_edge_attr: edge_attr=%s, func=%s.",
+            edge_attr,
+            getattr(func, "__name__", func),
+        )
         check_consistency(edge_attr, bool)
         if edge_attr:
             if is_function(func):
@@ -339,6 +402,9 @@ class GraphBuilder:
         :return: The edge attributes.
         :rtype: torch.Tensor
         """
+        logger.debug(
+            "GraphBuilder._build_edge_attr: edges=%d.", edge_index.shape[1]
+        )
         return (
             (pos[edge_index[0]] - pos[edge_index[1]])
             .abs()
@@ -377,6 +443,11 @@ class RadiusGraph(GraphBuilder):
             ``edge_index``.
         :rtype: Graph
         """
+        logger.debug(
+            "RadiusGraph.__new__: points=%d, radius=%s.",
+            pos.shape[0],
+            radius,
+        )
         edge_index = cls.compute_radius_graph(pos, radius)
         return super().__new__(cls, pos=pos, edge_index=edge_index, **kwargs)
 
@@ -395,11 +466,19 @@ class RadiusGraph(GraphBuilder):
         :rtype: torch.Tensor
         """
         dist = torch.cdist(points, points, p=2)
-        return (
+        edge_index = (
             torch.nonzero(dist <= radius, as_tuple=False)
             .t()
             .as_subclass(torch.Tensor)
         )
+        logger.debug(
+            "RadiusGraph.compute_radius_graph: %d points, radius=%s -> "
+            "%d edges.",
+            points.shape[0],
+            radius,
+            edge_index.shape[1],
+        )
+        return edge_index
 
 
 class KNNGraph(GraphBuilder):
@@ -435,6 +514,11 @@ class KNNGraph(GraphBuilder):
         :rtype: Graph
         """
 
+        logger.debug(
+            "KNNGraph.__new__: points=%d, neighbours=%d.",
+            pos.shape[0],
+            neighbours,
+        )
         edge_index = cls.compute_knn_graph(pos, neighbours)
         return super().__new__(cls, pos=pos, edge_index=edge_index, **kwargs)
 
@@ -456,7 +540,17 @@ class KNNGraph(GraphBuilder):
         knn_indices = torch.topk(dist, k=neighbours, largest=False).indices
         row = torch.arange(points.size(0)).repeat_interleave(neighbours)
         col = knn_indices.flatten()
-        return torch.stack([row, col], dim=0).as_subclass(torch.Tensor)
+        edge_index = torch.stack([row, col], dim=0).as_subclass(
+            torch.Tensor
+        )
+        logger.debug(
+            "KNNGraph.compute_knn_graph: %d points, neighbours=%d -> "
+            "%d edges.",
+            points.shape[0],
+            neighbours,
+            edge_index.shape[1],
+        )
+        return edge_index
 
 
 class LabelBatch(Batch):
@@ -488,6 +582,9 @@ class LabelBatch(Batch):
             the input data.
         :rtype: :class:`~torch_geometric.data.Batch`
         """
+        logger.debug(
+            "LabelBatch.from_data_list: %d graphs.", len(data_list)
+        )
         # Store the labels of Data/Graph objects (all data have the same labels)
         # If the data do not contain labels, labels is an empty dictionary,
         # therefore the labels are not stored

@@ -1,8 +1,13 @@
 """Module for LabelTensor"""
 
 from copy import copy, deepcopy
+
 import torch
 from torch import Tensor
+
+from pina._src.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class LabelTensor(torch.Tensor):
@@ -27,7 +32,17 @@ class LabelTensor(torch.Tensor):
         """
 
         if isinstance(x, LabelTensor):
+            logger.debug(
+                "LabelTensor.__new__: returning existing tensor with "
+                "shape=%s.",
+                tuple(x.shape),
+            )
             return x
+        logger.debug(
+            "LabelTensor.__new__: shape=%s, labels=%s.",
+            tuple(x.shape) if hasattr(x, "shape") else type(x).__name__,
+            labels,
+        )
         return super().__new__(cls, x, *args, **kwargs)
 
     @property
@@ -74,6 +89,11 @@ class LabelTensor(torch.Tensor):
         :type labels: str | list[str] | dict
         :raises ValueError: If the labels are not consistent with the tensor.
         """
+        logger.debug(
+            "LabelTensor.__init__: shape=%s, labels=%s.",
+            tuple(x.shape) if hasattr(x, "shape") else type(x).__name__,
+            labels,
+        )
         super().__init__()
         if labels is not None:
             self.labels = labels
@@ -135,6 +155,7 @@ class LabelTensor(torch.Tensor):
         :type labels: str | list[str] | dict
         """
 
+        logger.debug("LabelTensor.labels: setting %s.", labels)
         if not hasattr(self, "_labels"):
             self._labels = {}
         if isinstance(labels, dict):
@@ -157,6 +178,9 @@ class LabelTensor(torch.Tensor):
                             dof does not match the tensor shape.
         """
 
+        logger.debug(
+            "LabelTensor._init_labels_from_dict: %d dimensions.", len(labels)
+        )
         tensor_shape = self.shape
 
         def validate_dof(dof_list, dim_size):
@@ -207,6 +231,9 @@ class LabelTensor(torch.Tensor):
         :type labels: list
         """
 
+        logger.debug(
+            "LabelTensor._init_labels_from_list: %d labels.", len(labels)
+        )
         # Create a dict with labels
         last_dim_labels = {
             self.ndim - 1: {"dof": labels, "name": self.ndim - 1}
@@ -238,6 +265,12 @@ class LabelTensor(torch.Tensor):
             properly setted.
         :raises ValueError: Label to extract is not in the labels ``list``.
         """
+
+        logger.debug(
+            "LabelTensor.extract: requested=%s, available=%s.",
+            labels_to_extract,
+            self.labels,
+        )
 
         def get_label_indices(dim_labels, labels_te):
             """Get the indices of the specified labels in the dimension labels.
@@ -316,6 +349,11 @@ class LabelTensor(torch.Tensor):
 
         result = LabelTensor.__new__(LabelTensor, tensor, None)
         result._labels = labels
+        logger.debug(
+            "LabelTensor.extract: -> shape=%s, labels=%s.",
+            tuple(result.shape),
+            result.labels,
+        )
         return result
 
     def __str__(self):
@@ -352,6 +390,9 @@ class LabelTensor(torch.Tensor):
         :raises ValueError: either number dof or dimensions names differ.
         """
 
+        logger.debug(
+            "LabelTensor.cat: %d tensors, dim=%d.", len(tensors), dim
+        )
         if not tensors:
             return []  # Handle empty list
         if len(tensors) == 1:
@@ -387,6 +428,9 @@ class LabelTensor(torch.Tensor):
 
         # Assign updated labels to the concatenated tensor
         cat_tensor._labels = cat_labels
+        logger.debug(
+            "LabelTensor.cat: -> shape=%s.", tuple(cat_tensor.shape)
+        )
         return cat_tensor
 
     @staticmethod
@@ -402,6 +446,9 @@ class LabelTensor(torch.Tensor):
             by stacking the input tensors.
         :rtype: LabelTensor
         """
+        logger.debug(
+            "LabelTensor.stack: %d tensors, dim=%d.", len(tensors), dim
+        )
         if not tensors:
             return []
         if len(tensors) == 1:
@@ -437,6 +484,9 @@ class LabelTensor(torch.Tensor):
                 labels[key] = value
 
         new_tensor._labels = labels
+        logger.debug(
+            "LabelTensor.stack: -> shape=%s.", tuple(new_tensor.shape)
+        )
         return new_tensor
 
     def requires_grad_(self, mode=True):
@@ -453,6 +503,7 @@ class LabelTensor(torch.Tensor):
         :rtype: LabelTensor
         """
 
+        logger.debug("LabelTensor.requires_grad_: mode=%s.", mode)
         lt = super().requires_grad_(mode)
         lt._labels = self._labels
         return lt
@@ -479,6 +530,7 @@ class LabelTensor(torch.Tensor):
         :rtype: LabelTensor
         """
 
+        logger.debug("LabelTensor.to: args=%s, kwargs=%s.", args, kwargs)
         lt = super().to(*args, **kwargs)
         lt._labels = self._labels
         return lt
@@ -493,6 +545,7 @@ class LabelTensor(torch.Tensor):
         :rtype: LabelTensor
         """
 
+        logger.debug("LabelTensor.clone: shape=%s.", tuple(self.shape))
         out = LabelTensor(
             super().clone(*args, **kwargs), deepcopy(self._labels)
         )
@@ -519,6 +572,12 @@ class LabelTensor(torch.Tensor):
         :raises ValueError: If the mode is not "std" or "cross".
         """
 
+        logger.debug(
+            "LabelTensor.append: mode=%s, shapes=%s + %s.",
+            mode,
+            tuple(self.shape),
+            tuple(tensor.shape),
+        )
         if mode == "std":
             # Call cat on last dimension
             new_label_tensor = LabelTensor.cat(
@@ -554,6 +613,7 @@ class LabelTensor(torch.Tensor):
         :rtype: LabelTensor
         """
 
+        logger.debug("LabelTensor.vstack: %d tensors.", len(tensors))
         return LabelTensor.cat(tensors, dim=0)
 
     # This method is used to update labels
@@ -568,6 +628,11 @@ class LabelTensor(torch.Tensor):
         :rtype: list[int]
         :raises: ValueError: If the index type is not supported.
         """
+        logger.debug(
+            "LabelTensor._update_single_label: index=%s, dim=%s.",
+            index,
+            dim,
+        )
         old_dof = self._labels[dim]["dof"]
         # Handle slicing
         if isinstance(index, slice):
@@ -609,6 +674,8 @@ class LabelTensor(torch.Tensor):
         :raises KeyError: If an invalid label index is provided.
         :raises IndexError: If an invalid index is accessed in the tensor.
         """
+
+        logger.debug("LabelTensor.__getitem__: index=%s.", index)
 
         # Handle string index
         if isinstance(index, str) or (
@@ -659,6 +726,10 @@ class LabelTensor(torch.Tensor):
 
         # Update the selected tensor's labels
         selected_tensor._labels = updated_labels
+        logger.debug(
+            "LabelTensor.__getitem__: -> shape=%s.",
+            tuple(selected_tensor.shape),
+        )
         return selected_tensor
 
     def sort_labels(self, dim=None):
@@ -671,6 +742,8 @@ class LabelTensor(torch.Tensor):
         :return: A new tensor with sorted labels along the specified dimension.
         :rtype: LabelTensor
         """
+
+        logger.debug("LabelTensor.sort_labels: dim=%s.", dim)
 
         def arg_sort(lst):
             """Return the indices that would sort the list.
@@ -704,6 +777,9 @@ class LabelTensor(torch.Tensor):
         :rtype: LabelTensor
         """
 
+        logger.debug(
+            "LabelTensor.__deepcopy__: shape=%s.", tuple(self.shape)
+        )
         cls = self.__class__
         result = cls(deepcopy(self.tensor), deepcopy(self.stored_labels))
         return result
@@ -718,6 +794,7 @@ class LabelTensor(torch.Tensor):
         :return: A new object with permuted dimensions and reordered labels.
         :rtype: LabelTensor
         """
+        logger.debug("LabelTensor.permute: dims=%s.", dims)
         # Call the base class permute method
         tensor = super().permute(*dims)
 
@@ -739,6 +816,7 @@ class LabelTensor(torch.Tensor):
         :rtype: LabelTensor
         """
 
+        logger.debug("LabelTensor.detach: shape=%s.", tuple(self.shape))
         lt = super().detach()
 
         # Copy the labels to the new tensor only if present
@@ -764,6 +842,7 @@ class LabelTensor(torch.Tensor):
                               mismatched labels.
         """
 
+        logger.debug("LabelTensor.summation: %d tensors.", len(tensors))
         if not tensors:
             raise ValueError("The tensors list must not be empty.")
 
@@ -802,6 +881,7 @@ class LabelTensor(torch.Tensor):
         :rtype: LabelTensor
         """
 
+        logger.debug("LabelTensor.reshape: shape=%s.", shape)
         # As for now the reshape method is used only in the context of the
         # dataset, the labels are not
         tensor = super().reshape(*shape)
