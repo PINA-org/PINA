@@ -1,19 +1,18 @@
 import pytest
 import torch
-from pina.solver import AutoregressiveSingleModelSolver
-from pina import Trainer, LabelTensor, Condition
-from pina.condition import TimeSeriesCondition
-from pina.problem import BaseProblem
-from pina.model import FeedForward
 
+from pina import LabelTensor, Trainer
+from pina.condition import TimeSeriesCondition
+from pina.model import FeedForward
+from pina.problem import BaseProblem
+from pina.solver import AutoregressiveSingleModelSolver
 
 # Settings for test purposes
 n_traj = 5
 t_steps = 10
 n_dofs = 40
 n_feats = 2
-n_windows = 3
-unroll_length = 5
+
 
 
 # Helper function to create tensor data
@@ -53,9 +52,7 @@ class DummyProblem(BaseProblem):
         super().__init__()
 
         # Initialize the time series condition with the provided data
-        self.conditions["time"] = TimeSeriesCondition(
-            input=data, n_windows=n_windows, unroll_length=unroll_length
-        )
+        self.conditions["time"] = TimeSeriesCondition(input=data)
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
