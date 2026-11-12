@@ -80,17 +80,18 @@ or **time-series** conditions:
 
 ```python
 from pina import Condition
+from pina.condition import TimeSeriesCondition
 
 # Standard supervised
 Condition(input=ts_tensor, target=target_tensor)
 
-# Time series (input is 3D: [batch, n_windows, features])
-Condition(
+# Time series (input is 3D: [trajectories, time_steps, *features])
+condition = TimeSeriesCondition(
     input=ts_tensor,
-    n_windows=10,
-    unroll_length=5,
-    randomize=True,
+    state=[...],    # columns to predict
+    control=[...],  # optional columns used as inputs only
 )
+condition.store_data(n_windows=10, unroll_length=5, randomize=True)
 
 # Graph time series
 Condition(
@@ -102,9 +103,11 @@ Condition(
 ```
 
 Parameters:
-- `n_windows` — number of rolling windows
-- `unroll_length` — prediction horizon per window
-- `randomize` — shuffle window order
+- `state` — columns predicted by the model
+- `control` — columns concatenated to the model input but never predicted
+- `n_windows` — number of rolling windows, passed to `store_data`
+- `unroll_length` — prediction horizon per window, passed to `store_data`
+- `randomize` — shuffle window order, passed to `store_data`
 - `key` — key for graph time series data
 
 ## Step 4 — Integrate with the problem class
@@ -132,11 +135,12 @@ class MyProblem(SpatialProblem):
 - [ ] For data-driven: confirmed data type (`LabelTensor`, `torch.Tensor`,
       `Graph`, or PyG `Data`)
 - [ ] For data-driven: `input_variables` is a `list[str]` naming the inputs
-- [ ] For time series: `n_windows`, `unroll_length`, and optional `key`
-      are set correctly
+- [ ] For time series: `state`, `control`, and the `store_data` arguments
+      `n_windows`, `unroll_length`, and optional `key` are set correctly
 - [ ] Each `Condition` uses valid keyword arguments:
   - `Condition(domain=..., equation=...)` for physics-on-domain
   - `Condition(input=..., equation=...)` for physics-on-points
   - `Condition(input=..., target=...)` for data-driven
-  - `Condition(input=..., n_windows=..., unroll_length=...)` for time series
+  - `TimeSeriesCondition(input=..., state=..., control=...)` followed by
+    `store_data(n_windows=..., unroll_length=...)` for time series
 - [ ] `domains` dict has an entry for every domain name used in conditions
