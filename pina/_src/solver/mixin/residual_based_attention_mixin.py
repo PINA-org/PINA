@@ -94,7 +94,7 @@ class ResidualBasedAttentionMixin:
             self.register_buffer(f"weight_{cond}", torch.zeros((n_pts, 1)))
             self.weight_buffers[cond] = f"weight_{cond}"
 
-    def _regularize_condition_loss(
+    def _weight_condition_loss(
         self,
         condition_tensor_loss,
         condition_name,
@@ -102,18 +102,14 @@ class ResidualBasedAttentionMixin:
         batch_idx,
     ):
         """
-        Regularize the condition loss if needed. This method can be overridden
-        by mixins to implement specific regularization strategies, such as
-        adding a gradient penalty in gradient-enhanced solvers or applying
-        residual-based attention.
+        Apply residual-based attention weighting to the condition loss.
 
-        :param condition_tensor_loss: The original tensor loss for the
-            condition.
+        :param condition_tensor_loss: The tensor loss for the condition.
         :type condition_tensor_loss: torch.Tensor | LabelTensor
         :param str condition_name: The name of the condition.
         :param dict data: The data corresponding to the condition.
         :param int batch_idx: The index of the current batch.
-        :return: The regularized tensor loss for the condition.
+        :return: The weighted tensor loss for the condition.
         :rtype: torch.Tensor | LabelTensor
         """
         # Apply residual-based attention mechanism if needed

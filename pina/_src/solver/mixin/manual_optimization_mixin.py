@@ -11,12 +11,6 @@ class ManualOptimizationMixin:
     :class:`~pina._src.solver.base_solver.BaseSolver`.
     """
 
-    def _init_manual_optimization(self):
-        """
-        Disable Lightning's automatic optimization.
-        """
-        self.automatic_optimization = False
-
     def training_step(self, batch, batch_idx):
         """
         Solver training step.
