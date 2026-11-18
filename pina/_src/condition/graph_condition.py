@@ -63,10 +63,15 @@ class GraphCondition(BaseCondition):
         num_hops = kwargs.get("num_hops", 5)
 
         start_nodes = torch.randint(0, self.graph.num_nodes, (n_subgraphs,))
+        print("Start nodes:", start_nodes)
+        print(num_hops)
+        print(n_subgraphs)
         self.data = [
             self.create_subgraph(start_node, num_hops=num_hops)
             for start_node in start_nodes
         ]
+        for i, subgraph in enumerate(self.data):
+            print(f"Subgraph {i}: {subgraph.x.shape}")
         return self.data
 
     def create_subgraph(self, start_node, num_hops=5):

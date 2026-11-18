@@ -1,16 +1,19 @@
 """Trainer utilities built on top of the PyTorch Lightning Trainer class."""
 
 import warnings
-import torch
+from typing import ClassVar
+
 import lightning
-from pina._src.solver.mixin.physics_informed_mixin import PhysicsInformedMixin
-from pina._src.solver.base_solver import BaseSolver
+import torch
+
 from pina._src.core.data_module import DataModule
 from pina._src.core.utils import (
     check_consistency,
-    custom_warning_format,
     check_positive_integer,
+    custom_warning_format,
 )
+from pina._src.solver.base_solver import BaseSolver
+from pina._src.solver.mixin.physics_informed_mixin import PhysicsInformedMixin
 
 # Set custom warning format and filter warnings
 warnings.formatwarning = custom_warning_format
@@ -37,7 +40,7 @@ class Trainer(lightning.pytorch.Trainer):
     """
 
     # Available batching modes
-    _AVAIL_BATCHING_MODES = {
+    _AVAIL_BATCHING_MODES: ClassVar[set[str]] = {
         "common_batch_size",
         "proportional",
         "simple"
@@ -56,6 +59,7 @@ class Trainer(lightning.pytorch.Trainer):
         shuffle=True,
         dataloader_cls=None,
         collate_fn=None,
+        problem_setting=None,
         **kwargs,
     ):
         """
@@ -97,6 +101,10 @@ class Trainer(lightning.pytorch.Trainer):
             condition into a batch. It receives the selected raw data and the
             ids, and returns the batch. Default is ``None``.
         :type collate_fn: Callable | dict[str, Callable] | None
+        :param dict problem_setting: Per-condition keyword arguments passed to
+            each condition's ``store_data`` method by the data module. Keys
+            are condition names and values are dictionaries of settings.
+            Default is ``None``.
         :param dict kwargs: Additional keyword arguments forwarded to the
             Lightning trainer.
         :raises ValueError: If ``solver`` is not a PINA solver.
@@ -249,6 +257,7 @@ class Trainer(lightning.pytorch.Trainer):
             shuffle=shuffle,
             dataloader_cls=dataloader_cls,
             collate_fn=collate_fn,
+            problem_setting=problem_setting,
         )
 
         # Set logging kwargs

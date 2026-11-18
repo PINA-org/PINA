@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 import pytest
 import torch
 from torch_geometric.data import Data
@@ -192,7 +194,7 @@ def test_evaluate_forward_receives_graph():
     shapes = []
 
     class CaptureSolver:
-        _kwargs = {}
+        _kwargs: ClassVar[dict] = {}
 
         def preprocess_step(self, state, **kwargs):
             return state
@@ -211,3 +213,113 @@ def test_evaluate_forward_receives_graph():
     assert all(isinstance(inp, Data) for inp in received)
     assert shapes[0] == (4, batch.pos.shape[0], 2)
     assert residuals.shape == (2, 4, batch.pos.shape[0], 2)
+
+
+def _create_control_graph_data(use_lt):
+    x = torch.rand(n_nodes, time_steps, 3)
+    pos = torch.rand(n_nodes, 2)
+    if use_lt:
+        x = LabelTensor(x, ["u", "v", "a"])
+        pos = LabelTensor(pos, ["x", "y"])
+    return RadiusGraph(pos=pos, radius=0.1, x=x)
+
+
+class ControlledGraphSolver:
+    def __init__(self, n_state):
+        self.n_state = n_state
+        self._kwargs = {}
+        self.aggregation_strategy = torch.mean
+        self.last_input = None
+
+    def forward(self, samples):
+        self.last_input = samples.x
+        x = (
+            samples.x.as_subclass(torch.Tensor)
+            if isinstance(samples.x, LabelTensor)
+            else samples.x
+        )
+        return x[..., : self.n_state] + x[..., self.n_state :]
+
+    def preprocess_step(self, current_state, **kwargs):
+        return current_state
+
+    def postprocess_step(self, predicted_state, **kwargs):
+        return predicted_state
+
+    def _get_weights(self, condition_name, step_losses):
+        return 1.0
+
+
+@pytest.mark.parametrize("use_lt", [True, False])
+def test_constructor_control_selectors(use_lt):
+    graph = _create_control_graph_data(use_lt)
+    condition = GraphTimeSeriesCondition(
+        graph, key="x", state=[0, 1], control=[2]
+    )
+
+    assert condition.state == [0, 1]
+    assert condition.control == [2]
+    assert condition._state_indices == [0, 1]
+    assert condition._control_indices == [2]
+
+
+def test_constructor_control_labels():
+    graph = _create_control_graph_data(use_lt=True)
+    condition = GraphTimeSeriesCondition(
+        graph, key="x", state=["u", "v"], control=["a"]
+    )
+
+    assert condition.state == ["u", "v"]
+    assert condition.control == ["a"]
+    assert condition._state_indices == [0, 1]
+    assert condition._control_indices == [2]
+
+
+@pytest.mark.parametrize("use_lt", [True, False])
+@pytest.mark.parametrize("n_windows", [4, 6])
+@pytest.mark.parametrize("unroll_length", [3, 5])
+@pytest.mark.parametrize("randomize", [True, False])
+def test_evaluate_with_control(use_lt, n_windows, unroll_length, randomize):
+    graph = _create_control_graph_data(use_lt)
+    condition = GraphTimeSeriesCondition(
+        graph, key="x", state=[0, 1], control=[2]
+    )
+    condition.store_data(
+        n_subgraphs=1,
+        num_hops=1,
+        n_windows=n_windows,
+        unroll_length=unroll_length,
+        randomize=randomize,
+    )
+    batch = condition.materialize(0)
+    series = batch.x.clone()
+    solver = ControlledGraphSolver(n_state=2)
+
+    residuals = condition.evaluate(batch, solver)
+
+    # The model receives state and control concatenated
+    assert solver.last_input.shape[-1] == 3
+    if use_lt:
+        assert solver.last_input.labels == ["u", "v", "a"]
+
+    # The batch is restored after evaluation
+    assert torch.allclose(batch.x, series)
+
+    # Compute expected residuals. Only the state is predicted and fed back.
+    tensor = (
+        series.as_subclass(torch.Tensor)
+        if isinstance(series, LabelTensor)
+        else series
+    )
+    current_state = tensor[:, 0, :, :2]
+    step_residuals = []
+    for step in range(1, tensor.shape[1]):
+        control_state = tensor[:, step - 1, :, 2:]
+        predicted_state = current_state + control_state
+        target_state = tensor[:, step, :, :2]
+        step_residuals.append(predicted_state - target_state)
+        current_state = predicted_state
+
+    expected = torch.stack(step_residuals)
+    assert residuals.shape[-1] == 2
+    assert torch.allclose(residuals, expected)
