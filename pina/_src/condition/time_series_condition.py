@@ -530,9 +530,6 @@ class TimeSeriesCondition(TensorCondition):
                 f" Got shape {series.shape}."
             )
 
-        # Copy the kwargs to avoid modifying the original settings
-        kwargs = solver._kwargs.copy()
-
         # Resolve labels for the selected columns, if available
         if isinstance(series, LabelTensor) and series.labels is not None:
             state_labels = [series.labels[i] for i in self._state_indices]
@@ -562,10 +559,9 @@ class TimeSeriesCondition(TensorCondition):
                 control_labels=control_labels,
             )
 
-            # Pre-process, forward, and post-process the model input
-            processed_input = solver.preprocess_step(model_input, **kwargs)
-            output = solver.forward(processed_input)
-            predicted_state = solver.postprocess_step(output, **kwargs)
+            # Forward the model input
+            output = solver.forward(model_input)
+            predicted_state = output
 
             # Retrieve the target state and compute the step-wise residual
             target_state = _select_features(
