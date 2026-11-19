@@ -4,7 +4,7 @@
 
 DataModule
 ======================
-.. currentmodule:: pina.data_module
+.. currentmodule:: pina
 
 .. autoclass:: pina._src.core.data_module.DataModule
     :members:

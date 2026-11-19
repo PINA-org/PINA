@@ -1,7 +1,6 @@
 """Trainer utilities built on top of the PyTorch Lightning Trainer class."""
 
 import warnings
-from typing import ClassVar
 
 import lightning
 import torch
@@ -9,7 +8,6 @@ import torch
 from pina._src.core.data_module import DataModule
 from pina._src.core.utils import (
     check_consistency,
-    check_positive_integer,
     custom_warning_format,
 )
 from pina._src.solver.base_solver import BaseSolver
@@ -24,42 +22,53 @@ class Trainer(lightning.pytorch.Trainer):
     """
     PINA-specific extension of :class:`lightning.pytorch.Trainer`.
 
-    The trainer configures solver execution, dataset splitting, batching,
-    logging, device placement for unknown parameters, and gradient tracking
-    requirements for physics-informed solvers.
+    The trainer configures solver execution, logging, device placement for
+    unknown parameters, and gradient tracking requirements for
+    physics-informed solvers.
+
+    Dataset creation is delegated to :class:`~pina.DataModule`. By default the
+    trainer builds one from ``train_size``, ``val_size``, ``test_size``,
+    ``batch_size``, and ``shuffle``. For advanced settings, such as per
+    condition batch sizes or custom dataloader options, build a
+    :class:`~pina.DataModule` explicitly and pass it through ``datamodule``.
 
     :Example:
 
-        >>> from pina.solver import BaseSolver
+        >>> from pina import DataModule, Trainer
         >>> from pina.problem import BaseProblem
-        >>> import torch
-        >>> # Trainer is typically used with a solver and problem:
-        >>> # trainer = Trainer(solver=solver_instance, batch_size=32,
-        >>> #     max_epochs=100)
-        >>> # trainer.train()
+        >>> # Trainer builds the data module from the split and batch options:
+        >>> trainer = Trainer(
+        ...     solver=solver_instance,
+        ...     batch_size=32,
+        ...     train_size=0.8,
+        ...     val_size=0.1,
+        ...     test_size=0.1,
+        ...     max_epochs=100,
+        ... )
+        >>> # Advanced usage: provide a fully configured data module:
+        >>> data_module = DataModule(
+        ...     problem=solver_instance.problem,
+        ...     batch_size={"D": 32, "boundary": 16},
+        ... )
+        >>> trainer = Trainer(solver=solver_instance, datamodule=data_module)
     """
-
-    # Available batching modes
-    _AVAIL_BATCHING_MODES: ClassVar[set[str]] = {
-        "common_batch_size",
-        "proportional",
-        "simple"
-    }
 
     def __init__(
         self,
         solver,
+        train_size=None,
+        test_size=None,
+        val_size=None,
         batch_size=None,
-        train_size=1.0,
-        test_size=0.0,
-        val_size=0.0,
-        batching_mode="simple",
-        num_workers=0,
-        pin_memory=False,
-        shuffle=True,
+        shuffle=None,
+        datamodule=None,
+        *,
+        batching_mode=None,
+        num_workers=None,
+        pin_memory=None,
+        problem_setting=None,
         dataloader_cls=None,
         collate_fn=None,
-        problem_setting=None,
         **kwargs,
     ):
         """
@@ -67,61 +76,52 @@ class Trainer(lightning.pytorch.Trainer):
 
         :param BaseSolver solver: The solver used to train, validate, and test
             the associated problem.
-        :param int batch_size: The number of samples per batch. If ``None``, the
-            entire dataset is processed as a single batch. Default is ``None``.
         :param float train_size: The fraction of samples assigned to the
-            training split. Must belong to the interval ``[0, 1]``.
-            Default is ``1.0``.
-        :param float val_size: The fraction of samples assigned to the
-            validation split. Must belong to the interval ``[0, 1]``.
-            Default is ``0.0``.
+            training split. Must belong to the interval ``[0, 1]``. If
+            ``datamodule`` is not provided, defaults to ``1.0``.
         :param float test_size: The fraction of samples assigned to the test
-            split. Must belong to the interval ``[0, 1]``. Default is ``0.0``.
-        :param str batching_mode: The strategy used to aggregate batches across
-            dataloaders. Available options are ``"common_batch_size"`` for
-            uniform batch sizes across conditions, ``"proportional"`` for
-            batch sizes proportional to dataset sizes, and ``"simple"`` for
-            the current one-batch-per-condition aggregation.
-            Default is ``"simple"``.
-        :param int num_workers: The number of worker processes used by
-            dataloaders. Default is ``0`` for sequential loading.
-        :param bool pin_memory: Whether pinned memory should be enabled during
-            data loading. Default is ``False``.
-        :param bool shuffle: Whether condition samples should be shuffled before
-            splitting. Default is ``True``.
-        :param dataloader_cls: The dataloader class to use for each condition,
-            defaulting to :class:`torch.utils.data.DataLoader`. It can either
-            be a single class applied to all conditions, or a mapping between
-            condition names and dataloader classes. Custom classes must accept
-            the ``batch_size``, ``sampler``, ``num_workers``, and ``pin_memory``
-            arguments and yield batches of sample ids. Default is ``None``.
-        :type dataloader_cls: type | dict[str, type] | None
-        :param collate_fn: Optional callable (or mapping between condition
-            names and callables) used to collapse the raw data selected by a
-            condition into a batch. It receives the selected raw data and the
-            ids, and returns the batch. Default is ``None``.
-        :type collate_fn: Callable | dict[str, Callable] | None
-        :param dict problem_setting: Per-condition keyword arguments passed to
-            each condition's ``store_data`` method by the data module. Keys
-            are condition names and values are dictionaries of settings.
+            split. Must belong to the interval ``[0, 1]``. If ``datamodule``
+            is not provided, defaults to ``0.0``.
+        :param float val_size: The fraction of samples assigned to the
+            validation split. Must belong to the interval ``[0, 1]``. If
+            ``datamodule`` is not provided, defaults to ``0.0``.
+        :param batch_size: The number of samples per batch. If ``None``, the
+            entire dataset is processed as a single batch. If ``datamodule``
+            is not provided, it is forwarded to the created data module.
             Default is ``None``.
+        :type batch_size: int | None
+        :param bool shuffle: Whether condition samples should be shuffled
+            before splitting. If ``datamodule`` is not provided, defaults to
+            ``True``.
+        :param DataModule datamodule: A fully configured data module. When
+            provided, ``train_size``, ``test_size``, ``val_size``,
+            ``batch_size``, and ``shuffle`` are ignored with a warning.
+            Default is ``None``.
+        :param batching_mode: Deprecated and ignored. Configure it on the
+            :class:`~pina.DataModule` instead.
+        :param num_workers: Deprecated and ignored. Configure it on the
+            :class:`~pina.DataModule` instead.
+        :param pin_memory: Deprecated and ignored. Configure it on the
+            :class:`~pina.DataModule` instead.
+        :param problem_setting: Deprecated and ignored. Use the per condition
+            ``batch_size`` mapping of :class:`~pina.DataModule` instead.
+        :param dataloader_cls: Deprecated and ignored.
+        :param collate_fn: Deprecated and ignored.
         :param dict kwargs: Additional keyword arguments forwarded to the
             Lightning trainer.
         :raises ValueError: If ``solver`` is not a PINA solver.
-        :raises ValueError: If ``train_size``, ``val_size``, or ``test_size`` is
-            not a float in the interval ``[0, 1]``.
+        :raises ValueError: If ``datamodule`` is not a
+            :class:`~pina.DataModule` or refers to a different problem.
+        :raises ValueError: If ``train_size``, ``val_size``, or ``test_size``
+            is not a float in the interval ``[0, 1]``.
         :raises ValueError: If the sum of ``train_size``, ``val_size``, and
             ``test_size`` is not equal to 1.
-        :raises ValueError: If ``pin_memory`` or ``shuffle`` is not a boolean.
-        :raises AssertionError: If ``num_workers`` is a negative integer.
-        :raises ValueError: If ``batch_size``, when provided, is not a positive
-            integer.
-        :raises ValueError: If ``batching_mode`` is not one of the available
-             options.
-        :raises ValueError: If ``dataloader_cls`` or ``collate_fn`` is a mapping
-            referring to unknown conditions.
-        :raises UserWarning: If the provided ``batching_mode`` is incompatible
-            with the ``batch_size``.
+        :raises ValueError: If ``shuffle`` is not a boolean.
+        :raises AssertionError: If ``batch_size``, when provided, is not a
+            positive integer.
+        :raises UserWarning: If the split or batch options are provided
+            together with ``datamodule``.
+        :raises DeprecationWarning: If a deprecated data option is provided.
         :raises RuntimeError: If any domain in the problem has not been
             discretised.
         """
@@ -135,46 +135,81 @@ class Trainer(lightning.pytorch.Trainer):
             )
             kwargs.pop("compile")
 
+        # Warn about deprecated data options, which are now configured on the
+        # data module
+        deprecated_kwargs = {
+            "batching_mode": batching_mode,
+            "num_workers": num_workers,
+            "pin_memory": pin_memory,
+            "problem_setting": problem_setting,
+            "dataloader_cls": dataloader_cls,
+            "collate_fn": collate_fn,
+        }
+        for name, value in deprecated_kwargs.items():
+            if value is not None:
+                warnings.warn(
+                    f"`{name}` is deprecated in `Trainer` and will be removed "
+                    "in 0.4. It is ignored: configure it on a `pina.DataModule` "
+                    "and pass it through `datamodule=` instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+
         # Check consistency
         check_consistency(solver, BaseSolver)
-        check_consistency(train_size, float)
-        check_consistency(test_size, float)
-        check_consistency(val_size, float)
-        check_consistency(pin_memory, bool)
-        check_consistency(shuffle, bool)
-        check_positive_integer(num_workers, strict=False)
-        if batch_size is not None:
-            check_positive_integer(batch_size, strict=True)
 
-        # Check that train_size, test_size and val_size sum to 1
-        total = train_size + val_size + test_size
-        if not torch.isclose(torch.tensor(total), torch.tensor(1.0)):
-            raise ValueError(
-                "`train_size`, `val_size`, and `test_size` must sum to 1."
+        # Resolve the data module
+        if datamodule is None:
+            self.data_module = DataModule(
+                problem=solver.problem,
+                train_size=1.0 if train_size is None else train_size,
+                val_size=0.0 if val_size is None else val_size,
+                test_size=0.0 if test_size is None else test_size,
+                batch_size=batch_size,
+                shuffle=True if shuffle is None else shuffle,
             )
+        else:
+            check_consistency(datamodule, DataModule)
 
-        # Check consistency
-        if batching_mode not in self._AVAIL_BATCHING_MODES:
-            raise ValueError(
-                f"Invalid batching mode '{batching_mode}'. "
-                f"Expected one of: {sorted(self._AVAIL_BATCHING_MODES)}."
-            )
+            if datamodule.problem is not solver.problem:
+                raise ValueError(
+                    "The provided `datamodule` refers to a different problem "
+                    "than the solver. Make sure `datamodule.problem` is the "
+                    "same object as `solver.problem`."
+                )
 
-        # Normalize dataloader_cls and collate_fn to per-condition mappings
-        conditions = set(solver.problem.conditions)
-        dataloader_cls, collate_fn = self._resolve_dataloader_options(
-            dataloader_cls=dataloader_cls,
-            collate_fn=collate_fn,
-            conditions=conditions,
-        )
+            conflicting = [
+                name
+                for name, value in (
+                    ("train_size", train_size),
+                    ("val_size", val_size),
+                    ("test_size", test_size),
+                    ("batch_size", batch_size),
+                    ("shuffle", shuffle),
+                )
+                if value is not None
+            ]
+            if conflicting:
+                warnings.warn(
+                    "The following arguments are ignored because a "
+                    f"`datamodule` was provided: {conflicting}. Configure "
+                    "them on the `pina.DataModule` instead.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
-        # Set inference mode to false when usiing physics-informed mixin
+            self.data_module = datamodule
+
+        # Set inference mode to false when using physics-informed mixin
         if isinstance(solver, PhysicsInformedMixin):
             kwargs["inference_mode"] = False
 
-        # Set log_every_n_steps to 0 if batch_size is None, otherwise default
+        # Set log_every_n_steps to 0 if the whole dataset is a single batch,
+        # otherwise default
         kwargs["log_every_n_steps"] = (
-            0 if batch_size is None else kwargs.get("log_every_n_steps", 50)
+            0
+            if self.data_module.batch_size is None
+            else kwargs.get("log_every_n_steps", 50)
         )
 
         # Set default value for enable_progress_bar to True if not provided
@@ -183,44 +218,9 @@ class Trainer(lightning.pytorch.Trainer):
         # Initialize the parent class with the provided keyword arguments
         super().__init__(**kwargs)
 
-        # Raise warning if num_workers or pin_memory are set without a batch size
-        if batch_size is None and (num_workers > 0 or pin_memory):
-            warnings.warn(
-                "`num_workers` and `pin_memory` have no effect when "
-                "`batch_size` is None.",
-                UserWarning,
-            )
-
-        # Raise warning if batch size and batching mode are incompatible
-        if batch_size is None and batching_mode != "simple":
-            warnings.warn(
-                f"Batching mode '{batching_mode}' is ignored when the batch "
-                "size is None. Setting batching_mode to 'simple'.",
-                UserWarning,
-            )
-
-            # Set batching mode to simple if incompatible
-            batching_mode = "simple"
-
-        # Raise warning if batch size and batching mode are incompatible
-        if (
-            batch_size is not None
-            and batching_mode == "proportional"
-            and batch_size <= len(solver.problem.conditions)
-        ):
-            warnings.warn(
-                "Batching mode 'proportional' requires the batch size to be "
-                "larger than the number of conditions. Setting batching_mode "
-                "to 'simple'.",
-                UserWarning,
-            )
-
-            # Set batching mode to simple if incompatible
-            batching_mode = "simple"
-
         # Initialize the class attributes
         self.solver = solver
-        self.batch_size = batch_size
+        self.batch_size = self.data_module.batch_size
 
         # Move the unknown parameters to the correct device
         self._move_to_device()
@@ -244,22 +244,6 @@ class Trainer(lightning.pytorch.Trainer):
                 f"sampled. Domain status:\n{status}"
             )
 
-        # Create the data module
-        self.data_module = DataModule(
-            problem=self.solver.problem,
-            train_size=train_size,
-            test_size=test_size,
-            val_size=val_size,
-            batch_size=self.batch_size,
-            batching_mode=batching_mode,
-            num_workers=num_workers,
-            pin_memory=pin_memory,
-            shuffle=shuffle,
-            dataloader_cls=dataloader_cls,
-            collate_fn=collate_fn,
-            problem_setting=problem_setting,
-        )
-
         # Set logging kwargs
         self.logging_kwargs = {
             "sync_dist": bool(
@@ -269,44 +253,6 @@ class Trainer(lightning.pytorch.Trainer):
             "prog_bar": bool(kwargs["enable_progress_bar"]),
             "on_epoch": True,
         }
-
-    @staticmethod
-    def _resolve_dataloader_options(dataloader_cls, collate_fn, conditions):
-        """
-        Normalize the dataloader and collate options to per-condition mappings.
-
-        :param dataloader_cls: The dataloader class to use. It can be a single
-            class applied to all conditions, or a mapping between condition
-            names and dataloader classes.
-        :type dataloader_cls: type | dict[str, type] | None
-        :param collate_fn: The collate function to use. It can be a single
-            callable applied to all conditions, or a mapping between condition
-            names and callables.
-        :type collate_fn: Callable | dict[str, Callable] | None
-        :param set[str] conditions: The names of the problem conditions.
-        :raises ValueError: If a mapping refers to unknown conditions.
-        :return: The normalized per-condition mappings.
-        :rtype: tuple[dict[str, type | None], dict[str, Callable | None]]
-        """
-
-        def _normalize(value, label):
-            if value is None:
-                return {name: None for name in conditions}
-
-            if isinstance(value, dict):
-                if not set(value).issubset(conditions):
-                    raise ValueError(
-                        f"The {label} mapping refers to unknown conditions. "
-                        f"Valid conditions are: {sorted(conditions)}."
-                    )
-                return value
-
-            return {name: value for name in conditions}
-
-        dataloader_cls = _normalize(dataloader_cls, "dataloader_cls")
-        collate_fn = _normalize(collate_fn, "collate_fn")
-
-        return dataloader_cls, collate_fn
 
     def _move_to_device(self):
         """
