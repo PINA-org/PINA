@@ -36,12 +36,6 @@ class DummySolver:
     def forward(self, samples):
         return samples.x
 
-    def preprocess_step(self, current_state, **kwargs):
-        return current_state
-
-    def postprocess_step(self, predicted_state, **kwargs):
-        return predicted_state
-
     def _get_weights(self, condition_name, step_losses):
         return 1.0
 
@@ -196,12 +190,6 @@ def test_evaluate_forward_receives_graph():
     class CaptureSolver:
         _kwargs: ClassVar[dict] = {}
 
-        def preprocess_step(self, state, **kwargs):
-            return state
-
-        def postprocess_step(self, state, **kwargs):
-            return state
-
         def forward(self, samples):
             received.append(samples)
             shapes.append(samples.x.shape)
@@ -239,12 +227,6 @@ class ControlledGraphSolver:
             else samples.x
         )
         return x[..., : self.n_state] + x[..., self.n_state :]
-
-    def preprocess_step(self, current_state, **kwargs):
-        return current_state
-
-    def postprocess_step(self, predicted_state, **kwargs):
-        return predicted_state
 
     def _get_weights(self, condition_name, step_losses):
         return 1.0

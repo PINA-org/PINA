@@ -95,8 +95,8 @@ class AutoregressiveSingleModelSolver(AutoregressiveMixin, SingleModelSolver):
             average and step count at the start of each epoch. If ``True``, the
             adaptive weights will be recalibrated at the beginning of each epoch
             based on the new training dynamics. Default is ``True``.
-        :param dict kwargs: Additional keyword arguments for preprocessing and
-            postprocessing steps.
+        :param dict kwargs: Additional keyword arguments for the autoregressive
+            rollout.
         """
 
         # Initialize the parent class

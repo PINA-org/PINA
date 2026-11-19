@@ -132,9 +132,6 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                 series = LabelTensor(series, labels)
             setattr(subgraph, self.key, series)
 
-        for i, subgraph in enumerate(self.data):
-            print(f"Subgraph {i}: {getattr(subgraph, self.key).shape}")
-            print(subgraph.num_nodes)
         logger.debug("Stored %d graph time-series batches.", len(self.data))
         return self.data
 
@@ -217,9 +214,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
 
                 # Forward the graph and compare only the state columns
                 prediction = solver.forward(batch) + current_state
-                # print("Prediction before applying Dirichlet nodes:", prediction.tensor.sum())
                 prediction[dirichlet_nodes] = 0.0
-                # print("Prediction after applying Dirichlet nodes:", prediction.tensor.sum())
                 target_state = _select_features(
                     series[:, step], self._state_indices
                 )

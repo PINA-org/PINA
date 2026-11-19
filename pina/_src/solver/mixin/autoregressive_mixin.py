@@ -1,6 +1,7 @@
 """Module for the autoregressive mixin class."""
 
 import torch
+
 from pina._src.core.utils import check_consistency
 
 
@@ -31,8 +32,8 @@ class AutoregressiveMixin:
             average and step count at the start of each epoch. If ``True``, the
             adaptive weights will be recalibrated at the beginning of each epoch
             based on the new training dynamics.
-        :param dict kwargs: Additional keyword arguments for preprocessing and
-            postprocessing steps.
+        :param dict kwargs: Additional keyword arguments for the autoregressive
+            rollout.
         :raises ValueError: If ``eps`` is not a float or int.
         :raises ValueError: If ``reset_weights_at_epoch_start`` is not a bool.
         """
@@ -114,32 +115,7 @@ class AutoregressiveMixin:
             self._running_avg.clear()
             self._step_count.clear()
 
-    def preprocess_step(self, current_state, **kwargs):
-        """
-        Preprocess the current state before each step.
-
-        :param current_state: The current state tensor.
-        :type current_state: torch.Tensor | LabelTensor
-        :param dict kwargs: Additional keyword arguments for preprocessing.
-        :return: The preprocessed state tensor.
-        :rtype: torch.Tensor | LabelTensor
-        """
-        return current_state
-
-    def postprocess_step(self, predicted_state, **kwargs):
-        """
-        Postprocess the predicted state after each step. If multiple models are
-        used, average the predictions across the model dimension.
-
-        :param predicted_state: The predicted state tensor.
-        :type predicted_state: torch.Tensor | LabelTensor
-        :param dict kwargs: Additional keyword arguments for postprocessing.
-        :return: The postprocessed state tensor.
-        :rtype: torch.Tensor | LabelTensor
-        """
-        return predicted_state
-
-    def predict(self, initial_state, n_steps, **kwargs):
+    def predict(self, initial_state, n_steps, control=None, **kwargs):
         """
         Generate predictions by recursively calling the model's forward.
 
@@ -147,9 +123,16 @@ class AutoregressiveMixin:
             The initial state must be of shape ``[trajectories, 1, *features]``.
         :type initial_state: torch.Tensor | LabelTensor
         :param int n_steps: The number of autoregressive steps to predict.
+        :param control: Optional control inputs of shape
+            ``[trajectories, n_steps, *control_features]``. When provided, the
+            control at each step is concatenated with the current state before
+            the forward pass. Default is ``None``.
+        :type control: torch.Tensor | LabelTensor | None
         :param dict kwargs: Additional keyword arguments.
         :raises ValueError: If the provided initial_state tensor has less than 3
             dimensions.
+        :raises ValueError: If ``control`` is provided and has fewer than
+            ``n_steps`` time steps.
         :return: The predicted trajectory, including the initial state. It has
             shape ``[trajectories, n_steps + 1, *features]``, where the first
             step corresponds to the initial state.
@@ -166,6 +149,13 @@ class AutoregressiveMixin:
                 f" Got shape {initial_state.shape}."
             )
 
+        # Check that enough control steps are available
+        if control is not None and control.shape[1] < n_steps:
+            raise ValueError(
+                "The control tensor must provide at least `n_steps` time "
+                f"steps. Got {control.shape[1]} for {n_steps} steps."
+            )
+
         # Initialize the list of predictions with the initial state
         predictions = [initial_state]
 
@@ -173,14 +163,17 @@ class AutoregressiveMixin:
         with torch.no_grad():
 
             # Unroll the autoregressive prediction for n_steps
-            for _ in range(n_steps):
+            for step in range(n_steps):
 
-                # Preprocess the current state before the forward pass
-                current_state = self.preprocess_step(predictions[-1], **kwargs)
+                # Build the model input, optionally concatenating the control
+                current_state = predictions[-1]
+                if control is not None:
+                    current_state = torch.cat(
+                        [current_state, control[:, step : step + 1]], dim=-1
+                    )
+
+                # Forward the model input
                 output = self.forward(current_state)
-
-                # Postprocess the predicted state after the forward pass
-                next_state = self.postprocess_step(output, **kwargs)
-                predictions.append(next_state)
+                predictions.append(output)
 
         return torch.cat(predictions, dim=1)
