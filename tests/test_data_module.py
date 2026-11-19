@@ -184,7 +184,6 @@ def test_setup(problem_type, batch_size, train_size, val_size, test_size):
         dataset = getattr(dm, dataset_name)
         assert isinstance(dataset, torch.Tensor)
         assert dataset.dtype == torch.long
-        print("Dataset:", dataset)
         assert dataset.ndim == 3 and dataset.shape[-1] == 2
         # assert len(dataset) == expected_lengths[split] ?????
 
@@ -255,7 +254,6 @@ def test_setup(problem_type, batch_size, train_size, val_size, test_size):
 #     dm = DataModule(
 #         problem=problem,
 #         batch_size=batch_size,
-#         problem_setting={"D": {"batch_size": 17}},
 #         shuffle=False,
 #     )
 #     dm.setup()
@@ -300,7 +298,6 @@ def test_setup(problem_type, batch_size, train_size, val_size, test_size):
 #     dm = DataModule(
 #         problem=problem,
 #         batch_size=17,
-#         problem_setting={"boundary": {"batch_size": 10000}},
 #         train_size=0.5,
 #         val_size=0.25,
 #         shuffle=shuffle,
@@ -421,3 +418,78 @@ def test_setup(problem_type, batch_size, train_size, val_size, test_size):
 #     assert torch.isfinite(trainer.callback_metrics["train_loss"])
 #     for parameter in solver.model.parameters():
 #         assert torch.isfinite(parameter).all()
+
+
+def test_split_sizes_must_sum_to_one():
+    problem = _create_problem("pinn")
+
+    with pytest.raises(ValueError):
+        DataModule(
+            problem=problem,
+            train_size=0.5,
+            val_size=0.3,
+            test_size=0.3,
+        )
+
+
+@pytest.mark.parametrize("name", ["train_size", "val_size", "test_size"])
+def test_split_sizes_must_be_in_unit_interval(name):
+    problem = _create_problem("pinn")
+    sizes = {"train_size": 1.0, "val_size": 0.0, "test_size": 0.0}
+    sizes[name] = 1.5
+
+    with pytest.raises(ValueError):
+        DataModule(problem=problem, **sizes)
+
+
+def test_invalid_batching_mode_raises():
+    problem = _create_problem("pinn")
+
+    with pytest.raises(ValueError):
+        DataModule(problem=problem, batching_mode="invalid_mode")
+
+
+def test_invalid_batch_size_raises():
+    problem = _create_problem("pinn")
+
+    with pytest.raises(AssertionError):
+        DataModule(problem=problem, batch_size=0)
+
+    with pytest.raises(AssertionError):
+        DataModule(problem=problem, batch_size={"D": -1})
+
+
+def test_batch_size_mapping_unknown_condition_raises():
+    problem = _create_problem("pinn")
+
+    with pytest.raises(ValueError):
+        DataModule(problem=problem, batch_size={"unknown_condition": 4})
+
+
+def test_per_condition_batch_size():
+    problem = _create_problem("pinn")
+    dm = DataModule(
+        problem=problem,
+        batch_size={"D": 7},
+        shuffle=False,
+    )
+    dm.setup()
+
+    # 100 points batched by 7 give 15 batches, while the boundary condition
+    # is stored as a single batch
+    assert len(problem.conditions["D"]) == 15
+    assert len(problem.conditions["boundary"]) == 1
+    assert dm._condition_batch_size("D") == 7
+    assert dm._condition_batch_size("boundary") is None
+
+
+def test_global_batch_size():
+    problem = _create_problem("pinn")
+    dm = DataModule(problem=problem, batch_size=10, shuffle=False)
+    dm.setup()
+
+    assert dm._condition_batch_size("D") == 10
+    assert dm._condition_batch_size("boundary") == 10
+    assert len(problem.conditions["D"]) == 10
+    assert len(problem.conditions["boundary"]) == 10
+

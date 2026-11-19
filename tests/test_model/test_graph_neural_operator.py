@@ -114,3 +114,21 @@ def test_backward_2(shared_weights):
     l = torch.mean(output_)
     l.backward()
     assert input_.x.grad.shape == torch.Size([1000, 6])
+
+
+def test_edge_attr_is_used():
+    lifting_operator = torch.nn.Linear(6, 16)
+    projection_operator = torch.nn.Linear(16, 3)
+    model = GraphNeuralOperator(
+        lifting_operator=lifting_operator,
+        projection_operator=projection_operator,
+        edge_features=3,
+        inner_size=16,
+        internal_n_layers=1,
+    )
+    data = input_.clone()
+    output_1 = model(data)
+    data.edge_attr = data.edge_attr * 2.0
+    output_2 = model(data)
+    assert not torch.allclose(output_1, output_2)
+

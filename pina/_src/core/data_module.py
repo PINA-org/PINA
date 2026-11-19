@@ -1,37 +1,63 @@
 """Data module for PINA condition datasets."""
 
+import warnings
+from typing import ClassVar
+
 import torch
 from lightning.pytorch import LightningDataModule
 from torch.utils.data import DataLoader
 
 from pina import logger
+from pina._src.core.utils import (
+    check_consistency,
+    check_positive_integer,
+)
 
 
 class DataModule(LightningDataModule):
     """
     Lightning data module for PINA conditions.
 
-    Each dataset row is ``[condition_id, batch_id]``. The condition batch is
-    materialized in :meth:`transfer_batch_to_device`, so the dataloaders yield
-    one condition batch per step.
+    The data module owns every setting used to create the datasets: the
+    train/validation/test split, the batch size, the batching rule, and the
+    dataloader options. Each dataset row is ``[condition_id, batch_id]``. The
+    condition batch is materialized in :meth:`transfer_batch_to_device`, so the
+    dataloaders yield one condition batch per step.
 
-    TODO Improve documentation for the batching and transfer process.
+    The batch size can be set globally, with an ``int``, or per condition, with
+    a mapping from condition names to batch sizes. A condition mapped to
+    ``None`` is stored as a single batch.
+
+    :Example:
+
+        >>> from pina import DataModule, Trainer
+        >>> # Advanced usage: build the data module explicitly and pass it
+        >>> # to the trainer.
+        >>> data_module = DataModule(
+        ...     problem=problem,
+        ...     train_size=0.8,
+        ...     val_size=0.1,
+        ...     test_size=0.1,
+        ...     batch_size={"D": 32, "boundary": 16},
+        ...     shuffle=True,
+        ... )
+        >>> trainer = Trainer(solver=solver, datamodule=data_module)
     """
+
+    # Available batching modes
+    _AVAIL_BATCHING_MODES: ClassVar[set[str]] = {"simple"}
 
     def __init__(
         self,
         problem,
-        problem_setting=None,
         train_size=1.0,
         val_size=0.0,
         test_size=0.0,
         batch_size=None,
-        batching_mode="simple",
         shuffle=True,
+        batching_mode="simple",
         num_workers=0,
         pin_memory=False,
-        dataloader_cls=None,
-        collate_fn=None,
     ):
         """
         Initialization of the :class:`DataModule` class.
@@ -41,65 +67,148 @@ class DataModule(LightningDataModule):
 
         :param ProblemInterface problem: The problem containing the
             conditions to batch and split.
-        :param problem_setting: Per-condition keyword arguments passed to
-            each condition's ``store_data`` method. Keys are condition
-            names and values are dictionaries of settings. These settings
-            override the global ``batch_size`` for the corresponding
-            condition. If ``None``, an empty dictionary is used.
-        :type problem_setting: dict | None
         :param float train_size: Fraction of each condition's batches
             allocated to training, rounded down with a minimum of one
-            batch when positive and batches are available. Default is
-            ``1.0``.
+            batch when positive and batches are available. Must belong to
+            the interval ``[0, 1]``. Default is ``1.0``.
         :param float val_size: Fraction of each condition's batches
             allocated to validation, rounded down with a minimum of one
             batch when positive and batches remain after training
-            allocation. Default is ``0.0``.
+            allocation. Must belong to the interval ``[0, 1]``.
+            Default is ``0.0``.
         :param float test_size: Requested test fraction. Stored but not
             used to calculate the split: all batches remaining after
-            training and validation allocation become test batches.
-            Default is ``0.0``.
+            training and validation allocation become test batches. Must
+            belong to the interval ``[0, 1]``. Default is ``0.0``.
         :param batch_size: Default batch size passed to each condition's
-            ``store_data`` method. Interpretation of ``None`` depends on
-            the condition. Default is ``None``.
-        :type batch_size: int | None
-        :param str batching_mode: Batching mode identifier. Stored but not
-            used by the current implementation. Default is
-            ``"common_batch_size"``.
+            ``store_data`` method. It can be a positive integer applied to
+            every condition, a mapping from condition names to batch sizes,
+            or ``None`` to store each condition as a single batch. Mapping
+            values set to ``None`` store that condition as a single batch.
+            Default is ``None``.
+        :type batch_size: int | dict[str, int | None] | None
         :param bool shuffle: Whether to randomly permute each condition's
             batch indices before splitting. Does not enable dataloader
             shuffling. Default is ``True``.
+        :param str batching_mode: The strategy used to aggregate batches
+            across conditions. Available options are ``"simple"`` for the
+            one-batch-per-condition aggregation. Default is ``"simple"``.
         :param int num_workers: Number of worker processes used by the
             dataloaders. Default is ``0``.
         :param bool pin_memory: Whether dataloaders pin the identifier
             tensors in memory. Materialized condition data is not loaded
             by these dataloaders. Default is ``False``.
-        :param dataloader_cls: Custom dataloader class or per-condition
-            mapping of classes. Stored but not used: the current
-            implementation always constructs a standard DataLoader.
-            Default is ``None``.
-        :type dataloader_cls: type | dict | None
-        :param collate_fn: Custom collation function or per-condition
-            mapping of functions. Stored but not used: the current
-            implementation uses default collation. Default is ``None``.
-        :type collate_fn: Callable | dict | None
+        :raises ValueError: If ``train_size``, ``val_size``, or ``test_size``
+            is not a float in the interval ``[0, 1]``.
+        :raises ValueError: If the sum of ``train_size``, ``val_size``, and
+            ``test_size`` is not equal to 1.
+        :raises ValueError: If ``pin_memory`` or ``shuffle`` is not a boolean.
+        :raises AssertionError: If ``num_workers`` is a negative integer.
+        :raises AssertionError: If ``batch_size`` is not a positive integer,
+            or a mapping to positive integers or ``None``.
+        :raises ValueError: If a ``batch_size`` mapping refers to unknown
+            conditions.
+        :raises ValueError: If ``batching_mode`` is not one of the available
+            options.
+        :raises UserWarning: If ``num_workers`` or ``pin_memory`` are set
+            without a batch size.
         """
         super().__init__()
+
+        # Check the split sizes
+        check_consistency(train_size, float)
+        check_consistency(val_size, float)
+        check_consistency(test_size, float)
+
+        for name, value in (
+            ("train_size", train_size),
+            ("val_size", val_size),
+            ("test_size", test_size),
+        ):
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(
+                    f"`{name}` must belong to the interval [0, 1]. "
+                    f"Got {value}."
+                )
+
+        # Check that train_size, test_size and val_size sum to 1
+        total = train_size + val_size + test_size
+        if not torch.isclose(torch.tensor(total), torch.tensor(1.0)):
+            raise ValueError(
+                "`train_size`, `val_size`, and `test_size` must sum to 1."
+            )
+
+        # Check the remaining options
+        check_consistency(shuffle, bool)
+        check_consistency(pin_memory, bool)
+        check_positive_integer(num_workers, strict=False)
+
+        # Check the batch size, which can be global or per condition
+        if batch_size is not None:
+            if isinstance(batch_size, dict):
+                unknown = set(batch_size) - set(problem.conditions)
+                if unknown:
+                    raise ValueError(
+                        "The `batch_size` mapping refers to unknown "
+                        f"conditions: {sorted(unknown)}. Valid conditions "
+                        f"are: {sorted(problem.conditions)}."
+                    )
+                for value in batch_size.values():
+                    if value is not None:
+                        check_positive_integer(value, strict=True)
+            else:
+                check_positive_integer(batch_size, strict=True)
+
+        # Check the batching mode
+        if batching_mode not in self._AVAIL_BATCHING_MODES:
+            raise ValueError(
+                f"Invalid batching mode '{batching_mode}'. "
+                f"Expected one of: {sorted(self._AVAIL_BATCHING_MODES)}."
+            )
+
+        # Warn if dataloader options are set without a batch size
+        if batch_size is None and (num_workers > 0 or pin_memory):
+            warnings.warn(
+                "`num_workers` and `pin_memory` have no effect when "
+                "`batch_size` is None.",
+                UserWarning,
+                stacklevel=2,
+            )
+
         self.problem = problem
         self.batch_size = batch_size
-        self.batching_aggregation = batching_mode
+        self.batching_mode = batching_mode
         self.shuffle = shuffle
         self.num_workers = num_workers
         self.pin_memory = pin_memory
-        self.dataloader_cls = dataloader_cls
-        self.collate_fn = collate_fn
         self.train_size = train_size
         self.val_size = val_size
         self.test_size = test_size
 
-        if problem_setting is None:
-            problem_setting = {}
-        self.problem_setting = problem_setting
+    @property
+    def batching_aggregation(self):
+        """
+        Return the batching mode.
+
+        Deprecated alias kept for backward compatibility with the previous
+        attribute name.
+
+        :return: The batching mode.
+        :rtype: str
+        """
+        return self.batching_mode
+
+    def _condition_batch_size(self, name):
+        """
+        Return the batch size configured for a condition.
+
+        :param str name: The condition name.
+        :return: The configured batch size, or ``None`` for a single batch.
+        :rtype: int | None
+        """
+        if isinstance(self.batch_size, dict):
+            return self.batch_size.get(name)
+        return self.batch_size
 
     def enumerate_condition(self):
         """
@@ -134,7 +243,6 @@ class DataModule(LightningDataModule):
         ]
         return torch.tensor(aggregated_rows, dtype=torch.long)
 
-
     def aggregate_condition_rows(self, condition_rows):
         """
         Aggregate condition-specific rows into a single tensor.
@@ -144,14 +252,19 @@ class DataModule(LightningDataModule):
         :return: Aggregated tensor with one condition batch per condition and
             step.
         :rtype: torch.Tensor
+        :raises ValueError: If the configured batching mode has no aggregation
+            method.
         """
         aggregate_method = getattr(
-            self, 
-            f"_{self.batching_aggregation}_aggregate_condition_rows"
+            self,
+            f"_{self.batching_mode}_aggregate_condition_rows",
+            None,
         )
 
         if aggregate_method is None:
-            raise ValueError(f"Aggregation method '{self.batching_aggregation}' not found.")
+            raise ValueError(
+                f"Aggregation method '{self.batching_mode}' not found."
+            )
 
         return aggregate_method(condition_rows)
 
@@ -205,22 +318,15 @@ class DataModule(LightningDataModule):
 
             condition_id = self.condition_name_to_idx[condition_name]
             for batch_id in indices[:train_end]:
-                # train_rows.append([condition_id, batch_id])
                 condition_train_rows.append([condition_id, batch_id])
             for batch_id in indices[train_end:val_end]:
-                # val_rows.append([condition_id, batch_id])
                 condition_val_rows.append([condition_id, batch_id])
             for batch_id in indices[val_end:]:
-                # test_rows.append([condition_id, batch_id])
                 condition_test_rows.append([condition_id, batch_id])
 
             train_rows.append(condition_train_rows)
             val_rows.append(condition_val_rows)
             test_rows.append(condition_test_rows)
-
-        print("Train rows:", train_rows)
-        print("Val rows:", val_rows)
-        print("Test rows:", test_rows)
 
         self.train_dataset = self.aggregate_condition_rows(train_rows)
         self.val_dataset = self.aggregate_condition_rows(val_rows)
@@ -238,8 +344,8 @@ class DataModule(LightningDataModule):
         Store condition batches and create all dataset splits.
 
         Move the problem's discretized domains into their conditions,
-        then call each condition's ``store_data`` method with the global
-        batch size and any overriding per-condition settings.
+        then call each condition's ``store_data`` method with the batch
+        size configured for that condition.
 
         All accepted stages perform the same setup. Calling this method
         again rebuilds condition batches and dataset splits.
@@ -260,11 +366,9 @@ class DataModule(LightningDataModule):
         self.problem.move_discretisation_into_conditions()
 
         for name, condition in self.problem.conditions.items():
-            settings = {
-                "batch_size": self.batch_size,
-                **self.problem_setting.get(name, {}),
-            }
-            condition.store_data(**settings)
+            condition.store_data(
+                batch_size=self._condition_batch_size(name)
+            )
 
         self.enumerate_condition()
         self.create_datasets()
@@ -353,7 +457,9 @@ class DataModule(LightningDataModule):
             its condition.
         """
         result = []
-        assert batch.ndim == 3 and batch.shape[0] == 1, "Batch must have shape [1, n_rows, 2]"
+        assert (
+            batch.ndim == 3 and batch.shape[0] == 1
+        ), "Batch must have shape [1, n_rows, 2]"
 
         for condition_id, batch_id in batch.squeeze(0):
             name = self.idx_to_condition_name[int(condition_id)]

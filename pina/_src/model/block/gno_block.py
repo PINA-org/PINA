@@ -68,9 +68,31 @@ class GNOBlock(MessagePassing):
         self.W = torch.nn.Linear(width, width)
         self.func = external_func()
 
+    def message(self, x_j, edge_attr):
+        """
+        Construct the messages sent along each edge.
+
+        The edge features are mapped to a ``width x width`` matrix that
+        multiplies the source node features. This is the non-fused
+        counterpart of :meth:`message_and_aggregate`, which is used when a
+        plain :obj:`torch.Tensor` edge index is passed to ``propagate``.
+
+        :param torch.Tensor x_j: The source node features of each edge.
+        :param torch.Tensor edge_attr: The edge features.
+        :return: The messages for each edge.
+        :rtype: torch.Tensor
+        """
+        x_ = self.dense(edge_attr).view(-1, self.width, self.width)
+        return torch.einsum("bij,bj->bi", x_, x_j)
+
     def message_and_aggregate(self, edge_index, x, edge_attr):
         """
         Combine messages and perform aggregation.
+
+        This fused implementation is used when the fused message passing
+        path is available (e.g. with a sorted edge index or a sparse
+        adjacency). It is equivalent to :meth:`message` followed by
+        aggregation.
 
         :param torch.Tensor edge_index: The edge index.
         :param torch.Tensor x: The node feature matrix.
