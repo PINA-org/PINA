@@ -24,8 +24,8 @@ class Condition:
         (DomainEquationCondition, {"domain", "equation"}, set()),
         (
             TimeSeriesCondition,
-            {"input", "n_windows", "unroll_length"},
-            {"randomize"},
+            {"input"},
+            {"state", "control"},
         ),
         (
             GraphTimeSeriesCondition,

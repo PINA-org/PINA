@@ -1,17 +1,20 @@
 """Module for the Graph Time-Series Condition class."""
 
 import torch
+from torch_geometric.data import Data
 
 from pina import logger
 from pina._src.condition.graph_condition import GraphCondition
 from pina._src.condition.time_series_condition import (
     TimeSeriesCondition,
     _check_time_series_params,
+    _concat_features,
+    _select_features,
     _unroll_windows,
 )
 from pina._src.core.graph import Graph
 from pina._src.core.label_tensor import LabelTensor
-from torch_geometric.data import Data
+from pina._src.core.utils import check_consistency
 
 
 class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
@@ -20,11 +23,20 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
 
     Each stored batch is one subgraph carrying unrolled temporal windows with
     shape ``[n_windows, unroll_length, n_nodes, *features]``.
+
+    Feature columns can be partitioned into ``state`` and ``control`` columns
+    using integer indices or, for
+    :class:`~pina.label_tensor.LabelTensor` graph features, feature labels.
+    At each autoregressive step, the selected state and control columns are
+    concatenated along the feature dimension and passed to the solver. Only
+    the state is compared with the target and fed back into the next step.
     """
 
     _avail_input_cls = (Data, Graph)
 
-    def __init__(self, graph, key="x"):
+    def __init__(
+        self, graph, key="x", state=None, control=None, residual_addition=False
+    ):
         """
         Initialization of the :class:`GraphTimeSeriesCondition` class.
 
@@ -33,8 +45,45 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
             ``[n_nodes, time_steps, features]``.
         :param str key: The name of the graph attribute containing the
             temporal features. Default is ``"x"``.
+        :param state: The columns used as state. It can be a list of integer
+            feature indices, a list of labels for
+            :class:`~pina.label_tensor.LabelTensor` graph features, or
+            ``None``. If ``None`` and ``control`` is provided, all columns
+            not selected as control are used as state. If both are ``None``,
+            all feature columns are treated as state. Default is ``None``.
+        :type state: int | str | list[int] | list[str] | None
+        :param control: The columns used as control inputs. It can be a list
+            of integer feature indices, a list of labels for
+            :class:`~pina.label_tensor.LabelTensor` graph features, or
+            ``None``. Control columns are concatenated with the state before
+            the forward pass and are never predicted. Default is ``None``.
+        :type control: int | str | list[int] | list[str] | None
+        :param bool residual_addition: If ``True``, the previous state is added
+            to the model output at each step, so that the model predicts the
+            increment of the state instead of the state itself. If ``False``,
+            the model output is used as the next state. Default is ``False``.
+        :raises ValueError: If ``residual_addition`` is not a boolean.
         """
         GraphCondition.__init__(self, graph, key=key)
+        check_consistency(residual_addition, bool)
+        self._state = state
+        self._control = control
+        self._residual_addition = residual_addition
+
+        # By default the state is made of every column not used as control
+        if isinstance(self._control, (int, str)):
+            self._control = [self._control]
+        if self._state is None:
+            features = getattr(graph, key)
+            columns = (
+                features.labels if isinstance(features, LabelTensor) else None
+            )
+            columns = columns or list(range(features.shape[-1]))
+            self._state = [
+                column
+                for column in columns
+                if column not in (self._control or [])
+            ]
 
     def store_data(self, **kwargs):
         """
@@ -110,13 +159,15 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         Compute autoregressive residuals for a graph's temporal windows.
 
         The first state of each window initializes the rollout. At each
-        subsequent step, the model prediction is compared with the
-        corresponding stored state and becomes the input for the next step.
+        subsequent step, the selected state and control columns are
+        concatenated along the feature dimension and passed to the solver.
+        The model prediction is compared with the next state columns and
+        becomes the state input for the next step, while the control is
+        always read from the stored data.
 
         The batch's feature attribute is temporarily replaced during the
-        rollout and restored from a clone after successful evaluation.
-        Residuals are stacked along a new leading time-step dimension,
-        without loss aggregation.
+        rollout and restored after evaluation. Residuals are stacked along a
+        new leading time-step dimension, without loss aggregation.
 
         :param batch: The graph batch containing temporal windows under
             the attribute specified by ``key``, with shape
@@ -125,7 +176,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         :param BaseSolver solver: The solver providing the model forward
             pass. Predictions must be compatible with the stored states.
         :return: The prediction-minus-target residuals with shape
-            ``[unroll_length - 1, n_windows, n_nodes, features]``.
+            ``[unroll_length - 1, n_windows, n_nodes, *state_features]``.
         :rtype: torch.Tensor
         :raises KeyError: If the batch lacks the feature attribute
             specified by ``key``.
@@ -135,6 +186,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
             incompatible for subtraction, or no prediction steps are
             available to stack.
         """
+        original = getattr(batch, self.key).clone()
         series = batch[self.key]
         if series.dim() < 4:
             raise ValueError(
@@ -143,14 +195,113 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                 f" Got shape {series.shape}."
             )
 
-        original = getattr(batch, self.key).clone()
-        setattr(batch, self.key, series[:, 0, :, :])
-
+        # Select the initial state and read the labels of both selectors
+        current_state = _select_features(series[:, 0], self._state)
+        state_labels = (
+            current_state.labels
+            if isinstance(current_state, LabelTensor)
+            else None
+        )
+        control_labels = None
+        if self._control and isinstance(series, LabelTensor):
+            control_columns = _select_features(series[:, 0], self._control)
+            control_labels = control_columns.labels
         residuals = []
-        for step in range(1, series.shape[1]):
-            prediction = solver.forward(batch)
-            residuals.append(prediction - series[:, step, :, :])
-            setattr(batch, self.key, prediction)
 
-        setattr(batch, self.key, original)
+        try:
+            for step in range(1, series.shape[1]):
+
+                # The control is an input only and is never predicted
+                current_control = _select_features(
+                    series[:, step - 1], self._control
+                )
+
+                dirichlet_nodes = torch.isclose(_select_features(
+                    series[:, step - 1], [-1]
+                ), torch.tensor(1.0)).squeeze()
+
+                # print("Dirichlet nodes:", dirichlet_nodes.shape)
+                # print(torch.sum(dirichlet_nodes).tensor)
+                
+                model_input = _concat_features(
+                    current_state,
+                    current_control,
+                    state_labels=state_labels,
+                    control_labels=control_labels,
+                )
+                setattr(batch, self.key, model_input)
+
+                # Forward the graph and compare only the state columns
+                prediction = solver.forward(batch)
+                if self._residual_addition:
+                    prediction = prediction + current_state
+                prediction[dirichlet_nodes] = 0.0
+                target_state = _select_features(
+                    series[:, step], self._state
+                )
+                residuals.append(prediction - target_state)
+
+                # Only the predicted state is fed back
+                current_state = prediction
+        finally:
+            setattr(batch, self.key, original)
+
         return torch.stack(residuals).as_subclass(torch.Tensor)
+
+    def test(self, solver):
+        """
+        Predict the full trajectory of the graph's temporal data.
+
+        The initial state and the control are read from the graph's feature
+        attribute, and the rollout runs without gradient tracking. The feature
+        attribute is temporarily replaced at each step and restored afterwards.
+
+        :param BaseSolver solver: The solver providing the trained model.
+        :return: The predicted trajectory, including the initial state, with
+            shape ``[n_nodes, time_steps, *state_features]``.
+        :rtype: torch.Tensor | LabelTensor
+        """
+        original = getattr(self.graph, self.key).clone()
+        series = getattr(self.graph, self.key)
+        n_steps = series.shape[1] - 1
+
+        # Select the initial state and read the labels of both selectors
+        current_state = _select_features(series[:, 0], self._state)
+        state_labels = (
+            current_state.labels
+            if isinstance(current_state, LabelTensor)
+            else None
+        )
+        control_labels = None
+        if self._control and isinstance(series, LabelTensor):
+            control_columns = _select_features(series[:, 0], self._control)
+            control_labels = control_columns.labels
+
+        trajectory = [current_state]
+        try:
+            with torch.no_grad():
+                for step in range(n_steps):
+                    current_control = _select_features(
+                        series[:, step], self._control
+                    )
+                    setattr(
+                        self.graph,
+                        self.key,
+                        _concat_features(
+                            current_state,
+                            current_control,
+                            state_labels=state_labels,
+                            control_labels=control_labels,
+                        ),
+                    )
+
+                    prediction = solver.forward(self.graph)
+                    if self._residual_addition:
+                        prediction = prediction + current_state
+
+                    trajectory.append(prediction)
+                    current_state = prediction
+        finally:
+            setattr(self.graph, self.key, original)
+
+        return torch.stack(trajectory, dim=1)

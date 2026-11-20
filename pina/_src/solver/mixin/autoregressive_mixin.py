@@ -1,6 +1,7 @@
 """Module for the autoregressive mixin class."""
 
 import torch
+
 from pina._src.core.utils import check_consistency
 
 
@@ -17,7 +18,7 @@ class AutoregressiveMixin:
     """
 
     def _init_autoregressive_components(
-        self, eps, reset_weights_at_epoch_start, kwargs
+        self, eps, reset_weights_at_epoch_start
     ):
         """
         Initialize the components related to the autoregressive rollout loss.
@@ -31,8 +32,6 @@ class AutoregressiveMixin:
             average and step count at the start of each epoch. If ``True``, the
             adaptive weights will be recalibrated at the beginning of each epoch
             based on the new training dynamics.
-        :param dict kwargs: Additional keyword arguments for preprocessing and
-            postprocessing steps.
         :raises ValueError: If ``eps`` is not a float or int.
         :raises ValueError: If ``reset_weights_at_epoch_start`` is not a bool.
         """
@@ -45,7 +44,6 @@ class AutoregressiveMixin:
         self.eps = eps
         self._running_avg = {}
         self._step_count = {}
-        self._kwargs = kwargs or {}
 
     def _loss_from_residual(self, condition_name=None):
         """
@@ -113,74 +111,3 @@ class AutoregressiveMixin:
         if self.reset_weights_at_epoch_start:
             self._running_avg.clear()
             self._step_count.clear()
-
-    def preprocess_step(self, current_state, **kwargs):
-        """
-        Preprocess the current state before each step.
-
-        :param current_state: The current state tensor.
-        :type current_state: torch.Tensor | LabelTensor
-        :param dict kwargs: Additional keyword arguments for preprocessing.
-        :return: The preprocessed state tensor.
-        :rtype: torch.Tensor | LabelTensor
-        """
-        return current_state
-
-    def postprocess_step(self, predicted_state, **kwargs):
-        """
-        Postprocess the predicted state after each step. If multiple models are
-        used, average the predictions across the model dimension.
-
-        :param predicted_state: The predicted state tensor.
-        :type predicted_state: torch.Tensor | LabelTensor
-        :param dict kwargs: Additional keyword arguments for postprocessing.
-        :return: The postprocessed state tensor.
-        :rtype: torch.Tensor | LabelTensor
-        """
-        return predicted_state
-
-    def predict(self, initial_state, n_steps, **kwargs):
-        """
-        Generate predictions by recursively calling the model's forward.
-
-        :param initial_state: The initial state from which to start prediction.
-            The initial state must be of shape ``[trajectories, 1, *features]``.
-        :type initial_state: torch.Tensor | LabelTensor
-        :param int n_steps: The number of autoregressive steps to predict.
-        :param dict kwargs: Additional keyword arguments.
-        :raises ValueError: If the provided initial_state tensor has less than 3
-            dimensions.
-        :return: The predicted trajectory, including the initial state. It has
-            shape ``[trajectories, n_steps + 1, *features]``, where the first
-            step corresponds to the initial state.
-        :rtype: torch.Tensor | LabelTensor
-        """
-        # Set model to evaluation mode for prediction
-        self.eval()
-
-        # Raise error if the initial_state does not have at least 3 dimensions
-        if initial_state.dim() < 3:
-            raise ValueError(
-                "The provided initial_state tensor must have at least 3"
-                "dimensions: [trajectories, 1, *features]."
-                f" Got shape {initial_state.shape}."
-            )
-
-        # Initialize the list of predictions with the initial state
-        predictions = [initial_state]
-
-        # Disable gradient computation for autoregressive prediction
-        with torch.no_grad():
-
-            # Unroll the autoregressive prediction for n_steps
-            for _ in range(n_steps):
-
-                # Preprocess the current state before the forward pass
-                current_state = self.preprocess_step(predictions[-1], **kwargs)
-                output = self.forward(current_state)
-
-                # Postprocess the predicted state after the forward pass
-                next_state = self.postprocess_step(output, **kwargs)
-                predictions.append(next_state)
-
-        return torch.cat(predictions, dim=1)

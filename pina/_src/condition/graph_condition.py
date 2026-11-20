@@ -59,8 +59,8 @@ class GraphCondition(BaseCondition):
         :return: The generated subgraphs, also stored in ``self.data``.
         :rtype: list[Graph]
         """
-        n_subgraphs = kwargs.get("n_subgraphs", 10)
-        num_hops = kwargs.get("num_hops", 5)
+        n_subgraphs = kwargs.get("n_subgraphs", 1)
+        num_hops = kwargs.get("num_hops", 500)
 
         start_nodes = torch.randint(0, self.graph.num_nodes, (n_subgraphs,))
         self.data = [

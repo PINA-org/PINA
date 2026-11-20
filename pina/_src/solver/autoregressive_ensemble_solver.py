@@ -68,7 +68,6 @@ class AutoregressiveEnsembleSolver(AutoregressiveMixin, EnsembleSolver):
         use_lt=False,
         eps=0.0,
         reset_weights_at_epoch_start=True,
-        kwargs=None,
     ):
         """
         Initialization of the :class:`AutoregressiveEnsembleSolver` class.
@@ -102,8 +101,6 @@ class AutoregressiveEnsembleSolver(AutoregressiveMixin, EnsembleSolver):
             average and step count at the start of each epoch. If ``True``, the
             adaptive weights will be recalibrated at the beginning of each epoch
             based on the new training dynamics. Default is ``True``.
-        :param dict kwargs: Additional keyword arguments for preprocessing and
-            postprocessing steps.
         """
         # Initialize the parent class
         EnsembleSolver.__init__(
@@ -121,5 +118,4 @@ class AutoregressiveEnsembleSolver(AutoregressiveMixin, EnsembleSolver):
         self._init_autoregressive_components(
             eps=eps,
             reset_weights_at_epoch_start=reset_weights_at_epoch_start,
-            kwargs=kwargs,
         )
