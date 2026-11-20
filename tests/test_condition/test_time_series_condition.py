@@ -535,3 +535,112 @@ def test_evaluate_with_control(
     expected = torch.stack(step_residuals)
     assert residuals.shape[-1] == 2
     assert torch.allclose(residuals, expected)
+
+
+# Verify that residual_addition is stored and validated by the constructor
+@pytest.mark.parametrize("use_lt", [True, False])
+def test_constructor_residual_addition(use_lt):
+
+    # Define the condition with the residual addition enabled
+    condition = TimeSeriesCondition(
+        input=_create_tensor_data(use_lt), residual_addition=True
+    )
+    assert condition._residual_addition is True
+
+    # Residual addition is disabled by default
+    condition = TimeSeriesCondition(input=_create_tensor_data(use_lt))
+    assert condition._residual_addition is False
+
+    # Should fail if residual_addition is not a boolean
+    with pytest.raises(ValueError):
+        TimeSeriesCondition(
+            input=_create_tensor_data(use_lt), residual_addition="yes"
+        )
+
+
+# Verify that residual_addition adds the previous state to the prediction
+@pytest.mark.parametrize("use_lt", [True, False])
+@pytest.mark.parametrize("randomize", [True, False])
+def test_evaluate_residual_addition(use_lt, randomize):
+
+    # Define the condition and the solver
+    input_tensor = _create_control_tensor_data(use_lt)
+    condition = TimeSeriesCondition(
+        input=input_tensor,
+        state=[0, 1],
+        control=[2],
+        residual_addition=True,
+    )
+    solver = ControlledDummySolver(n_state=2)
+
+    # Store and extract the batch
+    condition.store_data(
+        n_windows=4, unroll_length=3, randomize=randomize
+    )
+    batch = condition.materialize(0)
+
+    # Evaluate the condition
+    residuals = condition.evaluate(batch, solver)
+
+    # Compute the expected residuals. The model output is the state plus the
+    # control, and the previous state is added to the prediction.
+    series = batch["input"]
+    tensor = (
+        series.as_subclass(torch.Tensor)
+        if isinstance(series, LabelTensor)
+        else series
+    )
+    current_state = tensor[:, :, 0, :2]
+    step_residuals = []
+    for step in range(1, tensor.shape[2]):
+        control_state = tensor[:, :, step - 1, 2:]
+        predicted_state = current_state + control_state + current_state
+        target_state = tensor[:, :, step, :2]
+        step_residuals.append(predicted_state - target_state)
+        current_state = predicted_state
+
+    expected = torch.stack(step_residuals)
+    assert torch.allclose(residuals, expected)
+
+
+# Verify the trajectory returned by the test method
+@pytest.mark.parametrize("use_lt", [True, False])
+@pytest.mark.parametrize("residual_addition", [True, False])
+def test_test(use_lt, residual_addition):
+
+    # Define the condition and the solver
+    input_tensor = _create_control_tensor_data(use_lt)
+    condition = TimeSeriesCondition(
+        input=input_tensor,
+        state=[0, 1],
+        control=[2],
+        residual_addition=residual_addition,
+    )
+    solver = ControlledDummySolver(n_state=2)
+
+    # Predict the trajectory of the stored input data
+    trajectory = condition.test(solver)
+
+    # The trajectory keeps the trajectories and the time steps, and only the
+    # state columns are predicted
+    assert isinstance(trajectory, LabelTensor if use_lt else torch.Tensor)
+    assert trajectory.shape == (n_samples, time_steps, 2)
+    assert not trajectory.requires_grad
+
+    # Compute the expected trajectory
+    tensor = (
+        input_tensor.as_subclass(torch.Tensor)
+        if isinstance(input_tensor, LabelTensor)
+        else input_tensor
+    )
+    states = [tensor[:, 0, :2]]
+    for step in range(1, time_steps):
+        predicted_state = states[-1] + tensor[:, step - 1, 2:]
+        if residual_addition:
+            predicted_state = predicted_state + states[-1]
+        states.append(predicted_state)
+    expected = torch.stack(states, dim=1)
+
+    assert torch.allclose(
+        trajectory.as_subclass(torch.Tensor), expected
+    )
