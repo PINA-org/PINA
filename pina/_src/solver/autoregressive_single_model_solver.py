@@ -66,7 +66,6 @@ class AutoregressiveSingleModelSolver(AutoregressiveMixin, SingleModelSolver):
         use_lt=False,
         eps=0.0,
         reset_weights_at_epoch_start=True,
-        kwargs=None,
     ):
         """
         Initialization of the :class:`AutoregressiveSingleModelSolver` class.
@@ -95,8 +94,6 @@ class AutoregressiveSingleModelSolver(AutoregressiveMixin, SingleModelSolver):
             average and step count at the start of each epoch. If ``True``, the
             adaptive weights will be recalibrated at the beginning of each epoch
             based on the new training dynamics. Default is ``True``.
-        :param dict kwargs: Additional keyword arguments for the autoregressive
-            rollout.
         """
 
         # Initialize the parent class
@@ -115,5 +112,4 @@ class AutoregressiveSingleModelSolver(AutoregressiveMixin, SingleModelSolver):
         self._init_autoregressive_components(
             eps=eps,
             reset_weights_at_epoch_start=reset_weights_at_epoch_start,
-            kwargs=kwargs,
         )

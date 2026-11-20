@@ -15,6 +15,7 @@ from pina._src.condition.time_series_condition import (
 )
 from pina._src.core.graph import Graph
 from pina._src.core.label_tensor import LabelTensor
+from pina._src.core.utils import check_consistency
 
 
 class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
@@ -34,7 +35,9 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
 
     _avail_input_cls = (Data, Graph)
 
-    def __init__(self, graph, key="x", state=None, control=None):
+    def __init__(
+        self, graph, key="x", state=None, control=None, residual_addition=False
+    ):
         """
         Initialization of the :class:`GraphTimeSeriesCondition` class.
 
@@ -56,12 +59,19 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
             ``None``. Control columns are concatenated with the state before
             the forward pass and are never predicted. Default is ``None``.
         :type control: list[int] | list[str] | None
+        :param bool residual_addition: If ``True``, the previous state is added
+            to the model output at each step, so that the model predicts the
+            increment of the state instead of the state itself. If ``False``,
+            the model output is used as the next state. Default is ``False``.
         :raises ValueError: If ``state`` or ``control`` selectors are invalid.
+        :raises ValueError: If ``residual_addition`` is not a boolean.
         """
         GraphCondition.__init__(self, graph, key=key)
         features = getattr(graph, key)
+        check_consistency(residual_addition, bool)
         self._state = state
         self._control = control
+        self._residual_addition = residual_addition
         self._state_indices, self._control_indices = (
             _resolve_feature_selectors(features, state, control)
         )
@@ -213,7 +223,9 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                 setattr(batch, self.key, model_input)
 
                 # Forward the graph and compare only the state columns
-                prediction = solver.forward(batch) + current_state
+                prediction = solver.forward(batch)
+                if self._residual_addition:
+                    prediction = prediction + current_state
                 prediction[dirichlet_nodes] = 0.0
                 target_state = _select_features(
                     series[:, step], self._state_indices

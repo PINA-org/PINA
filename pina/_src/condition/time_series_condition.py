@@ -316,6 +316,25 @@ def _concat_features(
     return model_input
 
 
+def _labels_or_none(tensor):
+    """
+    Read the feature labels of a tensor, if it has any.
+
+    Flattening or reshaping a :class:`LabelTensor` drops its feature labels,
+    so this helper reads the labels without failing when they are gone.
+
+    :param tensor: The tensor to read the labels from.
+    :type tensor: torch.Tensor | LabelTensor
+    :return: The feature labels, or ``None`` when ``tensor`` is not a
+        :class:`LabelTensor` or it does not define feature labels.
+    :rtype: list[str] | None
+    """
+    # Tensors without stored labels, including reshaped LabelTensors
+    if not getattr(tensor, "_labels", None):
+        return None
+    return None if tensor.labels is None else list(tensor.labels)
+
+
 class TimeSeriesCondition(TensorCondition):
     r"""
     The :class:`TimeSeriesCondition` class represents an autoregressive time
@@ -372,7 +391,9 @@ class TimeSeriesCondition(TensorCondition):
     __fields__: ClassVar[list[str]] = ["input", "state", "control"]
     _avail_input_cls = (torch.Tensor, LabelTensor)
 
-    def __init__(self, input, state=None, control=None):
+    def __init__(
+        self, input, state=None, control=None, residual_addition=False
+    ):
         """
         Validate the input data and the feature selectors.
 
@@ -394,12 +415,18 @@ class TimeSeriesCondition(TensorCondition):
             concatenated with the state before the forward pass and are never
             predicted. Default is ``None``.
         :type control: list[int] | list[str] | None
+        :param bool residual_addition: If ``True``, the previous state is added
+            to the model output at each step, so that the model predicts the
+            increment of the state instead of the state itself. If ``False``,
+            the model output is used as the next state. Default is ``False``.
         :raises ValueError: If ``input`` is not of type
             :class:`torch.Tensor` or :class:`~pina.label_tensor.LabelTensor`.
         :raises ValueError: If ``input`` has fewer than three dimensions.
+        :raises ValueError: If ``residual_addition`` is not a boolean.
         :raises ValueError: If ``state`` or ``control`` selectors are invalid.
         """
         check_consistency(input, self._avail_input_cls)
+        check_consistency(residual_addition, bool)
         if input.dim() < 3:
             raise ValueError(
                 "The provided data tensor must have at least 3 dimensions: "
@@ -408,6 +435,7 @@ class TimeSeriesCondition(TensorCondition):
         self._input = input
         self._state = state
         self._control = control
+        self._residual_addition = residual_addition
         self._state_indices, self._control_indices = (
             _resolve_feature_selectors(input, state, control)
         )
@@ -493,17 +521,95 @@ class TimeSeriesCondition(TensorCondition):
         finally:
             self._input = raw_input
 
+    def _rollout(
+        self,
+        solver,
+        initial_state,
+        control,
+        n_steps,
+        state_labels=None,
+        control_labels=None,
+    ):
+        """
+        Unroll the autoregressive model starting from ``initial_state``.
+
+        At each step the control is concatenated with the current state along
+        the feature dimension and passed to the solver. Only the prediction is
+        fed back as the state of the next step, so the control is always read
+        from ``control``. When ``residual_addition`` is ``True``, the previous
+        state is added to the prediction before feeding it back.
+
+        :param BaseSolver solver: The solver used to perform the forward pass.
+        :param initial_state: The state at the first time step, with shape
+            ``[records, *state_features]``.
+        :type initial_state: torch.Tensor | LabelTensor
+        :param control: The control inputs with shape
+            ``[records, n_steps, *control_features]``. If ``None``, no control
+            is provided. Control-free conditions store ``None``.
+        :type control: torch.Tensor | LabelTensor | None
+        :param int n_steps: The number of autoregressive steps to unroll.
+        :param state_labels: The labels of the state features. If ``None``,
+            the labels of ``initial_state`` are used when available. Default
+            is ``None``.
+        :type state_labels: list[str] | None
+        :param control_labels: The labels of the control features. If
+            ``None``, the labels of ``control`` are used when available.
+            Default is ``None``.
+        :type control_labels: list[str] | None
+        :return: The predicted trajectory, including the initial state, with
+            shape ``[records, n_steps + 1, *state_features]``.
+        :rtype: torch.Tensor | LabelTensor
+        """
+        # Resolve the labels of the state and control columns, if available
+        if state_labels is None:
+            state_labels = _labels_or_none(initial_state)
+        if control_labels is None:
+            control_labels = _labels_or_none(control)
+
+        # Restore the labels of the initial state, which are dropped when the
+        # data is flattened or reshaped by the caller
+        if state_labels is not None and isinstance(initial_state, LabelTensor):
+            initial_state = initial_state.as_subclass(LabelTensor)
+            initial_state.labels = list(state_labels)
+
+        # Initialize the trajectory with the initial state
+        trajectory = [initial_state]
+        current_state = initial_state
+
+        # Unroll the autoregressive prediction
+        for step in range(n_steps):
+
+            # The control is an input only and is never predicted
+            current_control = None if control is None else control[:, step]
+            model_input = _concat_features(
+                current_state,
+                current_control,
+                state_labels=state_labels,
+                control_labels=control_labels,
+            )
+
+            # Forward the model input and update the current state
+            predicted_state = solver.forward(model_input)
+            if self._residual_addition:
+                predicted_state = predicted_state + current_state
+
+            trajectory.append(predicted_state)
+            current_state = predicted_state
+
+        # Stack the trajectory along a new temporal dimension
+        return torch.stack(trajectory, dim=1)
+
     def evaluate(self, batch, solver):
         r"""
         Evaluate the residual of the condition on the given batch using the
         solver.
 
         This method computes the per-step residuals through autoregressive
-        unrolling. At each time step, the state and control columns are
-        selected from the unrolled data and concatenated along the feature
-        dimension before the forward pass. The model prediction is compared
-        with the next state columns, while the control columns are only used
-        as inputs and are never predicted.
+        unrolling, as implemented by :meth:`_rollout`. At each time step, the
+        state and control columns are selected from the unrolled data and
+        concatenated along the feature dimension before the forward pass. The
+        model prediction is compared with the next state columns, while the
+        control columns are only used as inputs and are never predicted.
 
         The returned tensor preserves all per-step residual values without
         reduction or loss aggregation.
@@ -530,52 +636,62 @@ class TimeSeriesCondition(TensorCondition):
                 f" Got shape {series.shape}."
             )
 
-        # Resolve labels for the selected columns, if available
-        if isinstance(series, LabelTensor) and series.labels is not None:
-            state_labels = [series.labels[i] for i in self._state_indices]
-            control_labels = [series.labels[i] for i in self._control_indices]
-        else:
-            state_labels = None
-            control_labels = None
-
-        # Extract the initial state and initialize the step-wise residuals list
-        current_state = _select_features(
-            series[:, :, 0], self._state_indices
+        # Extract the initial states, the controls, and the target states. The
+        # temporal dimension of the unrolled data is the third one.
+        n_steps = series.shape[2] - 1
+        records = series.shape[:2]
+        initial_state = _select_features(series[:, :, 0], self._state_indices)
+        control = _select_features(
+            series[:, :, :-1], self._control_indices
         )
-        residuals = []
+        targets = _select_features(series[:, :, 1:], self._state_indices)
 
-        # Iterate over the time steps
-        for step in range(1, series.shape[2]):
+        # Resolve the labels before flattening, which drops them
+        state_labels = _labels_or_none(initial_state)
+        control_labels = _labels_or_none(control)
 
-            # Select the control at the current time step. The control does
-            # not need to be predicted, so it is only used as model input.
-            current_control = _select_features(
-                series[:, :, step - 1], self._control_indices
+        # Unroll the trajectories, treating trajectories and windows as records
+        trajectory = self._rollout(
+            solver,
+            initial_state.flatten(0, 1),
+            None if control is None else control.flatten(0, 1),
+            n_steps,
+            state_labels=state_labels,
+            control_labels=control_labels,
+        )
+        trajectory = trajectory.reshape(
+            *records, n_steps + 1, *initial_state.shape[2:]
+        )
+
+        # Compare the predictions with the target states
+        residuals = trajectory[:, :, 1:] - targets
+        return residuals.movedim(2, 0).as_subclass(torch.Tensor)
+
+    def test(self, solver):
+        """
+        Predict the full trajectory of the stored input data.
+
+        The initial state and the control are read from the stored ``input``
+        column by column, and the rollout is computed by :meth:`_rollout`
+        without gradient tracking. This is meant to be used after training, to
+        compare the prediction of the trained solver with the stored data.
+
+        :param BaseSolver solver: The solver providing the trained model.
+        :return: The predicted trajectory, including the initial state, with
+            shape ``[trajectories, time_steps, *state_features]``.
+        :rtype: torch.Tensor | LabelTensor
+        """
+        # Read the initial state and the control from the stored input
+        initial_state = _select_features(self._input[:, 0], self._state_indices)
+        control = _select_features(
+            self._input[:, :-1], self._control_indices
+        )
+
+        # Unroll the trajectory without tracking the gradient
+        with torch.no_grad():
+            return self._rollout(
+                solver, initial_state, control, self._input.shape[1] - 1
             )
-            model_input = _concat_features(
-                current_state,
-                current_control,
-                state_labels=state_labels,
-                control_labels=control_labels,
-            )
-
-            # Forward the model input
-            output = solver.forward(model_input)
-            predicted_state = output
-
-            # Retrieve the target state and compute the step-wise residual
-            target_state = _select_features(
-                series[:, :, step], self._state_indices
-            )
-            step_residual = predicted_state - target_state
-            residuals.append(step_residual)
-
-            # Update the current state for the next iteration. Only the
-            # predicted state is fed back; the control is read from the data.
-            current_state = predicted_state
-
-        # Stack the step-wise residuals
-        return torch.stack(residuals).as_subclass(torch.Tensor)
 
     @property
     def input(self):

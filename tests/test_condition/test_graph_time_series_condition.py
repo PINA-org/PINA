@@ -305,3 +305,69 @@ def test_evaluate_with_control(use_lt, n_windows, unroll_length, randomize):
     expected = torch.stack(step_residuals)
     assert residuals.shape[-1] == 2
     assert torch.allclose(residuals, expected)
+
+
+@pytest.mark.parametrize("use_lt", [True, False])
+def test_constructor_residual_addition(use_lt):
+    graph = _create_control_graph_data(use_lt)
+
+    # Residual addition is disabled by default
+    condition = GraphTimeSeriesCondition(
+        graph, key="x", state=[0, 1], control=[2]
+    )
+    assert condition._residual_addition is False
+
+    # Residual addition can be enabled
+    condition = GraphTimeSeriesCondition(
+        graph, key="x", state=[0, 1], control=[2], residual_addition=True
+    )
+    assert condition._residual_addition is True
+
+    # Should fail if residual_addition is not a boolean
+    with pytest.raises(ValueError):
+        GraphTimeSeriesCondition(
+            graph, key="x", residual_addition="yes"
+        )
+
+
+@pytest.mark.parametrize("use_lt", [True, False])
+@pytest.mark.parametrize("n_windows", [4, 6])
+@pytest.mark.parametrize("unroll_length", [3, 5])
+def test_evaluate_residual_addition(use_lt, n_windows, unroll_length):
+    graph = _create_control_graph_data(use_lt)
+    condition = GraphTimeSeriesCondition(
+        graph,
+        key="x",
+        state=[0, 1],
+        control=[2],
+        residual_addition=True,
+    )
+    condition.store_data(
+        n_subgraphs=1,
+        num_hops=1,
+        n_windows=n_windows,
+        unroll_length=unroll_length,
+    )
+    batch = condition.materialize(0)
+    series = batch.x.clone()
+    solver = ControlledGraphSolver(n_state=2)
+
+    residuals = condition.evaluate(batch, solver)
+
+    # The previous state is added to the model output at each step
+    tensor = (
+        series.as_subclass(torch.Tensor)
+        if isinstance(series, LabelTensor)
+        else series
+    )
+    current_state = tensor[:, 0, :, :2]
+    step_residuals = []
+    for step in range(1, tensor.shape[1]):
+        control_state = tensor[:, step - 1, :, 2:]
+        predicted_state = current_state + control_state + current_state
+        target_state = tensor[:, step, :, :2]
+        step_residuals.append(predicted_state - target_state)
+        current_state = predicted_state
+
+    expected = torch.stack(step_residuals)
+    assert torch.allclose(residuals, expected)
