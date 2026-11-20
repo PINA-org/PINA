@@ -247,3 +247,61 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
             setattr(batch, self.key, original)
 
         return torch.stack(residuals).as_subclass(torch.Tensor)
+
+    def test(self, solver):
+        """
+        Predict the full trajectory of the graph's temporal data.
+
+        The initial state and the control are read from the graph's feature
+        attribute, and the rollout runs without gradient tracking. The feature
+        attribute is temporarily replaced at each step and restored afterwards.
+
+        :param BaseSolver solver: The solver providing the trained model.
+        :return: The predicted trajectory, including the initial state, with
+            shape ``[n_nodes, time_steps, *state_features]``.
+        :rtype: torch.Tensor | LabelTensor
+        """
+        original = getattr(self.graph, self.key).clone()
+        series = getattr(self.graph, self.key)
+        n_steps = series.shape[1] - 1
+
+        # Select the initial state and read the labels of both selectors
+        current_state = _select_features(series[:, 0], self._state)
+        state_labels = (
+            current_state.labels
+            if isinstance(current_state, LabelTensor)
+            else None
+        )
+        control_labels = None
+        if self._control and isinstance(series, LabelTensor):
+            control_columns = _select_features(series[:, 0], self._control)
+            control_labels = control_columns.labels
+
+        trajectory = [current_state]
+        try:
+            with torch.no_grad():
+                for step in range(n_steps):
+                    current_control = _select_features(
+                        series[:, step], self._control
+                    )
+                    setattr(
+                        self.graph,
+                        self.key,
+                        _concat_features(
+                            current_state,
+                            current_control,
+                            state_labels=state_labels,
+                            control_labels=control_labels,
+                        ),
+                    )
+
+                    prediction = solver.forward(self.graph)
+                    if self._residual_addition:
+                        prediction = prediction + current_state
+
+                    trajectory.append(prediction)
+                    current_state = prediction
+        finally:
+            setattr(self.graph, self.key, original)
+
+        return torch.stack(trajectory, dim=1)
