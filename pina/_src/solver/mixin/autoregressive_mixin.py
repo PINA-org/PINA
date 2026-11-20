@@ -2,7 +2,33 @@
 
 import torch
 
+from pina._src.core.label_tensor import LabelTensor
 from pina._src.core.utils import check_consistency
+
+
+def _concat_state_control(state, control):
+    """
+    Concatenate state and control along the feature dimension.
+
+    :param state: The current state.
+    :type state: torch.Tensor | LabelTensor
+    :param control: The control, or ``None``.
+    :type control: torch.Tensor | LabelTensor | None
+    :return: The concatenated input. Labels are preserved when both inputs are
+        :class:`~pina.label_tensor.LabelTensor` instances.
+    :rtype: torch.Tensor | LabelTensor
+    """
+    if control is None:
+        return state
+
+    model_input = torch.cat([state, control], dim=-1)
+
+    # Restore labels when both inputs are LabelTensor instances
+    if isinstance(state, LabelTensor) and isinstance(control, LabelTensor):
+        model_input = model_input.as_subclass(LabelTensor)
+        model_input.labels = state.labels + control.labels
+
+    return model_input
 
 
 class AutoregressiveMixin:
@@ -115,12 +141,47 @@ class AutoregressiveMixin:
             self._running_avg.clear()
             self._step_count.clear()
 
-    def predict(self, initial_state, n_steps, control=None, **kwargs):
+    def rollout_step(self, state, control=None, **kwargs):
         """
-        Generate predictions by recursively calling the model's forward.
+        Perform a single autoregressive rollout step.
 
-        :param initial_state: The initial state from which to start prediction.
-            The initial state must be of shape ``[trajectories, 1, *features]``.
+        This method defines how the current state and control are combined and
+        passed to the model. Override it to customize the rollout convention,
+        for example to update a graph attribute before the forward pass.
+
+        :param state: The current state.
+        :type state: torch.Tensor | LabelTensor
+        :param control: The control at the current step. Defaults to ``None``.
+        :type control: torch.Tensor | LabelTensor | None
+        :param dict kwargs: Additional keyword arguments. Recognized keys are
+            ``graph`` and ``key`` for graph-based rollouts. When ``graph`` is
+            provided, the concatenated state and control are stored on the
+            graph under ``key`` before the forward pass.
+        :return: The next state.
+        :rtype: torch.Tensor | LabelTensor
+        """
+        graph = kwargs.get("graph")
+        key = kwargs.get("key", "x")
+
+        # Graph rollout: update the graph attribute before the forward pass
+        if graph is not None:
+            setattr(graph, key, _concat_state_control(state, control))
+            return self.forward(graph) + state
+
+        # Tensor rollout: concatenate state and control
+        return self.forward(_concat_state_control(state, control))
+
+    def rollout(self, initial_state, n_steps, control=None, **kwargs):
+        """
+        Run an autoregressive rollout for ``n_steps`` steps.
+
+        The rollout repeatedly calls :meth:`rollout_step`, feeding the
+        predicted state back as the next input. The initial state is included
+        in the returned trajectory.
+
+        :param initial_state: The initial state from which to start the
+            rollout. The initial state must be of shape
+            ``[trajectories, 1, *features]``.
         :type initial_state: torch.Tensor | LabelTensor
         :param int n_steps: The number of autoregressive steps to predict.
         :param control: Optional control inputs of shape
@@ -128,7 +189,8 @@ class AutoregressiveMixin:
             control at each step is concatenated with the current state before
             the forward pass. Default is ``None``.
         :type control: torch.Tensor | LabelTensor | None
-        :param dict kwargs: Additional keyword arguments.
+        :param dict kwargs: Additional keyword arguments forwarded to
+            :meth:`rollout_step`.
         :raises ValueError: If the provided initial_state tensor has less than 3
             dimensions.
         :raises ValueError: If ``control`` is provided and has fewer than
@@ -159,21 +221,57 @@ class AutoregressiveMixin:
         # Initialize the list of predictions with the initial state
         predictions = [initial_state]
 
-        # Disable gradient computation for autoregressive prediction
-        with torch.no_grad():
+        # Preserve the graph attribute so the rollout does not mutate it
+        graph = kwargs.get("graph")
+        key = kwargs.get("key", "x")
+        original = getattr(graph, key) if graph is not None else None
 
-            # Unroll the autoregressive prediction for n_steps
-            for step in range(n_steps):
+        try:
+            # Disable gradient computation for autoregressive prediction
+            with torch.no_grad():
 
-                # Build the model input, optionally concatenating the control
-                current_state = predictions[-1]
-                if control is not None:
-                    current_state = torch.cat(
-                        [current_state, control[:, step : step + 1]], dim=-1
+                # Unroll the autoregressive prediction for n_steps
+                for step in range(n_steps):
+
+                    # Select the control at the current step
+                    current_control = (
+                        control[:, step : step + 1]
+                        if control is not None
+                        else None
                     )
 
-                # Forward the model input
-                output = self.forward(current_state)
-                predictions.append(output)
+                    # Advance the rollout by one step
+                    predictions.append(
+                        self.rollout_step(
+                            predictions[-1], current_control, **kwargs
+                        )
+                    )
+        finally:
+            if graph is not None:
+                setattr(graph, key, original)
 
         return torch.cat(predictions, dim=1)
+
+    def predict(self, initial_state, n_steps, control=None, **kwargs):
+        """
+        Generate predictions by recursively calling the model's forward.
+
+        This is an alias for :meth:`rollout`.
+
+        :param initial_state: The initial state from which to start prediction.
+            The initial state must be of shape ``[trajectories, 1, *features]``.
+        :type initial_state: torch.Tensor | LabelTensor
+        :param int n_steps: The number of autoregressive steps to predict.
+        :param control: Optional control inputs of shape
+            ``[trajectories, n_steps, *control_features]``. When provided, the
+            control at each step is concatenated with the current state before
+            the forward pass. Default is ``None``.
+        :type control: torch.Tensor | LabelTensor | None
+        :param dict kwargs: Additional keyword arguments forwarded to
+            :meth:`rollout_step`.
+        :return: The predicted trajectory, including the initial state. It has
+            shape ``[trajectories, n_steps + 1, *features]``, where the first
+            step corresponds to the initial state.
+        :rtype: torch.Tensor | LabelTensor
+        """
+        return self.rollout(initial_state, n_steps, control=control, **kwargs)
