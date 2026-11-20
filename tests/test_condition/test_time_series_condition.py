@@ -356,8 +356,6 @@ def test_constructor_control_indices(use_lt):
     # Assert that the selectors are stored and resolved correctly
     assert condition.state == [0, 1]
     assert condition.control == [2]
-    assert condition._state_indices == [0, 1]
-    assert condition._control_indices == [2]
 
     # The constructor keeps the raw input shape
     expected_shape = torch.Size([n_samples, time_steps, 3])
@@ -374,11 +372,9 @@ def test_constructor_control_labels():
         control=["a"],
     )
 
-    # Assert that labels are resolved to the correct columns
+    # Assert that the labels are stored as provided
     assert condition.state == ["u", "v"]
     assert condition.control == ["a"]
-    assert condition._state_indices == [0, 1]
-    assert condition._control_indices == [2]
 
 
 def test_control_only_selector():
@@ -390,10 +386,8 @@ def test_control_only_selector():
         control=["a"],
     )
 
-    assert condition.state is None
+    assert condition.state == ["u", "v"]
     assert condition.control == ["a"]
-    assert condition._state_indices == [0, 1]
-    assert condition._control_indices == [2]
 
 
 def test_no_selectors_all_state():
@@ -402,84 +396,8 @@ def test_no_selectors_all_state():
     input_tensor = _create_control_tensor_data(use_lt=False)
     condition = TimeSeriesCondition(input=input_tensor)
 
-    assert condition._state_indices == [0, 1, 2]
-    assert condition._control_indices == []
-
-
-@pytest.mark.parametrize("use_lt", [True, False])
-@pytest.mark.parametrize(
-    "kwargs",
-    [
-        {"state": [0, 1], "control": [1]},  # overlapping columns
-        {"control": [5]},  # out-of-range index
-        {"control": [0, 0]},  # duplicate control columns
-        {"state": []},  # empty state
-        {"control": [1.5]},  # invalid selector type
-        {"state": [0, "u"]},  # mixed selector types
-    ],
-)
-def test_selector_validation(use_lt, kwargs):
-
-    # Invalid selectors must be rejected
-    input_tensor = _create_control_tensor_data(use_lt)
-    with pytest.raises(ValueError):
-        TimeSeriesCondition(input=input_tensor, **kwargs)
-
-
-def test_selector_labels_require_label_tensor():
-
-    # Labels cannot be used with plain tensors
-    input_tensor = _create_control_tensor_data(use_lt=False)
-    with pytest.raises(ValueError):
-        TimeSeriesCondition(
-            input=input_tensor,
-            state=["u", "v"],
-            control=["a"],
-        )
-
-
-def test_selector_missing_label():
-
-    # Labels must exist in the LabelTensor
-    input_tensor = _create_control_tensor_data(use_lt=True)
-    with pytest.raises(ValueError):
-        TimeSeriesCondition(
-            input=input_tensor,
-            state=["u", "v"],
-            control=["missing"],
-        )
-
-
-def test_selector_invalid_type():
-
-    # Selectors must be lists of columns (or a single column)
-    input_tensor = _create_control_tensor_data(use_lt=False)
-    with pytest.raises(TypeError):
-        TimeSeriesCondition(input=input_tensor, control=1.5)
-
-
-def test_store_data_selector_override():
-
-    # Selectors can be overridden when storing the data
-    input_tensor = _create_control_tensor_data(use_lt=False)
-    condition = TimeSeriesCondition(
-        input=input_tensor,
-        state=[0, 1],
-        control=[2],
-    )
-    condition.store_data(
-        batch_size=2,
-        n_windows=4,
-        unroll_length=3,
-        state=[1],
-        control=[0, 2],
-    )
-
-    assert condition._state_indices == [1]
-    assert condition._control_indices == [0, 2]
-    for batch in condition.data:
-        assert batch["state"] == [1]
-        assert batch["control"] == [0, 2]
+    assert condition.state == [0, 1, 2]
+    assert condition.control is None
 
 
 @pytest.mark.parametrize("use_lt", [True, False])

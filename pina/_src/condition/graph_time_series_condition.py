@@ -9,7 +9,6 @@ from pina._src.condition.time_series_condition import (
     TimeSeriesCondition,
     _check_time_series_params,
     _concat_features,
-    _resolve_feature_selectors,
     _select_features,
     _unroll_windows,
 )
@@ -52,29 +51,39 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
             ``None``. If ``None`` and ``control`` is provided, all columns
             not selected as control are used as state. If both are ``None``,
             all feature columns are treated as state. Default is ``None``.
-        :type state: list[int] | list[str] | None
+        :type state: int | str | list[int] | list[str] | None
         :param control: The columns used as control inputs. It can be a list
             of integer feature indices, a list of labels for
             :class:`~pina.label_tensor.LabelTensor` graph features, or
             ``None``. Control columns are concatenated with the state before
             the forward pass and are never predicted. Default is ``None``.
-        :type control: list[int] | list[str] | None
+        :type control: int | str | list[int] | list[str] | None
         :param bool residual_addition: If ``True``, the previous state is added
             to the model output at each step, so that the model predicts the
             increment of the state instead of the state itself. If ``False``,
             the model output is used as the next state. Default is ``False``.
-        :raises ValueError: If ``state`` or ``control`` selectors are invalid.
         :raises ValueError: If ``residual_addition`` is not a boolean.
         """
         GraphCondition.__init__(self, graph, key=key)
-        features = getattr(graph, key)
         check_consistency(residual_addition, bool)
         self._state = state
         self._control = control
         self._residual_addition = residual_addition
-        self._state_indices, self._control_indices = (
-            _resolve_feature_selectors(features, state, control)
-        )
+
+        # By default the state is made of every column not used as control
+        if isinstance(self._control, (int, str)):
+            self._control = [self._control]
+        if self._state is None:
+            features = getattr(graph, key)
+            columns = (
+                features.labels if isinstance(features, LabelTensor) else None
+            )
+            columns = columns or list(range(features.shape[-1]))
+            self._state = [
+                column
+                for column in columns
+                if column not in (self._control or [])
+            ]
 
     def store_data(self, **kwargs):
         """
@@ -186,17 +195,17 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                 f" Got shape {series.shape}."
             )
 
-        # Resolve labels for the selected columns, if available
-        if isinstance(series, LabelTensor) and series.labels is not None:
-            state_labels = [series.labels[i] for i in self._state_indices]
-            control_labels = [series.labels[i] for i in self._control_indices]
-        else:
-            state_labels = None
-            control_labels = None
-
-        current_state = _select_features(
-            series[:, 0], self._state_indices
+        # Select the initial state and read the labels of both selectors
+        current_state = _select_features(series[:, 0], self._state)
+        state_labels = (
+            current_state.labels
+            if isinstance(current_state, LabelTensor)
+            else None
         )
+        control_labels = None
+        if self._control and isinstance(series, LabelTensor):
+            control_columns = _select_features(series[:, 0], self._control)
+            control_labels = control_columns.labels
         residuals = []
 
         try:
@@ -204,7 +213,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
 
                 # The control is an input only and is never predicted
                 current_control = _select_features(
-                    series[:, step - 1], self._control_indices
+                    series[:, step - 1], self._control
                 )
 
                 dirichlet_nodes = torch.isclose(_select_features(
@@ -228,7 +237,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                     prediction = prediction + current_state
                 prediction[dirichlet_nodes] = 0.0
                 target_state = _select_features(
-                    series[:, step], self._state_indices
+                    series[:, step], self._state
                 )
                 residuals.append(prediction - target_state)
 
