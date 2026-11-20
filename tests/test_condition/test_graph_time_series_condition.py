@@ -241,8 +241,6 @@ def test_constructor_control_selectors(use_lt):
 
     assert condition.state == [0, 1]
     assert condition.control == [2]
-    assert condition._state_indices == [0, 1]
-    assert condition._control_indices == [2]
 
 
 def test_constructor_control_labels():
@@ -253,8 +251,6 @@ def test_constructor_control_labels():
 
     assert condition.state == ["u", "v"]
     assert condition.control == ["a"]
-    assert condition._state_indices == [0, 1]
-    assert condition._control_indices == [2]
 
 
 @pytest.mark.parametrize("use_lt", [True, False])

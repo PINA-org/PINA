@@ -133,151 +133,39 @@ def _unroll_windows(data, n_windows, unroll_length, randomize):
     return unrolled_data
 
 
-def _resolve_feature_selectors(data, state, control):
-    """
-    Resolve state and control selectors into feature column indices.
-
-    Selectors can be lists of integer column indices or, when ``data`` is a
-    :class:`LabelTensor`, lists of feature labels. When ``control`` is
-    provided without ``state``, all columns not selected as control are used
-    as state. When both are omitted, every feature column is treated as
-    state.
-
-    :param data: The temporal input data of shape
-        ``[trajectories, time_steps, *features]``.
-    :type data: torch.Tensor | LabelTensor
-    :param state: The columns predicting the state. It can be a list of
-        integer indices, a list of labels, or ``None``.
-    :type state: list[int] | list[str] | None
-    :param control: The columns acting as control inputs. It can be a list
-        of integer indices, a list of labels, or ``None``.
-    :type control: list[int] | list[str] | None
-    :raises TypeError: If a selector is not a list of integers or labels.
-    :raises ValueError: If a selector references an out-of-range column or a
-        missing label, contains duplicates, leaves the state empty, or
-        overlaps with the control.
-    :return: The resolved state and control column indices.
-    :rtype: tuple[list[int], list[int]]
-    """
-    n_features = data.shape[-1]
-
-    def _resolve(selector, name):
-        if selector is None:
-            return None
-
-        # Allow a single column to be passed directly
-        if isinstance(selector, (int, str)):
-            selector = [selector]
-        elif not isinstance(selector, (list, tuple, range)):
-            raise TypeError(
-                f"'{name}' must be None, an integer, a string, or a list "
-                f"of integers/labels. Got {type(selector).__name__}."
-            )
-        selector = list(selector)
-
-        # Empty selectors are allowed for control, checked by the caller
-        if len(selector) == 0:
-            return []
-
-        # Resolve integer column indices
-        if all(isinstance(item, int) for item in selector):
-            indices = list(selector)
-            for index in indices:
-                if index < 0 or index >= n_features:
-                    raise ValueError(
-                        f"'{name}' contains the column index {index}, which "
-                        f"is out of range for data with {n_features} "
-                        "features."
-                    )
-
-        # Resolve label selectors for LabelTensor data
-        elif all(isinstance(item, str) for item in selector):
-            if not isinstance(data, LabelTensor):
-                raise ValueError(
-                    f"'{name}' was provided as labels, but the input data is "
-                    "not a LabelTensor."
-                )
-            labels = data.labels
-            if labels is None:
-                raise ValueError(
-                    f"'{name}' was provided as labels, but the input "
-                    "LabelTensor does not define feature labels."
-                )
-            missing = [label for label in selector if label not in labels]
-            if missing:
-                raise ValueError(
-                    f"'{name}' contains labels {missing} that are not "
-                    f"present in the input labels {list(labels)}."
-                )
-            indices = [labels.index(label) for label in selector]
-
-        else:
-            raise ValueError(
-                f"'{name}' must contain either only integers or only labels, "
-                f"not a mixture. Got {selector}."
-            )
-
-        if len(indices) != len(set(indices)):
-            raise ValueError(
-                f"'{name}' contains duplicate columns: {selector}."
-            )
-
-        return indices
-
-    state_indices = _resolve(state, "state")
-    control_indices = _resolve(control, "control")
-
-    # By default, all columns not used as control are predicted as state
-    if state_indices is None:
-        if control_indices is None:
-            state_indices = list(range(n_features))
-        else:
-            state_indices = [
-                index
-                for index in range(n_features)
-                if index not in control_indices
-            ]
-
-    # No control columns by default
-    if control_indices is None:
-        control_indices = []
-
-    # At least one state column is required
-    if len(state_indices) == 0:
-        raise ValueError(
-            "At least one feature column must be selected as state."
-        )
-
-    # State and control columns must be disjoint
-    overlapping = set(state_indices) & set(control_indices)
-    if overlapping:
-        raise ValueError(
-            "State and control columns must be disjoint. Overlapping "
-            f"columns: {sorted(overlapping)}."
-        )
-
-    return state_indices, control_indices
-
-
-def _select_features(tensor, indices):
+def _select_features(tensor, selector):
     """
     Select feature columns along the last dimension of a tensor.
 
+    Columns can be selected by feature labels or by column indices.
+
     :param tensor: The tensor to select columns from.
     :type tensor: torch.Tensor | LabelTensor
-    :param list[int] indices: The feature column indices to select.
-    :return: The selected tensor, or ``None`` if ``indices`` is empty.
+    :param selector: The columns to select, given as labels or indices. A
+        single column is accepted as well as a list of columns.
+    :type selector: int | str | list[int] | list[str] | None
+    :raises AttributeError: If ``selector`` contains labels and ``tensor``
+        is not a :class:`~pina.label_tensor.LabelTensor`.
+    :raises ValueError: If ``selector`` contains labels that ``tensor`` does
+        not define.
+    :return: The selected columns, or ``None`` if ``selector`` is empty.
     :rtype: torch.Tensor | LabelTensor | None
     """
-    if not indices:
+    if not selector:
         return None
+    if isinstance(selector, (int, str)):
+        selector = [selector]
 
-    selected = tensor[..., indices]
+    # Labels are extracted by the LabelTensor, indices by plain slicing
+    if isinstance(selector[0], str):
+        return tensor.extract(selector)
 
-    # LabelTensor indexing does not always update labels for advanced
-    # indexing, so explicitly restore the labels of the selected columns
+    selected = tensor[..., selector]
+
+    # LabelTensor indexing does not always update labels, so explicitly
+    # restore the labels of the selected columns
     if isinstance(selected, LabelTensor) and tensor.labels is not None:
-        selected.labels = [tensor.labels[index] for index in indices]
+        selected.labels = [tensor.labels[index] for index in selector]
 
     return selected
 
@@ -314,25 +202,6 @@ def _concat_features(
         model_input.labels = list(state_labels) + list(control_labels)
 
     return model_input
-
-
-def _labels_or_none(tensor):
-    """
-    Read the feature labels of a tensor, if it has any.
-
-    Flattening or reshaping a :class:`LabelTensor` drops its feature labels,
-    so this helper reads the labels without failing when they are gone.
-
-    :param tensor: The tensor to read the labels from.
-    :type tensor: torch.Tensor | LabelTensor
-    :return: The feature labels, or ``None`` when ``tensor`` is not a
-        :class:`LabelTensor` or it does not define feature labels.
-    :rtype: list[str] | None
-    """
-    # Tensors without stored labels, including reshaped LabelTensors
-    if not getattr(tensor, "_labels", None):
-        return None
-    return None if tensor.labels is None else list(tensor.labels)
 
 
 class TimeSeriesCondition(TensorCondition):
@@ -395,10 +264,11 @@ class TimeSeriesCondition(TensorCondition):
         self, input, state=None, control=None, residual_addition=False
     ):
         """
-        Validate the input data and the feature selectors.
+        Validate the input data and store the feature selectors.
 
-        The temporal window parameters are provided to :meth:`store_data`,
-        not to the constructor.
+        The selectors are stored as provided and resolved when the columns are
+        selected. The temporal window parameters are provided to
+        :meth:`store_data`, not to the constructor.
 
         :param input: The temporal input data. It must contain all the
             feature columns used as state and control.
@@ -408,13 +278,13 @@ class TimeSeriesCondition(TensorCondition):
             or ``None``. If ``None`` and ``control`` is provided, all columns
             not selected as control are used as state. If both are ``None``,
             all columns are treated as state. Default is ``None``.
-        :type state: list[int] | list[str] | None
+        :type state: int | str | list[int] | list[str] | None
         :param control: The columns used as control inputs. It can be a list
             of integer column indices, a list of labels for
             :class:`LabelTensor` input, or ``None``. Control columns are
             concatenated with the state before the forward pass and are never
             predicted. Default is ``None``.
-        :type control: list[int] | list[str] | None
+        :type control: int | str | list[int] | list[str] | None
         :param bool residual_addition: If ``True``, the previous state is added
             to the model output at each step, so that the model predicts the
             increment of the state instead of the state itself. If ``False``,
@@ -423,7 +293,6 @@ class TimeSeriesCondition(TensorCondition):
             :class:`torch.Tensor` or :class:`~pina.label_tensor.LabelTensor`.
         :raises ValueError: If ``input`` has fewer than three dimensions.
         :raises ValueError: If ``residual_addition`` is not a boolean.
-        :raises ValueError: If ``state`` or ``control`` selectors are invalid.
         """
         check_consistency(input, self._avail_input_cls)
         check_consistency(residual_addition, bool)
@@ -436,9 +305,18 @@ class TimeSeriesCondition(TensorCondition):
         self._state = state
         self._control = control
         self._residual_addition = residual_addition
-        self._state_indices, self._control_indices = (
-            _resolve_feature_selectors(input, state, control)
-        )
+
+        # By default the state is made of every column not used as control
+        if isinstance(self._control, (int, str)):
+            self._control = [self._control]
+        if self._state is None:
+            columns = input.labels if isinstance(input, LabelTensor) else None
+            columns = columns or list(range(input.shape[-1]))
+            self._state = [
+                column
+                for column in columns
+                if column not in (self._control or [])
+            ]
 
     def store_data(
         self,
@@ -446,9 +324,6 @@ class TimeSeriesCondition(TensorCondition):
         n_windows=None,
         unroll_length=None,
         randomize=False,
-        state=None,
-        control=None,
-        **kwargs,
     ):
         """
         Unroll the time-series input data and store it in batches.
@@ -468,11 +343,6 @@ class TimeSeriesCondition(TensorCondition):
         :param bool randomize: If ``True``, randomly permute the valid
             starting indices before selecting the windows. Default is
             ``False``.
-        :param state: Optional override of the state column selector. If
-            ``None``, the selector provided to the constructor is used.
-        :param control: Optional override of the control column selector. If
-            ``None``, the selector provided to the constructor is used.
-        :param dict kwargs: Additional keyword arguments are ignored.
         :return: The stored batches.
         :rtype: list[dict]
         :raises AssertionError: If ``n_windows`` or ``unroll_length`` is not
@@ -490,19 +360,11 @@ class TimeSeriesCondition(TensorCondition):
             if n_windows is None
             else n_windows
         )
-        state = self._state if state is None else state
-        control = self._control if control is None else control
-
         _check_time_series_params(
             data=self._input,
             n_windows=n_windows,
             unroll_length=unroll_length,
             randomize=randomize,
-        )
-        self._state = state
-        self._control = control
-        self._state_indices, self._control_indices = (
-            _resolve_feature_selectors(self._input, state, control)
         )
 
         # Unroll the raw input only while creating the batches. The base
@@ -560,15 +422,15 @@ class TimeSeriesCondition(TensorCondition):
             shape ``[records, n_steps + 1, *state_features]``.
         :rtype: torch.Tensor | LabelTensor
         """
-        # Resolve the labels of the state and control columns, if available
-        if state_labels is None:
-            state_labels = _labels_or_none(initial_state)
-        if control_labels is None:
-            control_labels = _labels_or_none(control)
+        # Read the labels of the state and control columns, if available
+        if state_labels is None and hasattr(initial_state, "_labels"):
+            state_labels = initial_state.labels
+        if control_labels is None and hasattr(control, "_labels"):
+            control_labels = control.labels
 
         # Restore the labels of the initial state, which are dropped when the
         # data is flattened or reshaped by the caller
-        if state_labels is not None and isinstance(initial_state, LabelTensor):
+        if state_labels and isinstance(initial_state, LabelTensor):
             initial_state = initial_state.as_subclass(LabelTensor)
             initial_state.labels = list(state_labels)
 
@@ -640,15 +502,19 @@ class TimeSeriesCondition(TensorCondition):
         # temporal dimension of the unrolled data is the third one.
         n_steps = series.shape[2] - 1
         records = series.shape[:2]
-        initial_state = _select_features(series[:, :, 0], self._state_indices)
-        control = _select_features(
-            series[:, :, :-1], self._control_indices
-        )
-        targets = _select_features(series[:, :, 1:], self._state_indices)
+        initial_state = _select_features(series[:, :, 0], self._state)
+        control = _select_features(series[:, :, :-1], self._control)
+        targets = _select_features(series[:, :, 1:], self._state)
 
-        # Resolve the labels before flattening, which drops them
-        state_labels = _labels_or_none(initial_state)
-        control_labels = _labels_or_none(control)
+        # Read the labels before flattening, which drops them
+        state_labels = (
+            initial_state.labels
+            if isinstance(initial_state, LabelTensor)
+            else None
+        )
+        control_labels = (
+            control.labels if isinstance(control, LabelTensor) else None
+        )
 
         # Unroll the trajectories, treating trajectories and windows as records
         trajectory = self._rollout(
@@ -682,10 +548,8 @@ class TimeSeriesCondition(TensorCondition):
         :rtype: torch.Tensor | LabelTensor
         """
         # Read the initial state and the control from the stored input
-        initial_state = _select_features(self._input[:, 0], self._state_indices)
-        control = _select_features(
-            self._input[:, :-1], self._control_indices
-        )
+        initial_state = _select_features(self._input[:, 0], self._state)
+        control = _select_features(self._input[:, :-1], self._control)
 
         # Unroll the trajectory without tracking the gradient
         with torch.no_grad():
