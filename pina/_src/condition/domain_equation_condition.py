@@ -76,7 +76,7 @@ class DomainEquationCondition(BaseCondition):
             "condition."
         )
 
-    def store_data(self, **kwargs):
+    def store_mini_batches(self, **kwargs):
         """
         Store the domain and the equation for the condition. It sets the
         attributes ``domain`` and ``equation`` of the condition instance based
