@@ -121,7 +121,7 @@ def test_constructor(use_lt):
     assert isinstance(condition, TimeSeriesCondition)
     _assert_tensor_type(condition.input, use_lt)
 
-    # The constructor stores the raw input; unrolling happens in store_data
+    # The constructor stores the raw input; unrolling happens in store_mini_batches
     expected_shape = torch.Size([n_samples, time_steps, 2])
     assert condition.input.shape == expected_shape
     assert torch.allclose(condition.input, input_tensor)
@@ -143,7 +143,7 @@ def test_constructor(use_lt):
 @pytest.mark.parametrize("n_windows", [4, 6])
 @pytest.mark.parametrize("unroll_length", [3, 5])
 @pytest.mark.parametrize("randomize", [True, False])
-def test_store_data_unrolls_input(use_lt, n_windows, unroll_length, randomize):
+def test_store_mini_batches_unrolls_input(use_lt, n_windows, unroll_length, randomize):
 
     # Define the condition
     input_tensor = _create_tensor_data(use_lt)
@@ -153,8 +153,8 @@ def test_store_data_unrolls_input(use_lt, n_windows, unroll_length, randomize):
     raw_shape = torch.Size([n_samples, time_steps, 2])
     assert condition.input.shape == raw_shape
 
-    # store_data builds the temporal windows in the batches
-    condition.store_data(
+    # store_mini_batches builds the temporal windows in the batches
+    condition.store_mini_batches(
         n_windows=n_windows,
         unroll_length=unroll_length,
         randomize=randomize,
@@ -180,12 +180,12 @@ def test_store_data_unrolls_input(use_lt, n_windows, unroll_length, randomize):
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
-def test_store_data_defaults(use_lt):
+def test_store_mini_batches_defaults(use_lt):
 
     # Without temporal arguments, use the full trajectory in one window
     input_tensor = _create_tensor_data(use_lt)
     condition = TimeSeriesCondition(input=input_tensor)
-    condition.store_data()
+    condition.store_mini_batches()
 
     batch = condition.materialize(0)
     expected_shape = torch.Size([n_samples, 1, time_steps, 2])
@@ -194,35 +194,35 @@ def test_store_data_defaults(use_lt):
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
-def test_store_data_validation(use_lt):
+def test_store_mini_batches_validation(use_lt):
 
-    # Invalid temporal window parameters are rejected by store_data
+    # Invalid temporal window parameters are rejected by store_mini_batches
     input_tensor = _create_tensor_data(use_lt)
     condition = TimeSeriesCondition(input=input_tensor)
 
     # Should fail if unroll_length is not a positive integer
     with pytest.raises(AssertionError):
-        condition.store_data(unroll_length=0)
+        condition.store_mini_batches(unroll_length=0)
 
     # Should fail if n_windows is not a positive integer
     with pytest.raises(AssertionError):
-        condition.store_data(n_windows=0)
+        condition.store_mini_batches(n_windows=0)
 
     # Should fail if randomize is not a boolean value
     with pytest.raises(ValueError):
-        condition.store_data(randomize="not_a_boolean")
+        condition.store_mini_batches(randomize="not_a_boolean")
 
     # Should fail if unroll_length is not greater than 1
     with pytest.raises(ValueError):
-        condition.store_data(unroll_length=1)
+        condition.store_mini_batches(unroll_length=1)
 
     # Should fail if unroll_length is greater than the number of time steps
     with pytest.raises(ValueError):
-        condition.store_data(unroll_length=time_steps + 1)
+        condition.store_mini_batches(unroll_length=time_steps + 1)
 
     # Should fail if n_windows is greater than the number of valid windows
     with pytest.raises(ValueError):
-        condition.store_data(n_windows=10, unroll_length=3)
+        condition.store_mini_batches(n_windows=10, unroll_length=3)
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
@@ -237,7 +237,7 @@ def test_get_item(use_lt, n_windows, unroll_length, randomize):
 
     # Store and extract item using __getitem__
     index = 0
-    condition.store_data(
+    condition.store_mini_batches(
         batch_size=1,
         n_windows=n_windows,
         unroll_length=unroll_length,
@@ -273,7 +273,7 @@ def test_materialize(use_lt, n_windows, unroll_length, randomize):
     condition = TimeSeriesCondition(input=input_tensor)
 
     # Materialize the first batch of size two
-    condition.store_data(
+    condition.store_mini_batches(
         batch_size=2,
         n_windows=n_windows,
         unroll_length=unroll_length,
@@ -312,7 +312,7 @@ def test_evaluate(use_lt, n_windows, unroll_length, randomize):
     solver = DummySolver(use_lt, input_vars)
 
     # Store and extract the batch
-    condition.store_data(
+    condition.store_mini_batches(
         n_windows=n_windows,
         unroll_length=unroll_length,
         randomize=randomize,
@@ -418,7 +418,7 @@ def test_evaluate_with_control(
     solver = ControlledDummySolver(n_state=2)
 
     # Store and extract the batch
-    condition.store_data(
+    condition.store_mini_batches(
         n_windows=n_windows,
         unroll_length=unroll_length,
         randomize=randomize,
@@ -492,7 +492,7 @@ def test_evaluate_residual_addition(use_lt, randomize):
     solver = ControlledDummySolver(n_state=2)
 
     # Store and extract the batch
-    condition.store_data(
+    condition.store_mini_batches(
         n_windows=4, unroll_length=3, randomize=randomize
     )
     batch = condition.materialize(0)

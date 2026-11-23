@@ -59,7 +59,7 @@ def test_constructor(use_lt):
 def test_store_and_materialize(use_lt):
     graph = _create_graph(use_lt=use_lt)
     condition = GraphInputTargetCondition(graph=graph)
-    condition.store_data(n_subgraphs=3, num_hops=1)
+    condition.store_mini_batches(n_subgraphs=3, num_hops=1)
 
     assert len(condition) == 3
 
@@ -73,7 +73,7 @@ def test_store_and_materialize(use_lt):
 def test_evaluate(use_lt):
     graph = _create_graph(use_lt=use_lt)
     condition = GraphInputTargetCondition(graph=graph)
-    condition.store_data(n_subgraphs=1, num_hops=1)
+    condition.store_mini_batches(n_subgraphs=1, num_hops=1)
 
     batch = condition.materialize(0)
     solver = DummyGraphSolver(use_lt=use_lt)

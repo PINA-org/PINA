@@ -68,7 +68,7 @@ def test_constructor(use_lt):
 def test_get_item(use_lt):
     input_tensor, target_tensor = _create_tensor_data(use_lt=use_lt)
     condition = InputTargetCondition(input=input_tensor, target=target_tensor)
-    condition.store_data(batch_size=1)
+    condition.store_mini_batches(batch_size=1)
 
     item = condition[0]
 
@@ -83,7 +83,7 @@ def test_get_item(use_lt):
 def test_materialize(use_lt):
     input_tensor, target_tensor = _create_tensor_data(use_lt=use_lt)
     condition = InputTargetCondition(input=input_tensor, target=target_tensor)
-    condition.store_data(batch_size=2)
+    condition.store_mini_batches(batch_size=2)
 
     batch = condition.materialize(1)
 
@@ -106,7 +106,7 @@ def test_evaluate(use_lt):
     output_vars = target_.labels if use_lt else None
 
     condition = InputTargetCondition(input=input_, target=target_)
-    condition.store_data()
+    condition.store_mini_batches()
     batch = condition.materialize(0)
     solver = DummySolver(use_lt, input_vars, output_vars)
 

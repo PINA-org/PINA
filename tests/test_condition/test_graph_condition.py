@@ -32,10 +32,10 @@ def test_constructor():
     assert condition.key == "x"
 
 
-def test_store_data():
+def test_store_mini_batches():
     graph = _create_graph()
     condition = DummyGraphCondition(graph)
-    condition.store_data(n_subgraphs=4, num_hops=1)
+    condition.store_mini_batches(n_subgraphs=4, num_hops=1)
 
     assert len(condition) == 4
     assert len(condition.data) == 4
@@ -57,7 +57,7 @@ def test_create_subgraph():
 def test_materialize():
     graph = _create_graph()
     condition = DummyGraphCondition(graph)
-    condition.store_data(n_subgraphs=3, num_hops=1)
+    condition.store_mini_batches(n_subgraphs=3, num_hops=1)
 
     assert condition.materialize(0) is condition.data[0]
     assert condition[1] is condition.data[1]
@@ -66,10 +66,10 @@ def test_materialize():
     )
 
 
-def test_store_data_preserves_labels():
+def test_store_mini_batches_preserves_labels():
     graph = _create_graph(labels=True)
     condition = DummyGraphCondition(graph)
-    condition.store_data(n_subgraphs=2, num_hops=1)
+    condition.store_mini_batches(n_subgraphs=2, num_hops=1)
 
     for subgraph in condition.data:
         assert isinstance(subgraph.x, LabelTensor)
