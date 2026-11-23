@@ -126,7 +126,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         unroll_length = kwargs.get("unroll_length", 10)
         n_windows = kwargs.get("n_windows", 4)
         randomize = kwargs.get("randomize", False)
-
+        print("un roll", unroll_length)
         _check_time_series_params(
             data=getattr(self.graph, self.key),
             n_windows=n_windows,
@@ -150,7 +150,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
             if labels is not None:
                 series = LabelTensor(series, labels)
             setattr(subgraph, self.key, series)
-
+        print("data", self.data)
         logger.debug("Stored %d graph time-series batches.", len(self.data))
         return self.data
 
@@ -188,6 +188,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         """
         original = getattr(batch, self.key).clone()
         series = batch[self.key]
+        print("series", series.shape)
         if series.dim() < 4:
             raise ValueError(
                 "The provided input tensor must have at least 4 dimensions:"
@@ -202,6 +203,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
             if isinstance(current_state, LabelTensor)
             else None
         )
+        print(state_labels)
         control_labels = None
         if self._control and isinstance(series, LabelTensor):
             control_columns = _select_features(series[:, 0], self._control)
@@ -215,13 +217,15 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                 current_control = _select_features(
                     series[:, step - 1], self._control
                 )
+                print("self._control", self._control)
+                print(current_control.shape)
 
                 dirichlet_nodes = torch.isclose(_select_features(
                     series[:, step - 1], [-1]
                 ), torch.tensor(1.0)).squeeze()
 
-                # print("Dirichlet nodes:", dirichlet_nodes.shape)
-                # print(torch.sum(dirichlet_nodes).tensor)
+                print("Dirichlet nodes:", dirichlet_nodes.shape)
+                print(torch.sum(dirichlet_nodes).tensor)
                 
                 model_input = _concat_features(
                     current_state,
@@ -229,6 +233,10 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                     state_labels=state_labels,
                     control_labels=control_labels,
                 )
+                print("Model input", model_input.shape)
+                if torch.equal(model_input, series[:,0]):
+                    print("aaaaaaaaaa")
+                
                 setattr(batch, self.key, model_input)
 
                 # Forward the graph and compare only the state columns
@@ -236,6 +244,8 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                 if self._residual_addition:
                     prediction = prediction + current_state
                 prediction[dirichlet_nodes] = 0.0
+                print("prediction", prediction.shape)
+                
                 target_state = _select_features(
                     series[:, step], self._state
                 )
@@ -245,7 +255,8 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                 current_state = prediction
         finally:
             setattr(batch, self.key, original)
-
+        print(torch.stack(residuals).shape)
+        
         return torch.stack(residuals).as_subclass(torch.Tensor)
 
     def test(self, solver):

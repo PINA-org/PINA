@@ -58,6 +58,7 @@ class DataModule(LightningDataModule):
         batching_mode="simple",
         num_workers=0,
         pin_memory=False,
+        condition_kwargs=None
     ):
         """
         Initialization of the :class:`DataModule` class.
@@ -114,6 +115,8 @@ class DataModule(LightningDataModule):
             without a batch size.
         """
         super().__init__()
+
+        self.condition_kwargs = condition_kwargs or {}
 
         # Check the split sizes
         check_consistency(train_size, float)
@@ -367,7 +370,9 @@ class DataModule(LightningDataModule):
 
         for name, condition in self.problem.conditions.items():
             condition.store_data(
-                batch_size=self._condition_batch_size(name)
+                batch_size=self._condition_batch_size(name),
+                **self.condition_kwargs.get(name, {}),
+
             )
 
         self.enumerate_condition()
