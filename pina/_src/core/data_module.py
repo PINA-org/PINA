@@ -24,9 +24,14 @@ class DataModule(LightningDataModule):
     condition batch is materialized in :meth:`transfer_batch_to_device`, so the
     dataloaders yield one condition batch per step.
 
-    The batch size can be set globally, with an ``int``, or per condition, with
-    a mapping from condition names to batch sizes. A condition mapped to
-    ``None`` is stored as a single batch.
+    Each condition builds its own mini-batches with its ``store_mini_batches``
+    method. How it does so is set per condition by ``mini_batch_rule``, a
+    mapping from condition names to the keyword arguments of that method
+    (e.g. ``batch_size`` for tensor conditions, ``n_subgraphs`` and
+    ``unroll_length`` for graph time-series conditions). A global
+    ``batch_size`` applies to every condition whose rule does not set one.
+    ``batching_mode`` then decides how the mini-batches of the different
+    conditions are combined in each training step.
 
     :Example:
 
@@ -38,7 +43,11 @@ class DataModule(LightningDataModule):
         ...     train_size=0.8,
         ...     val_size=0.1,
         ...     test_size=0.1,
-        ...     batch_size={"D": 32, "boundary": 16},
+        ...     batch_size=32,  # default for every condition
+        ...     mini_batch_rule={
+        ...         "boundary": {"batch_size": 16},  # overrides the default
+        ...         "time": {"n_subgraphs": 20, "unroll_length": 3},
+        ...     },
         ...     shuffle=True,
         ... )
         >>> trainer = Trainer(solver=solver, datamodule=data_module)
@@ -58,6 +67,7 @@ class DataModule(LightningDataModule):
         batching_mode="simple",
         num_workers=0,
         pin_memory=False,
+        mini_batch_rule=None,
     ):
         """
         Initialization of the :class:`DataModule` class.
@@ -81,12 +91,13 @@ class DataModule(LightningDataModule):
             training and validation allocation become test batches. Must
             belong to the interval ``[0, 1]``. Default is ``0.0``.
         :param batch_size: Default batch size passed to each condition's
-            ``store_data`` method. It can be a positive integer applied to
-            every condition, a mapping from condition names to batch sizes,
-            or ``None`` to store each condition as a single batch. Mapping
-            values set to ``None`` store that condition as a single batch.
-            Default is ``None``.
-        :type batch_size: int | dict[str, int | None] | None
+            ``store_mini_batches`` method, used by every condition whose
+            ``mini_batch_rule`` does not set ``batch_size``. ``None`` stores
+            each such tensor condition as a single mini-batch. Graph
+            conditions ignore it, since each subgraph is one mini-batch.
+            A mapping from condition names to batch sizes is deprecated:
+            use ``mini_batch_rule`` instead. Default is ``None``.
+        :type batch_size: int | None
         :param bool shuffle: Whether to randomly permute each condition's
             batch indices before splitting. Does not enable dataloader
             shuffling. Default is ``True``.
@@ -98,6 +109,19 @@ class DataModule(LightningDataModule):
         :param bool pin_memory: Whether dataloaders pin the identifier
             tensors in memory. Materialized condition data is not loaded
             by these dataloaders. Default is ``False``.
+        :param mini_batch_rule: Per-condition rules used to build the
+            mini-batches. It maps each condition name to the keyword
+            arguments forwarded to that condition's ``store_mini_batches``
+            method, e.g.
+            ``{"D": {"batch_size": 64},
+            "time": {"n_subgraphs": 20, "num_hops": 30, "unroll_length": 3}}``.
+            Each condition accepts only the keys it supports; conditions
+            not listed use the global ``batch_size`` and their defaults.
+            The rule controls how each condition splits its own data into
+            mini-batches, while ``batching_mode`` controls how the
+            mini-batches of different conditions are combined in a training
+            step. Default is ``None``.
+        :type mini_batch_rule: dict[str, dict] | None
         :raises ValueError: If ``train_size``, ``val_size``, or ``test_size``
             is not a float in the interval ``[0, 1]``.
         :raises ValueError: If the sum of ``train_size``, ``val_size``, and
@@ -106,8 +130,11 @@ class DataModule(LightningDataModule):
         :raises AssertionError: If ``num_workers`` is a negative integer.
         :raises AssertionError: If ``batch_size`` is not a positive integer,
             or a mapping to positive integers or ``None``.
-        :raises ValueError: If a ``batch_size`` mapping refers to unknown
-            conditions.
+        :raises ValueError: If a ``batch_size`` or ``mini_batch_rule``
+            mapping refers to unknown conditions.
+        :raises ValueError: If a ``mini_batch_rule`` value is not a
+            dictionary.
+        :raises DeprecationWarning: If ``batch_size`` is a mapping.
         :raises ValueError: If ``batching_mode`` is not one of the available
             options.
         :raises UserWarning: If ``num_workers`` or ``pin_memory`` are set
@@ -159,6 +186,44 @@ class DataModule(LightningDataModule):
             else:
                 check_positive_integer(batch_size, strict=True)
 
+        # Check the mini-batch rule
+        for name, rule in (mini_batch_rule or {}).items():
+            if not isinstance(rule, dict):
+                raise ValueError(
+                    f"The `mini_batch_rule` of condition '{name}' must be a "
+                    f"dictionary. Got {type(rule).__name__}."
+                )
+        mini_batch_rule = {
+            name: dict(rule) for name, rule in (mini_batch_rule or {}).items()
+        }
+        unknown = set(mini_batch_rule) - set(problem.conditions)
+        if unknown:
+            raise ValueError(
+                "The `mini_batch_rule` mapping refers to unknown "
+                f"conditions: {sorted(unknown)}. Valid conditions "
+                f"are: {sorted(problem.conditions)}."
+            )
+        for name, rule in mini_batch_rule.items():
+            if rule.get("batch_size") is not None:
+                check_positive_integer(rule["batch_size"], strict=True)
+
+        # Backward compatibility: a per-condition batch size mapping becomes
+        # part of the mini-batch rule, which takes precedence
+        if isinstance(batch_size, dict):
+            warnings.warn(
+                "Passing `batch_size` as a mapping is deprecated and will be "
+                "removed in a future release. Use `batch_size` as the global "
+                "default and `mini_batch_rule={name: {'batch_size': ...}}` "
+                "for per-condition values instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            for name, value in batch_size.items():
+                mini_batch_rule.setdefault(name, {}).setdefault(
+                    "batch_size", value
+                )
+            batch_size = None
+
         # Check the batching mode
         if batching_mode not in self._AVAIL_BATCHING_MODES:
             raise ValueError(
@@ -166,8 +231,12 @@ class DataModule(LightningDataModule):
                 f"Expected one of: {sorted(self._AVAIL_BATCHING_MODES)}."
             )
 
-        # Warn if dataloader options are set without a batch size
-        if batch_size is None and (num_workers > 0 or pin_memory):
+        # Warn if dataloader options are set without any batch size
+        any_batch_size = batch_size is not None or any(
+            rule.get("batch_size") is not None
+            for rule in mini_batch_rule.values()
+        )
+        if not any_batch_size and (num_workers > 0 or pin_memory):
             warnings.warn(
                 "`num_workers` and `pin_memory` have no effect when "
                 "`batch_size` is None.",
@@ -177,6 +246,7 @@ class DataModule(LightningDataModule):
 
         self.problem = problem
         self.batch_size = batch_size
+        self.mini_batch_rule = mini_batch_rule
         self.batching_mode = batching_mode
         self.shuffle = shuffle
         self.num_workers = num_workers
@@ -198,17 +268,32 @@ class DataModule(LightningDataModule):
         """
         return self.batching_mode
 
-    def _condition_batch_size(self, name):
+    @property
+    def has_batch_size(self):
         """
-        Return the batch size configured for a condition.
+        Whether a batch size is set, globally or by any mini-batch rule.
+
+        :return: ``True`` if any batch size is not ``None``.
+        :rtype: bool
+        """
+        return self.batch_size is not None or any(
+            rule.get("batch_size") is not None
+            for rule in self.mini_batch_rule.values()
+        )
+
+    def _condition_mini_batch_rule(self, name):
+        """
+        Return the mini-batch rule of a condition, with the global batch size
+        as default for ``batch_size``.
 
         :param str name: The condition name.
-        :return: The configured batch size, or ``None`` for a single batch.
-        :rtype: int | None
+        :return: The keyword arguments for the condition's
+            ``store_mini_batches`` method.
+        :rtype: dict
         """
-        if isinstance(self.batch_size, dict):
-            return self.batch_size.get(name)
-        return self.batch_size
+        rule = dict(self.mini_batch_rule.get(name, {}))
+        rule.setdefault("batch_size", self.batch_size)
+        return rule
 
     def enumerate_condition(self):
         """
@@ -341,11 +426,12 @@ class DataModule(LightningDataModule):
 
     def setup(self, stage=None):
         """
-        Store condition batches and create all dataset splits.
+        Store each condition's mini-batches and create all dataset splits.
 
-        Move the problem's discretized domains into their conditions,
-        then call each condition's ``store_data`` method with the batch
-        size configured for that condition.
+        Move the problem's discretized domains into their conditions, then
+        call each condition's ``store_mini_batches`` method with the
+        ``mini_batch_rule`` of that condition, using the global
+        ``batch_size`` when the rule does not set one.
 
         All accepted stages perform the same setup. Calling this method
         again rebuilds condition batches and dataset splits.
@@ -366,8 +452,8 @@ class DataModule(LightningDataModule):
         self.problem.move_discretisation_into_conditions()
 
         for name, condition in self.problem.conditions.items():
-            condition.store_data(
-                batch_size=self._condition_batch_size(name)
+            condition.store_mini_batches(
+                **self._condition_mini_batch_rule(name)
             )
 
         self.enumerate_condition()

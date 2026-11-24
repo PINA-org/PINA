@@ -56,10 +56,10 @@ def test_constructor(use_lt):
 @pytest.mark.parametrize("n_windows", [4, 6])
 @pytest.mark.parametrize("unroll_length", [3, 5])
 @pytest.mark.parametrize("randomize", [True, False])
-def test_store_data(use_lt, n_windows, unroll_length, randomize):
+def test_store_mini_batches(use_lt, n_windows, unroll_length, randomize):
     graph = _create_graph_data(use_lt=use_lt)
     condition = GraphTimeSeriesCondition(graph, key="x")
-    condition.store_data(
+    condition.store_mini_batches(
         n_subgraphs=2,
         num_hops=1,
         n_windows=n_windows,
@@ -81,39 +81,39 @@ def test_store_data(use_lt, n_windows, unroll_length, randomize):
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
-def test_store_data_validation(use_lt):
+def test_store_mini_batches_validation(use_lt):
     graph = _create_graph_data(use_lt=use_lt)
     condition = GraphTimeSeriesCondition(graph, key="x")
 
     with pytest.raises(AssertionError):
-        condition.store_data(n_windows=4, unroll_length=0)
+        condition.store_mini_batches(n_windows=4, unroll_length=0)
     with pytest.raises(AssertionError):
-        condition.store_data(n_windows=0, unroll_length=3)
+        condition.store_mini_batches(n_windows=0, unroll_length=3)
     with pytest.raises(ValueError):
-        condition.store_data(
+        condition.store_mini_batches(
             n_windows=4, unroll_length=3, randomize="not_a_boolean"
         )
     with pytest.raises(ValueError):
-        condition.store_data(n_windows=4, unroll_length=1)
+        condition.store_mini_batches(n_windows=4, unroll_length=1)
     with pytest.raises(ValueError):
-        condition.store_data(n_windows=4, unroll_length=time_steps + 1)
+        condition.store_mini_batches(n_windows=4, unroll_length=time_steps + 1)
     with pytest.raises(ValueError):
-        condition.store_data(n_windows=10, unroll_length=3)
+        condition.store_mini_batches(n_windows=10, unroll_length=3)
 
 
-def test_store_data_requires_temporal_input():
+def test_store_mini_batches_requires_temporal_input():
     graph = _create_graph_data(use_lt=False, time_steps=None)
     condition = GraphTimeSeriesCondition(graph, key="x")
 
     with pytest.raises(ValueError):
-        condition.store_data(n_windows=2, unroll_length=2)
+        condition.store_mini_batches(n_windows=2, unroll_length=2)
 
 
 @pytest.mark.parametrize("use_lt", [True, False])
 def test_get_item(use_lt):
     graph = _create_graph_data(use_lt=use_lt)
     condition = GraphTimeSeriesCondition(graph, key="x")
-    condition.store_data(
+    condition.store_mini_batches(
         n_subgraphs=2, num_hops=1, n_windows=4, unroll_length=3
     )
 
@@ -130,7 +130,7 @@ def test_get_item(use_lt):
 def test_materialize(use_lt):
     graph = _create_graph_data(use_lt=use_lt)
     condition = GraphTimeSeriesCondition(graph, key="x")
-    condition.store_data(
+    condition.store_mini_batches(
         n_subgraphs=2, num_hops=1, n_windows=4, unroll_length=3
     )
 
@@ -151,7 +151,7 @@ def test_materialize(use_lt):
 def test_evaluate(use_lt, n_windows, unroll_length, randomize):
     graph = _create_graph_data(use_lt=use_lt)
     condition = GraphTimeSeriesCondition(graph, key="x")
-    condition.store_data(
+    condition.store_mini_batches(
         n_subgraphs=1,
         num_hops=1,
         n_windows=n_windows,
@@ -179,7 +179,7 @@ def test_evaluate(use_lt, n_windows, unroll_length, randomize):
 def test_evaluate_forward_receives_graph():
     graph = _create_graph_data(use_lt=False)
     condition = GraphTimeSeriesCondition(graph, key="x")
-    condition.store_data(
+    condition.store_mini_batches(
         n_subgraphs=1, num_hops=1, n_windows=4, unroll_length=3
     )
     batch = condition.materialize(0)
@@ -262,7 +262,7 @@ def test_evaluate_with_control(use_lt, n_windows, unroll_length, randomize):
     condition = GraphTimeSeriesCondition(
         graph, key="x", state=[0, 1], control=[2]
     )
-    condition.store_data(
+    condition.store_mini_batches(
         n_subgraphs=1,
         num_hops=1,
         n_windows=n_windows,
@@ -338,7 +338,7 @@ def test_evaluate_residual_addition(use_lt, n_windows, unroll_length):
         control=[2],
         residual_addition=True,
     )
-    condition.store_data(
+    condition.store_mini_batches(
         n_subgraphs=1,
         num_hops=1,
         n_windows=n_windows,

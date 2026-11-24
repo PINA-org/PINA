@@ -91,7 +91,11 @@ condition = TimeSeriesCondition(
     state=[...],    # columns to predict
     control=[...],  # optional columns used as inputs only
 )
-condition.store_data(n_windows=10, unroll_length=5, randomize=True)
+# Windows are built when the mini-batches are stored, configured through
+# the DataModule's per-condition mini_batch_rule:
+# DataModule(problem, mini_batch_rule={
+#     "time": {"n_windows": 10, "unroll_length": 5, "randomize": True},
+# })
 
 # Graph time series
 Condition(
@@ -105,9 +109,12 @@ Condition(
 Parameters:
 - `state` — columns predicted by the model
 - `control` — columns concatenated to the model input but never predicted
-- `n_windows` — number of rolling windows, passed to `store_data`
-- `unroll_length` — prediction horizon per window, passed to `store_data`
-- `randomize` — shuffle window order, passed to `store_data`
+- `n_windows` — number of rolling windows, set in `mini_batch_rule` and
+  passed to `store_mini_batches`
+- `unroll_length` — prediction horizon per window, set in `mini_batch_rule`
+  and passed to `store_mini_batches`
+- `randomize` — shuffle window order, set in `mini_batch_rule` and passed to
+  `store_mini_batches`
 - `key` — key for graph time series data
 
 ## Step 4 — Integrate with the problem class
@@ -135,12 +142,14 @@ class MyProblem(SpatialProblem):
 - [ ] For data-driven: confirmed data type (`LabelTensor`, `torch.Tensor`,
       `Graph`, or PyG `Data`)
 - [ ] For data-driven: `input_variables` is a `list[str]` naming the inputs
-- [ ] For time series: `state`, `control`, and the `store_data` arguments
-      `n_windows`, `unroll_length`, and optional `key` are set correctly
+- [ ] For time series: `state`, `control`, optional `key`, and the
+      `mini_batch_rule` entries `n_windows` and `unroll_length` are set
+      correctly
 - [ ] Each `Condition` uses valid keyword arguments:
   - `Condition(domain=..., equation=...)` for physics-on-domain
   - `Condition(input=..., equation=...)` for physics-on-points
   - `Condition(input=..., target=...)` for data-driven
-  - `TimeSeriesCondition(input=..., state=..., control=...)` followed by
-    `store_data(n_windows=..., unroll_length=...)` for time series
+  - `TimeSeriesCondition(input=..., state=..., control=...)` with
+    `DataModule(mini_batch_rule={name: {"n_windows": ..., "unroll_length": ...}})`
+    for time series
 - [ ] `domains` dict has an entry for every domain name used in conditions

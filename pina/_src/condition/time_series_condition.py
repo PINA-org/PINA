@@ -212,10 +212,10 @@ class TimeSeriesCondition(TensorCondition):
     dimension corresponds to the temporal evolution of each trajectory.
 
     The input data is stored as provided to the constructor. During
-    :meth:`store_data`, it is unrolled into temporal windows of shape
+    :meth:`store_mini_batches`, it is unrolled into temporal windows of shape
     ``[trajectories, n_windows, unroll_length, *features]`` before being
     split into batches. The temporal window parameters ``unroll_length``,
-    ``n_windows``, and ``randomize`` are arguments of :meth:`store_data` and
+    ``n_windows``, and ``randomize`` are arguments of :meth:`store_mini_batches` and
     are not stored on the condition.
 
     Feature columns can be partitioned into ``state`` and ``control`` columns
@@ -253,7 +253,7 @@ class TimeSeriesCondition(TensorCondition):
     ...     state=["u", "v"],
     ...     control=["a"],
     ... )
-    >>> condition.store_data(unroll_length=5, n_windows=3)
+    >>> condition.store_mini_batches(unroll_length=5, n_windows=3)
     """
 
     # Available fields and input data types
@@ -268,7 +268,7 @@ class TimeSeriesCondition(TensorCondition):
 
         The selectors are stored as provided and resolved when the columns are
         selected. The temporal window parameters are provided to
-        :meth:`store_data`, not to the constructor.
+        :meth:`store_mini_batches`, not to the constructor.
 
         :param input: The temporal input data. It must contain all the
             feature columns used as state and control.
@@ -318,7 +318,7 @@ class TimeSeriesCondition(TensorCondition):
                 if column not in (self._control or [])
             ]
 
-    def store_data(
+    def store_mini_batches(
         self,
         batch_size=None,
         n_windows=None,
@@ -368,7 +368,7 @@ class TimeSeriesCondition(TensorCondition):
         )
 
         # Unroll the raw input only while creating the batches. The base
-        # TensorCondition.store_data slices _input along the trajectory
+        # TensorCondition.store_mini_batches slices _input along the trajectory
         # dimension, so it is temporarily replaced by the unrolled tensor
         # and restored afterwards.
         raw_input = self._input
@@ -379,7 +379,7 @@ class TimeSeriesCondition(TensorCondition):
             randomize=randomize,
         )
         try:
-            return super().store_data(batch_size=batch_size)
+            return super().store_mini_batches(batch_size=batch_size)
         finally:
             self._input = raw_input
 

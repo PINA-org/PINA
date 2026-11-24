@@ -83,8 +83,10 @@ The :class:`~pina.solver.physics_informed_single_model_solver.PhysicsInformedSin
    trainer = Trainer(solver=solver, max_epochs=1000, accelerator="cpu")
    trainer.train()
 
-For advanced dataset settings, such as per-condition batch sizes or custom
-split fractions, build a :class:`~pina.DataModule` and pass it to the trainer:
+For advanced dataset settings, such as per-condition mini-batch rules or
+custom split fractions, build a :class:`~pina.DataModule` and pass it to the
+trainer. ``batch_size`` is the default for every condition, and
+``mini_batch_rule`` overrides it per condition:
 
 .. code-block:: python
 
@@ -92,7 +94,8 @@ split fractions, build a :class:`~pina.DataModule` and pass it to the trainer:
 
    data_module = DataModule(
        problem=problem,
-       batch_size={"D": 64, "boundary": 32},
+       batch_size=64,
+       mini_batch_rule={"boundary": {"batch_size": 32}},
        train_size=0.8,
        val_size=0.1,
        test_size=0.1,

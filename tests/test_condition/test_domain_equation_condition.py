@@ -12,7 +12,7 @@ def _create_condition():
     return DomainEquationCondition(domain=domain, equation=equation)
 
 
-def test_store_data():
+def test_store_mini_batches():
     condition = _create_condition()
 
     assert isinstance(condition, DomainEquationCondition)

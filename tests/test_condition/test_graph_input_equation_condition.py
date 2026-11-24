@@ -34,7 +34,7 @@ def test_constructor_and_batching(use_lt):
     assert condition.key == "x"
     assert condition.equation is equation
 
-    condition.store_data(n_subgraphs=2, num_hops=1)
+    condition.store_mini_batches(n_subgraphs=2, num_hops=1)
     assert len(condition) == 2
     assert isinstance(condition.materialize(0), Graph)
 
@@ -51,7 +51,7 @@ def test_evaluate(use_lt):
     condition = GraphInputEquationCondition(
         graph=_create_graph(use_lt=use_lt), equation=FixedValue(0.0)
     )
-    condition.store_data(n_subgraphs=1, num_hops=1)
+    condition.store_mini_batches(n_subgraphs=1, num_hops=1)
     batch = condition.materialize(0)
 
     residual = condition.evaluate(batch, DummyGraphSolver())

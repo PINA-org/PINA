@@ -29,7 +29,7 @@ class Trainer(lightning.pytorch.Trainer):
     Dataset creation is delegated to :class:`~pina.DataModule`. By default the
     trainer builds one from ``train_size``, ``val_size``, ``test_size``,
     ``batch_size``, and ``shuffle``. For advanced settings, such as per
-    condition batch sizes or custom dataloader options, build a
+    condition mini-batch rules or custom dataloader options, build a
     :class:`~pina.DataModule` explicitly and pass it through ``datamodule``.
 
     :Example:
@@ -48,7 +48,8 @@ class Trainer(lightning.pytorch.Trainer):
         >>> # Advanced usage: provide a fully configured data module:
         >>> data_module = DataModule(
         ...     problem=solver_instance.problem,
-        ...     batch_size={"D": 32, "boundary": 16},
+        ...     batch_size=32,
+        ...     mini_batch_rule={"boundary": {"batch_size": 16}},
         ... )
         >>> trainer = Trainer(solver=solver_instance, datamodule=data_module)
     """
@@ -104,7 +105,7 @@ class Trainer(lightning.pytorch.Trainer):
         :param pin_memory: Deprecated and ignored. Configure it on the
             :class:`~pina.DataModule` instead.
         :param problem_setting: Deprecated and ignored. Use the per condition
-            ``batch_size`` mapping of :class:`~pina.DataModule` instead.
+            ``mini_batch_rule`` of :class:`~pina.DataModule` instead.
         :param dataloader_cls: Deprecated and ignored.
         :param collate_fn: Deprecated and ignored.
         :param dict kwargs: Additional keyword arguments forwarded to the
@@ -208,7 +209,7 @@ class Trainer(lightning.pytorch.Trainer):
         # otherwise default
         kwargs["log_every_n_steps"] = (
             0
-            if self.data_module.batch_size is None
+            if not self.data_module.has_batch_size
             else kwargs.get("log_every_n_steps", 50)
         )
 

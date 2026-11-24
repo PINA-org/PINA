@@ -11,7 +11,7 @@ class InputTargetCondition(TensorCondition):
     """
     Supervised condition defined by tensor ``input`` and ``target`` data.
 
-    The condition splits the data into batches during :meth:`store_data`.
+    The condition splits the data into batches during :meth:`store_mini_batches`.
     ``self.data`` is a list of dictionaries, one per batch, and
     :meth:`materialize` returns the batch selected by a single id.
     """
