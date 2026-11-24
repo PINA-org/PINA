@@ -225,13 +225,6 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                     series[:, step - 1], self._control
                 )
 
-                dirichlet_nodes = torch.isclose(_select_features(
-                    series[:, step - 1], [-1]
-                ), torch.tensor(1.0)).squeeze()
-
-                logger.debug("Dirichlet nodes:", dirichlet_nodes.shape)
-                logger.debug("Number of Dirichelet nodes", torch.sum(dirichlet_nodes).tensor)
-                
                 model_input = _concat_features(
                     current_state,
                     current_control,
@@ -245,8 +238,6 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                 prediction = solver.forward(batch)
                 if self._residual_addition:
                     prediction = prediction + current_state
-                prediction[dirichlet_nodes] = 0.0
-                print("prediction", prediction.shape)
                 
                 target_state = _select_features(
                     series[:, step], self._state
