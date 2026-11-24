@@ -12,7 +12,7 @@ class InputEquationCondition(TensorCondition):
     """
     Condition defined by tensor ``input`` data and an ``equation``.
 
-    The condition splits the input into batches during :meth:`store_data`.
+    The condition splits the input into batches during :meth:`store_mini_batches`.
     ``self.data`` is a list of dictionaries, one per batch, and
     :meth:`materialize` returns the batch selected by a single id.
     """

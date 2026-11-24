@@ -11,13 +11,13 @@ class TensorCondition(BaseCondition):
     Base condition for tensor-based data.
 
     The condition splits its tensor fields into batches during
-    :meth:`store_data`. ``self.data`` is a list of dictionaries, one per batch,
+    :meth:`store_mini_batches`. ``self.data`` is a list of dictionaries, one per batch,
     and :meth:`materialize` returns the batch selected by a single id.
     """
 
     _avail_data_cls = (torch.Tensor, LabelTensor)
 
-    def store_data(self, batch_size=None):
+    def store_mini_batches(self, batch_size=None):
         """
         Split the tensor fields into batches stored in ``self.data``.
 

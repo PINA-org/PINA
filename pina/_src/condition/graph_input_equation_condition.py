@@ -10,7 +10,7 @@ class GraphInputEquationCondition(GraphCondition):
     """
     Equation condition evaluated on node features of sampled subgraphs.
 
-    Subgraphs are sampled and stored by :meth:`store_data`. Residual
+    Subgraphs are sampled and stored by :meth:`store_mini_batches`. Residual
     evaluation enables gradients on their selected node features, evaluates
     the solver on the graph, and passes the features, predictions, and
     unknown parameters to the equation.

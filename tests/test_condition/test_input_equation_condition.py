@@ -50,7 +50,7 @@ def test_get_item():
     condition = InputEquationCondition(
         input=input_tensor, equation=test_equation
     )
-    condition.store_data(batch_size=1)
+    condition.store_mini_batches(batch_size=1)
 
     item = condition[0]
 
@@ -64,7 +64,7 @@ def test_materialize():
     condition = InputEquationCondition(
         input=input_tensor, equation=test_equation
     )
-    condition.store_data(batch_size=2)
+    condition.store_mini_batches(batch_size=2)
 
     batch = condition.materialize(1)
 
@@ -78,7 +78,7 @@ def test_evaluate():
     condition = InputEquationCondition(
         input=input_tensor, equation=test_equation
     )
-    condition.store_data()
+    condition.store_mini_batches()
     batch = condition.materialize(0)
     solver = DummySolver(input_vars=input_tensor.labels, output_vars=["z", "t"])
 

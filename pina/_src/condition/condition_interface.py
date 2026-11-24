@@ -1,5 +1,6 @@
 """Module for the Condition interface."""
 
+import warnings
 from abc import ABCMeta, abstractmethod
 
 
@@ -36,15 +37,36 @@ class ConditionInterface(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def store_data(self, **kwargs):
+    def store_mini_batches(self, **kwargs):
         """
-        Store the data for the condition in a suitable format.
+        Build the condition's mini-batches and store them in ``self.data``.
 
-        :param dict kwargs: The keyword arguments containing the data to be
-            stored.
-        :return: The stored data.
+        Each element of ``self.data`` is one mini-batch, later retrieved by
+        :meth:`materialize` through its index. Existing mini-batches are
+        replaced. The accepted keyword arguments depend on the condition and
+        are provided by :class:`~pina.DataModule` through its
+        ``mini_batch_rule`` (and global ``batch_size``).
+
+        :param dict kwargs: The mini-batching rule of the condition.
+        :return: The stored mini-batches.
         :rtype: Any
         """
+
+    def store_data(self, **kwargs):
+        """
+        Deprecated alias of :meth:`store_mini_batches`.
+
+        :param dict kwargs: Forwarded to :meth:`store_mini_batches`.
+        :return: The stored mini-batches.
+        :rtype: Any
+        """
+        warnings.warn(
+            "`store_data` is deprecated and will be removed in a future "
+            "release. Use `store_mini_batches` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.store_mini_batches(**kwargs)
 
     @abstractmethod
     def materialize(self, ids, device=None, batch_fn=None):

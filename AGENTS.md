@@ -23,8 +23,9 @@ Define `output_variables`, `spatial_domain`/`temporal_domain`, and `conditions` 
 - `Condition(domain=..., equation=...)` — physics residual on sampled domain
 - `Condition(input=..., equation=...)` — physics residual at fixed points
 - `Condition(input=..., target=...)` — supervised data
-- `TimeSeriesCondition(input=..., state=..., control=...)` then
-  `store_data(n_windows=..., unroll_length=...)` — time series
+- `TimeSeriesCondition(input=..., state=..., control=...)` with
+  `DataModule(mini_batch_rule={name: {"n_windows": ..., "unroll_length": ...}})`
+  — time series (windows built by `store_mini_batches`)
 
 ### Domains
 `CartesianDomain`, `EllipsoidDomain`, `SimplexDomain`.

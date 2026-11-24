@@ -33,6 +33,12 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
     """
 
     _avail_input_cls = (Data, Graph)
+    _mini_batch_keys = (
+        *GraphCondition._mini_batch_keys,
+        "unroll_length",
+        "n_windows",
+        "randomize",
+    )
 
     def __init__(
         self, graph, key="x", state=None, control=None, residual_addition=False
@@ -85,21 +91,24 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                 if column not in (self._control or [])
             ]
 
-    def store_data(self, **kwargs):
+    def store_mini_batches(self, **kwargs):
         """
         Sample subgraphs and store their temporal windows.
 
-        Starting nodes are sampled uniformly with replacement. Each
-        subgraph's feature attribute is replaced with windows of shape
+        Each subgraph is one mini-batch. Starting nodes are sampled
+        uniformly with replacement. Each subgraph's feature attribute is
+        replaced with windows of shape
         ``[n_windows, unroll_length, n_nodes, features]``. LabelTensor
-        features retain their labels. Existing stored batches are replaced.
+        features retain their labels. Existing stored mini-batches are
+        replaced.
 
-        :param dict kwargs: Sampling and temporal window settings:
+        :param dict kwargs: The mini-batching rule, with sampling and
+            temporal window settings:
 
-            * ``n_subgraphs`` (int): Number of subgraphs to generate.
-              Default is ``10``.
+            * ``n_subgraphs`` (int): Number of subgraphs, i.e. of
+              mini-batches, to generate. Default is ``1``.
             * ``num_hops`` (int): Number of hops around each starting node.
-              Default is ``5``.
+              Default is ``500``.
             * ``unroll_length`` (int): Number of time steps in each window.
               Must be at least ``2``. Default is ``10``.
             * ``n_windows`` (int): Number of windows to extract per
@@ -107,11 +116,12 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
             * ``randomize`` (bool): Whether to randomly permute valid
               window starting indices before selecting windows. Default
               is ``False``.
-
-            Other keyword arguments are ignored.
+            * ``batch_size``: Accepted and ignored, since each subgraph is
+              one mini-batch.
         :return: The subgraphs containing temporal windows, also stored
             in ``self.data``.
         :rtype: list[Graph]
+        :raises ValueError: If ``kwargs`` contains unsupported keys.
         :raises AttributeError: If the graph does not contain the feature
             attribute specified by ``key``.
         :raises AssertionError: If ``n_windows`` or ``unroll_length`` is
@@ -123,10 +133,10 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         :raises RuntimeError: If the temporal windows do not have the
             four dimensions required by the permutation.
         """
+        self._check_mini_batch_rule(kwargs)
         unroll_length = kwargs.get("unroll_length", 10)
         n_windows = kwargs.get("n_windows", 4)
         randomize = kwargs.get("randomize", False)
-
         _check_time_series_params(
             data=getattr(self.graph, self.key),
             n_windows=n_windows,
@@ -134,7 +144,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
             randomize=randomize,
         )
 
-        subgraphs = GraphCondition.store_data(self, **kwargs)
+        subgraphs = GraphCondition.store_mini_batches(self, **kwargs)
         for subgraph in subgraphs:
             data = getattr(subgraph, self.key)
             labels = getattr(data, "labels", None)
@@ -150,7 +160,6 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
             if labels is not None:
                 series = LabelTensor(series, labels)
             setattr(subgraph, self.key, series)
-
         logger.debug("Stored %d graph time-series batches.", len(self.data))
         return self.data
 
@@ -220,8 +229,8 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                     series[:, step - 1], [-1]
                 ), torch.tensor(1.0)).squeeze()
 
-                # print("Dirichlet nodes:", dirichlet_nodes.shape)
-                # print(torch.sum(dirichlet_nodes).tensor)
+                logger.debug("Dirichlet nodes:", dirichlet_nodes.shape)
+                logger.debug("Number of Dirichelet nodes", torch.sum(dirichlet_nodes).tensor)
                 
                 model_input = _concat_features(
                     current_state,
@@ -229,6 +238,7 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                     state_labels=state_labels,
                     control_labels=control_labels,
                 )
+                
                 setattr(batch, self.key, model_input)
 
                 # Forward the graph and compare only the state columns
@@ -236,6 +246,8 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
                 if self._residual_addition:
                     prediction = prediction + current_state
                 prediction[dirichlet_nodes] = 0.0
+                print("prediction", prediction.shape)
+                
                 target_state = _select_features(
                     series[:, step], self._state
                 )
@@ -246,6 +258,8 @@ class GraphTimeSeriesCondition(GraphCondition, TimeSeriesCondition):
         finally:
             setattr(batch, self.key, original)
 
+        logger.debug("Residulas shape", torch.stack(residuals).shape)        
+        
         return torch.stack(residuals).as_subclass(torch.Tensor)
 
     def test(self, solver):

@@ -200,7 +200,7 @@ class DataNormalizer(Callback):
         Apply normalization to all matching conditions in-place for a split.
 
         The backing tensor (``_input`` or ``_target``) of each condition is
-        updated so that normalization survives subsequent ``store_data`` calls
+        updated so that normalization survives subsequent ``store_mini_batches`` calls
         that regenerate the batch dictionaries.  Each individual batch dict is
         then also refreshed from the updated backing tensor.
 

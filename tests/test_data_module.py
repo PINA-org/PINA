@@ -468,19 +468,20 @@ def test_batch_size_mapping_unknown_condition_raises():
 
 def test_per_condition_batch_size():
     problem = _create_problem("pinn")
-    dm = DataModule(
-        problem=problem,
-        batch_size={"D": 7},
-        shuffle=False,
-    )
+    # A batch size mapping is deprecated in favour of mini_batch_rule
+    with pytest.warns(DeprecationWarning):
+        dm = DataModule(
+            problem=problem,
+            batch_size={"D": 7},
+            shuffle=False,
+        )
     dm.setup()
+    assert dm.mini_batch_rule == {"D": {"batch_size": 7}}
 
     # 100 points batched by 7 give 15 batches, while the boundary condition
     # is stored as a single batch
     assert len(problem.conditions["D"]) == 15
     assert len(problem.conditions["boundary"]) == 1
-    assert dm._condition_batch_size("D") == 7
-    assert dm._condition_batch_size("boundary") is None
 
 
 def test_global_batch_size():
@@ -488,8 +489,123 @@ def test_global_batch_size():
     dm = DataModule(problem=problem, batch_size=10, shuffle=False)
     dm.setup()
 
-    assert dm._condition_batch_size("D") == 10
-    assert dm._condition_batch_size("boundary") == 10
     assert len(problem.conditions["D"]) == 10
     assert len(problem.conditions["boundary"]) == 10
 
+
+
+def test_mini_batch_rule_per_condition():
+    problem = _create_problem("pinn")
+    dm = DataModule(
+        problem=problem,
+        mini_batch_rule={"D": {"batch_size": 7}, "boundary": {"batch_size": 25}},
+        shuffle=False,
+    )
+    dm.setup()
+
+    # 100 points batched by 7 and 25 give 15 and 4 batches
+    assert len(problem.conditions["D"]) == 15
+    assert len(problem.conditions["boundary"]) == 4
+    assert dm.has_batch_size
+
+    # One step per batch of the longest condition, one batch per condition
+    n_conditions = len(problem.conditions)
+    assert dm.train_dataset.shape == (15, n_conditions, 2)
+
+    # The shorter condition is cycled over the steps
+    boundary = dm.condition_name_to_idx["boundary"]
+    batch_ids = dm.train_dataset[:, boundary, 1].tolist()
+    assert batch_ids == [step % 4 for step in range(15)]
+
+
+def test_mini_batch_rule_overrides_global_batch_size():
+    problem = _create_problem("pinn")
+    dm = DataModule(
+        problem=problem,
+        batch_size=10,
+        mini_batch_rule={"boundary": {"batch_size": 25}},
+        shuffle=False,
+    )
+    dm.setup()
+
+    assert len(problem.conditions["D"]) == 10
+    assert len(problem.conditions["boundary"]) == 4
+
+
+def test_mini_batch_rule_unknown_condition_raises():
+    problem = _create_problem("pinn")
+
+    with pytest.raises(ValueError):
+        DataModule(problem=problem, mini_batch_rule={"unknown": {}})
+
+
+def test_mini_batch_rule_invalid_batch_size_raises():
+    problem = _create_problem("pinn")
+
+    with pytest.raises(AssertionError):
+        DataModule(problem=problem, mini_batch_rule={"D": {"batch_size": 0}})
+
+
+def test_mini_batch_rule_graph_condition():
+    problem = _create_problem("graph")
+    # The global batch size is ignored by graph conditions
+    dm = DataModule(
+        problem=problem,
+        batch_size=5,
+        mini_batch_rule={"data": {"n_subgraphs": 3, "num_hops": 1}},
+    )
+    dm.setup()
+
+    assert len(problem.conditions["data"]) == 3
+
+
+def test_mini_batch_rule_unknown_key_raises():
+    problem = _create_problem("graph")
+    dm = DataModule(
+        problem=problem, mini_batch_rule={"data": {"n_subgrpahs": 3}}
+    )
+
+    with pytest.raises(ValueError, match="n_subgrpahs"):
+        dm.setup()
+
+
+def test_mini_batch_rule_not_a_dict_raises():
+    problem = _create_problem("pinn")
+
+    with pytest.raises(ValueError):
+        DataModule(problem=problem, mini_batch_rule={"D": 5})
+
+
+def test_explicit_batch_size_wins_over_global():
+    problem = _create_problem("pinn")
+    dm = DataModule(
+        problem=problem,
+        batch_size=10,
+        mini_batch_rule={"D": {"batch_size": None}, "boundary": {}},
+        shuffle=False,
+    )
+    dm.setup()
+
+    # An explicit batch size in the rule, even None, overrides the default
+    assert len(problem.conditions["D"]) == 1
+    # A rule without batch size uses the global default
+    assert len(problem.conditions["boundary"]) == 10
+
+
+def test_store_data_is_deprecated():
+    problem = _create_problem("tensor")
+    condition = next(iter(problem.conditions.values()))
+
+    with pytest.warns(DeprecationWarning):
+        data = condition.store_data(batch_size=10)
+    assert len(data) == 10
+
+
+def test_has_batch_size():
+    problem = _create_problem("pinn")
+
+    assert not DataModule(problem=problem).has_batch_size
+    assert DataModule(problem=problem, batch_size=5).has_batch_size
+    assert DataModule(
+        problem=problem, mini_batch_rule={"D": {"batch_size": 5}}
+    ).has_batch_size
